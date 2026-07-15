@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="hero">
+    <h1>LifeOS AI</h1>
+    <p>Personal Execution Intelligence Workspace</p>
+</section>
+
+<section class="cards">
+    <div class="card">
+        <h3>Projects</h3>
+        <p>{{ projects_count }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Tasks</h3>
+        <p>{{ tasks_count }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Notes</h3>
+        <p>{{ notes_count }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Documents</h3>
+        <p>{{ documents_count }}</p>
+    </div>
+</section>
+
+<a class="btn" href="{{ url_for('project_bp.projects') }}">Manage Projects</a>
+
+<section class="section-block">
+    <h2>Latest Projects</h2>
+
+    {% if latest_projects %}
+        <div class="projects-grid">
+            {% for project in latest_projects %}
+                <a class="project-card-link" href="{{ url_for('project_bp.project_details', project_id=project.id) }}">
+                    <div class="project-card">
+                        <div class="project-card-header">
+                            <h3>{{ project.title }}</h3>
+                            <span class="badge status-{{ project.status|lower|replace(' ', '-') }}">{{ project.status }}</span>
+                        </div>
+                        <p class="muted">{{ project.project_type or "General" }}</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" data-progress="{{ project.progress or 0 }}"></div>
+                        </div>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p>No projects yet. <a href="{{ url_for('project_bp.projects') }}">Create your first project</a>.</p>
+        </div>
+    {% endif %}
+</section>
+
+{% endblock %}

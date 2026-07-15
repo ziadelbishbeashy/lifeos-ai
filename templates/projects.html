@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Projects</h1>
+<p>Create and manage your LifeOS projects.</p>
+
+<section class="form-section">
+    <h2>Add New Project</h2>
+
+    <form method="POST" class="project-form">
+        <label>Project Title *</label>
+        <input type="text" name="title" placeholder="Example: LifeOS AI" required>
+
+        <label>Project Type</label>
+        <input type="text" name="project_type" placeholder="Example: Web App, Mobile App, Research">
+
+        <label>Description</label>
+        <textarea name="description" placeholder="Write a short description..."></textarea>
+
+        <label>Goal</label>
+        <textarea name="goal" placeholder="What is the main goal of this project?"></textarea>
+
+        <label>Technology Stack</label>
+        <input type="text" name="tech_stack" placeholder="Example: Flask, SQL Server, JS">
+
+        <label>Project Folder Path (optional)</label>
+        <input type="text" name="project_folder" placeholder="C:\Projects\LifeOS">
+
+        <label>GitHub Link (optional)</label>
+        <input type="url" name="github_link" placeholder="https://github.com/...">
+
+        <label>Demo Link (optional)</label>
+        <input type="url" name="demo_link" placeholder="https://...">
+
+        <label>Start Date</label>
+        <input type="date" name="start_date">
+
+        <label>Deadline</label>
+        <input type="date" name="deadline" id="deadline-input">
+
+        <label class="checkbox-label">
+            <input type="checkbox" name="no_deadline" id="no-deadline-checkbox">
+            No Deadline
+        </label>
+
+        <label>Status</label>
+        <select name="status">
+            <option value="Planning">Planning</option>
+            <option value="In Progress" selected>In Progress</option>
+            <option value="Completed">Completed</option>
+            <option value="Paused">Paused</option>
+        </select>
+
+        <label>Priority</label>
+        <select name="priority">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+        </select>
+
+        <label>Current Phase</label>
+        <input type="text" name="current_phase" placeholder="Example: Design, Development, Testing">
+
+        <label>Progress %</label>
+        <input type="number" name="progress" min="0" max="100" value="0">
+
+        <button type="submit">Add Project</button>
+    </form>
+</section>
+
+<section class="projects-grid">
+    {% for project in projects %}
+        <div class="project-card">
+            <div class="project-card-header">
+                <h3>{{ project.title }}</h3>
+                <span class="badge status-{{ project.status|lower|replace(' ', '-') }}">{{ project.status }}</span>
+            </div>
+
+            <p class="muted">{{ project.project_type or "General" }}</p>
+            <p>{{ project.description }}</p>
+
+            <div class="project-meta">
+                <span class="badge priority-{{ project.priority|lower }}">Priority: {{ project.priority }}</span>
+
+                {% if project.current_phase %}
+                    <span>Phase: {{ project.current_phase }}</span>
+                {% endif %}
+
+                {% if project.deadline %}
+                    <span>Deadline: {{ project.deadline }}</span>
+                {% else %}
+                    <span>No Deadline</span>
+                {% endif %}
+
+                <span>Tasks: {{ project.tasks|length }}</span>
+                <span>Documents: {{ project.documents|length }}</span>
+
+                {% if project.project_folder %}
+                    <span class="badge folder-badge">Folder Connected</span>
+                {% endif %}
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" data-progress="{{ project.progress or 0 }}"></div>
+            </div>
+
+            <div class="project-links">
+                {% if project.github_link %}
+                    <a href="{{ project.github_link }}" target="_blank" rel="noopener">GitHub</a>
+                {% endif %}
+                {% if project.demo_link %}
+                    <a href="{{ project.demo_link }}" target="_blank" rel="noopener">Demo</a>
+                {% endif %}
+            </div>
+
+            <div class="actions">
+                <a class="btn small" href="{{ url_for('project_bp.project_details', project_id=project.id) }}">Open</a>
+                <a class="btn small secondary" href="{{ url_for('project_bp.edit_project', project_id=project.id) }}">Edit</a>
+
+                <form method="POST" action="{{ url_for('project_bp.delete_project', project_id=project.id) }}" onsubmit="return confirm('Delete this project?');">
+                    <button class="delete-btn" type="submit">Delete</button>
+                </form>
+            </div>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p>No projects yet. Add your first project above.</p>
+        </div>
+    {% endfor %}
+</section>
+
+{% endblock %}

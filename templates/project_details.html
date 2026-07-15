@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<a href="{{ url_for('project_bp.projects') }}">&larr; Back to Projects</a>
+
+<section class="details-card">
+    <div class="project-card-header">
+        <h1>{{ project.title }}</h1>
+        <span class="badge status-{{ project.status|lower|replace(' ', '-') }}">{{ project.status }}</span>
+    </div>
+
+    <p class="muted">{{ project.project_type or "General" }}</p>
+    <p>{{ project.description }}</p>
+
+    {% if project.goal %}
+        <h3>Main Goal</h3>
+        <p>{{ project.goal }}</p>
+    {% endif %}
+
+    {% if project.tech_stack %}
+        <h3>Technology Stack</h3>
+        <p>{{ project.tech_stack }}</p>
+    {% endif %}
+
+    <div class="progress-bar">
+        <div class="progress-fill" data-progress="{{ project.progress or 0 }}"></div>
+    </div>
+
+    <ul class="details-list">
+        <li><strong>Priority:</strong> {{ project.priority }}</li>
+        <li><strong>Current Phase:</strong> {{ project.current_phase or "Not set" }}</li>
+        <li><strong>Start Date:</strong> {{ project.start_date or "Not set" }}</li>
+        <li><strong>Deadline:</strong> {{ project.deadline or "No Deadline" }}</li>
+        <li><strong>Progress:</strong> {{ project.progress }}%</li>
+        <li><strong>Folder Path:</strong> {{ project.project_folder or "Not set" }}</li>
+        <li>
+            <strong>GitHub:</strong>
+            {% if project.github_link %}<a href="{{ project.github_link }}" target="_blank" rel="noopener">{{ project.github_link }}</a>{% else %}Not set{% endif %}
+        </li>
+        <li>
+            <strong>Demo:</strong>
+            {% if project.demo_link %}<a href="{{ project.demo_link }}" target="_blank" rel="noopener">{{ project.demo_link }}</a>{% else %}Not set{% endif %}
+        </li>
+    </ul>
+
+    <div class="actions">
+        <a class="btn small secondary" href="{{ url_for('project_bp.edit_project', project_id=project.id) }}">Edit</a>
+        <form method="POST" action="{{ url_for('project_bp.delete_project', project_id=project.id) }}" onsubmit="return confirm('Delete this project?');">
+            <button class="delete-btn" type="submit">Delete</button>
+        </form>
+    </div>
+</section>
+
+<section class="cards">
+    <div class="card">
+        <h3>Tasks</h3>
+        <p>{{ project.tasks|length }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Notes</h3>
+        <p>{{ project.notes|length }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Documents</h3>
+        <p>{{ project.documents|length }}</p>
+    </div>
+</section>
+
+{% endblock %}
