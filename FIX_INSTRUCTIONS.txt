@@ -1,0 +1,24 @@
+LIFEOS AUTHENTICATION FIX
+=========================
+
+What was broken in the uploaded project:
+1. app.py imported routes.auth_routes, but auth_routes.py was inside services.
+2. The template was named "public_ base.html" while the pages extend "public_base.html".
+3. Project and task routes were not consistently restricted to the logged-in owner.
+4. base.html used layout class names that did not match the existing private CSS.
+5. requirements.txt did not include Flask-Login or Flask-Migrate and was UTF-16 encoded.
+
+INSTALLATION
+============
+1. Keep your current .env file. This fixed folder intentionally does not include your secret values.
+2. Copy these files over your current lifeos-ai folder and replace matching files.
+3. Install packages:
+   pip install -r requirements.txt
+4. Open sql/setup_auth.sql in SSMS and run it once.
+5. Stop old Python processes, then run:
+   python app.py
+6. Open:
+   http://127.0.0.1:5000/
+7. Create the first account. Existing projects without an owner are automatically assigned when there is only one user.
+
+Do not delete the projects or tasks tables.

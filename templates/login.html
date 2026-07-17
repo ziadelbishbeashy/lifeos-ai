@@ -1,0 +1,102 @@
+{% extends "public_base.html" %}
+
+{% block title %}
+    Log In | LifeOS AI
+{% endblock %}
+
+{% block content %}
+
+<main class="authentication-page">
+    <section class="authentication-introduction">
+        <span class="hero-label">
+            Welcome back
+        </span>
+
+        <h1>
+            Continue building your
+            intelligent workspace.
+        </h1>
+
+        <p>
+            Access your projects, tasks, notes,
+            documents and execution plans.
+        </p>
+
+        <div class="authentication-benefits">
+            <span>Connected project knowledge</span>
+            <span>Private personal workspace</span>
+            <span>Clear execution priorities</span>
+        </div>
+    </section>
+
+    <section class="authentication-card">
+        <div class="authentication-heading">
+            <span>LifeOS account</span>
+            <h2>Log in</h2>
+
+            <p>
+                Enter your account details to continue.
+            </p>
+        </div>
+
+        <form
+            method="POST"
+            class="authentication-form"
+            data-loading-title="Logging in"
+            data-loading-message="Opening your LifeOS workspace..."
+        >
+            <div class="authentication-field">
+                <label for="email">Email address</label>
+
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value="{{ entered_email or '' }}"
+                    placeholder="name@example.com"
+                    autocomplete="email"
+                    required
+                >
+            </div>
+
+            <div class="authentication-field">
+                <label for="password">Password</label>
+
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <label class="remember-control">
+                <input
+                    type="checkbox"
+                    name="remember"
+                >
+
+                <span>Keep me logged in</span>
+            </label>
+
+            <button
+                type="submit"
+                class="authentication-submit"
+            >
+                Log In to LifeOS
+            </button>
+        </form>
+
+        <p class="authentication-switch">
+            Do not have an account?
+
+            <a href="{{ url_for('auth_bp.register') }}">
+                Create one
+            </a>
+        </p>
+    </section>
+</main>
+
+{% endblock %}

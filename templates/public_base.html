@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}LifeOS AI{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}?v=phase4-ui-final-1">
+    <style>
+        .public-loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9000;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: rgba(2, 6, 23, 0.72);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .public-loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .public-loading-card {
+            width: min(320px, 100%);
+            padding: 28px;
+            border-radius: 24px;
+            background: #ffffff;
+            color: #0f172a;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.24);
+        }
+
+        .public-loading-mark {
+            display: grid;
+            width: 54px;
+            height: 54px;
+            margin: 0 auto 16px;
+            place-items: center;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #6d7cff, #8ea0ff);
+            color: #ffffff;
+            font-weight: 900;
+            animation: publicLoadingPulse 1.2s ease-in-out infinite;
+        }
+
+        .public-loading-card strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 17px;
+        }
+
+        .public-loading-card span {
+            display: block;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .public-loading-bar {
+            position: relative;
+            height: 5px;
+            margin-top: 18px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #e2e8f0;
+        }
+
+        .public-loading-bar i {
+            position: absolute;
+            inset: 0;
+            width: 42%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #6d7cff, #8ea0ff);
+            animation: publicLoadingBar 1s ease-in-out infinite;
+        }
+
+        .authentication-submit.is-loading,
+        .primary-public-button.is-loading,
+        .navigation-register.is-loading,
+        .navigation-login.is-loading {
+            pointer-events: none;
+            opacity: 0.78;
+        }
+
+        @keyframes publicLoadingPulse {
+            50% { transform: scale(1.06); }
+        }
+
+        @keyframes publicLoadingBar {
+            from { transform: translateX(-120%); }
+            to { transform: translateX(260%); }
+        }
+    </style>
+</head>
+<body class="public-body">
+    <nav class="public-navbar">
+        <a href="{{ url_for('landing') }}" class="public-brand">
+            <span class="public-brand-icon">L</span>
+            <span>
+                <strong>LifeOS AI</strong>
+                <small>Execution Intelligence</small>
+            </span>
+        </a>
+
+        <div class="public-navigation">
+            <a href="{{ url_for('landing') }}#features">Features</a>
+            <a href="{{ url_for('landing') }}#workflow">How It Works</a>
+            <a href="{{ url_for('auth_bp.login') }}" class="navigation-login">Log In</a>
+            <a href="{{ url_for('auth_bp.register') }}" class="navigation-register">Get Started</a>
+        </div>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="public-flashes">
+                {% for category, message in messages %}
+                    <div class="public-flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+    <footer class="public-footer">
+        <div>
+            <strong>LifeOS AI</strong>
+            <p>Turn scattered work into clear, intelligent execution.</p>
+        </div>
+        <span>Personal Execution Intelligence Workspace</span>
+    </footer>
+
+    <div
+        class="public-loading-overlay"
+        id="publicLoadingOverlay"
+        aria-hidden="true"
+    >
+        <div class="public-loading-card">
+            <div class="public-loading-mark">L</div>
+            <strong id="publicLoadingTitle">Loading LifeOS</strong>
+            <span id="publicLoadingMessage">Preparing your workspace...</span>
+            <div class="public-loading-bar"><i></i></div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const overlay = document.getElementById("publicLoadingOverlay");
+            const title = document.getElementById("publicLoadingTitle");
+            const message = document.getElementById("publicLoadingMessage");
+            let timer = null;
+
+            function showLoading(config) {
+                if (!overlay) return;
+                const options = config || {};
+                title.textContent = options.title || "Loading LifeOS";
+                message.textContent = options.message || "Preparing your workspace...";
+                clearTimeout(timer);
+                timer = setTimeout(function () {
+                    overlay.classList.add("active");
+                    overlay.setAttribute("aria-hidden", "false");
+                }, options.delay || 120);
+            }
+
+            function hideLoading() {
+                if (!overlay) return;
+                clearTimeout(timer);
+                overlay.classList.remove("active");
+                overlay.setAttribute("aria-hidden", "true");
+                document.querySelectorAll(".is-loading").forEach(function (element) {
+                    element.classList.remove("is-loading");
+                    element.disabled = false;
+                });
+            }
+
+            document.addEventListener("submit", function (event) {
+                const form = event.target.closest("form");
+                if (!form || form.dataset.loadingStarted === "true") return;
+                form.dataset.loadingStarted = "true";
+                const submitButton = event.submitter || form.querySelector("button[type='submit']");
+                if (submitButton) {
+                    submitButton.classList.add("is-loading");
+                    submitButton.disabled = true;
+                }
+                showLoading({
+                    title: form.dataset.loadingTitle || "Checking account",
+                    message: form.dataset.loadingMessage || "Please wait while LifeOS processes your request..."
+                });
+            });
+
+            document.addEventListener("click", function (event) {
+                const link = event.target.closest("a");
+                if (!link) return;
+                const href = link.getAttribute("href") || "";
+                if (
+                    href.startsWith("#") ||
+                    href.includes("#features") ||
+                    href.includes("#workflow") ||
+                    link.target === "_blank" ||
+                    link.hasAttribute("download") ||
+                    href.startsWith("mailto:") ||
+                    href.startsWith("tel:")
+                ) {
+                    return;
+                }
+                link.classList.add("is-loading");
+                showLoading({
+                    title: link.dataset.loadingTitle || "Opening page",
+                    message: link.dataset.loadingMessage || "Loading LifeOS AI..."
+                });
+            });
+
+            window.addEventListener("pageshow", hideLoading);
+        })();
+    </script>
+</body>
+</html>

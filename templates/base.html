@@ -2,38 +2,811 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LifeOS AI</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
 
-    <div class="layout">
-        <aside class="sidebar">
-            <h2 class="brand">LifeOS AI</h2>
-            <nav class="sidebar-nav">
-                <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}">Dashboard</a>
-                <a href="{{ url_for('project_bp.projects') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('project_bp') else '' }}">Projects</a>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {% block title %}LifeOS AI{% endblock %}
+    </title>
+
+    <!--
+        Apply the saved theme before loading the page.
+        This prevents a light/dark flash during refresh.
+    -->
+    <script>
+        (function () {
+            const savedTheme =
+                localStorage.getItem("lifeos-theme");
+
+            const systemPrefersLight =
+                window.matchMedia &&
+                window.matchMedia(
+                    "(prefers-color-scheme: light)"
+                ).matches;
+
+            const initialTheme =
+                savedTheme ||
+                (systemPrefersLight ? "light" : "dark");
+
+            document.documentElement.setAttribute(
+                "data-theme",
+                initialTheme
+            );
+        })();
+    </script>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/style.css'
+        ) }}?v=phase4-ui-final-1"
+    >
+</head>
+
+<body
+    class="app-body"
+    data-notification-user="{{ current_user.id }}"
+>
+
+
+    <div class="app-shell">
+
+        <!-- Mobile sidebar overlay -->
+        <button
+            type="button"
+            class="sidebar-overlay"
+            id="sidebarOverlay"
+            aria-label="Close navigation"
+        ></button>
+
+
+        <!-- =================================================
+             SIDEBAR
+             ================================================= -->
+
+        <aside
+            class="app-sidebar"
+            id="appSidebar"
+        >
+
+            <div class="sidebar-header">
+
+                <a
+                    href="{{ url_for('dashboard') }}"
+                    class="app-brand"
+                    data-page-loading
+                    data-loading-title="Opening dashboard"
+                    data-loading-message="Loading your workspace overview..."
+                >
+                    <span class="app-brand-mark">
+                        L
+                    </span>
+
+                    <span class="app-brand-copy">
+                        <strong>LifeOS AI</strong>
+                        <small>Execution Intelligence</small>
+                    </span>
+                </a>
+
+                <button
+                    type="button"
+                    class="sidebar-close-button"
+                    id="sidebarCloseButton"
+                    aria-label="Close navigation"
+                >
+                    ×
+                </button>
+
+            </div>
+
+
+            <nav
+                class="app-navigation"
+                aria-label="Main navigation"
+            >
+
+                <span class="navigation-label">
+                    Workspace
+                </span>
+
+
+                <!-- Dashboard -->
+
+                <a
+                    href="{{ url_for('dashboard') }}"
+                    class="navigation-link
+                    {{
+                        'active'
+                        if request.endpoint == 'dashboard'
+                        else ''
+                    }}"
+                    data-page-loading
+                    data-loading-title="Opening dashboard"
+                    data-loading-message="Loading your workspace overview..."
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z"
+                        />
+                    </svg>
+
+                    <span>Dashboard</span>
+                </a>
+
+
+                <!-- Projects -->
+
+                <a
+                    href="{{ url_for(
+                        'project_bp.projects'
+                    ) }}"
+                    class="navigation-link
+                    {{
+                        'active'
+                        if request.endpoint
+                        and request.endpoint.startswith(
+                            'project_bp'
+                        )
+                        else ''
+                    }}"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2h7.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-10Z"
+                        />
+                    </svg>
+
+                    <span>Projects</span>
+                </a>
+
+
+                <!-- Global Tasks -->
+
+                <a
+                    href="{{ url_for(
+                        'task_bp.all_tasks'
+                    ) }}"
+                    class="navigation-link
+                    {{
+                        'active'
+                        if request.endpoint
+                        and request.endpoint.startswith(
+                            'task_bp'
+                        )
+                        else ''
+                    }}"
+                    data-page-loading
+                    data-loading-title="Opening tasks"
+                    data-loading-message="Loading all workspace tasks..."
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M9 5h11v2H9V5Zm0 6h11v2H9v-2Zm0 6h11v2H9v-2ZM4.5 4A1.5 1.5 0 1 1 3 5.5 1.5 1.5 0 0 1 4.5 4Zm0 6A1.5 1.5 0 1 1 3 11.5 1.5 1.5 0 0 1 4.5 10Zm0 6A1.5 1.5 0 1 1 3 17.5 1.5 1.5 0 0 1 4.5 16Z"
+                        />
+                    </svg>
+
+                    <span>Tasks</span>
+                    <small>All projects</small>
+                </a>
+
+
+                <span
+                    class="navigation-label
+                    navigation-label-spaced"
+                >
+                    Intelligence
+                </span>
+
+
+                <!-- Future AI Notes -->
+
+                <span
+                    class="navigation-link
+                    navigation-link-disabled"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M4 4h16v12H7l-3 3V4Zm4 4v2h8V8H8Zm0 4v2h5v-2H8Z"
+                        />
+                    </svg>
+
+                    <span>AI Notes</span>
+                    <em>Soon</em>
+                </span>
+
+
+                <!-- Future Document Brain -->
+
+                <span
+                    class="navigation-link
+                    navigation-link-disabled"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M6 2h9l5 5v15H6V2Zm8 2v4h4l-4-4ZM9 12h8v-2H9v2Zm0 4h8v-2H9v2Zm0 4h6v-2H9v2Z"
+                        />
+                    </svg>
+
+                    <span>Document Brain</span>
+                    <em>Soon</em>
+                </span>
+
+
+                <!-- Future Smart Plan -->
+
+                <span
+                    class="navigation-link
+                    navigation-link-disabled"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="m12 2 2.4 5.1L20 8l-4 4 .9 5.7L12 15l-4.9 2.7L8 12 4 8l5.6-.9L12 2Z"
+                        />
+                    </svg>
+
+                    <span>Smart Plan</span>
+                    <em>Soon</em>
+                </span>
+
             </nav>
+
+
+            <!-- Workspace status -->
+
+            <div class="sidebar-system-card">
+
+                <div class="system-card-heading">
+                    <span class="system-status-dot"></span>
+                    <strong>Workspace online</strong>
+                </div>
+
+                <p>
+                    Projects and task management are active.
+                </p>
+
+            </div>
+
+
+            <!-- Sidebar user information -->
+
+            <div class="sidebar-user-summary">
+
+                <div class="account-avatar">
+                    {{ current_user.name[0]|upper }}
+                </div>
+
+                <div class="account-information">
+                    <strong>
+                        {{ current_user.name }}
+                    </strong>
+
+                    <span>
+                        {{ current_user.email }}
+                    </span>
+                </div>
+
+            </div>
+
         </aside>
 
-        <div class="main-area">
-            <main class="container">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        <div class="flash-container">
-                            {% for category, message in messages %}
-                                <div class="flash flash-{{ category }}">{{ message }}</div>
-                            {% endfor %}
+
+        <!-- =================================================
+             MAIN APPLICATION
+             ================================================= -->
+
+        <div class="app-main">
+
+            <!-- Top navigation -->
+
+            <header class="app-topbar">
+
+                <div class="topbar-left">
+
+                    <button
+                        type="button"
+                        class="mobile-menu-button"
+                        id="mobileMenuButton"
+                        aria-label="Open navigation"
+                    >
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+
+                    <div class="topbar-context">
+
+                        <span>
+                            {% block page_kicker %}
+                                Private workspace
+                            {% endblock %}
+                        </span>
+
+                        <strong>
+                            {% block page_title %}
+                                LifeOS AI
+                            {% endblock %}
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="topbar-actions">
+
+                    <!-- Future global search -->
+
+                    <button
+                        type="button"
+                        class="workspace-search-button"
+                        title="Global search will be connected in a later phase"
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="m21 20-5.2-5.2a7 7 0 1 0-1.4 1.4L20 21l1-1ZM5 10a5 5 0 1 1 10 0 5 5 0 0 1-10 0Z"
+                            />
+                        </svg>
+
+                        <span>Search workspace</span>
+                        <kbd>Ctrl K</kbd>
+                    </button>
+
+
+                    <!-- Phase 4 theme toggle -->
+
+                    <button
+                        type="button"
+                        class="theme-switch"
+                        id="themeToggleButton"
+                        aria-label="Switch to light mode"
+                        aria-pressed="false"
+                        title="Switch to light mode"
+                    >
+                        <span class="theme-switch-icon theme-switch-sun" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M12 4V2m0 20v-2M4 12H2m20 0h-2M5.64 5.64 4.22 4.22m15.56 15.56-1.42-1.42M18.36 5.64l1.42-1.42M4.22 19.78l1.42-1.42M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/>
+                            </svg>
+                        </span>
+
+                        <span class="theme-switch-track" aria-hidden="true">
+                            <span class="theme-switch-thumb">
+                                <svg
+                                    class="theme-switch-thumb-icon"
+                                    id="themeToggleIcon"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path d="M20.3 15.2A8 8 0 0 1 8.8 3.7 8.5 8.5 0 1 0 20.3 15.2Z"/>
+                                </svg>
+                            </span>
+                        </span>
+
+                        <span class="theme-switch-icon theme-switch-moon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M20.3 15.2A8 8 0 0 1 8.8 3.7 8.5 8.5 0 1 0 20.3 15.2Z"/>
+                            </svg>
+                        </span>
+
+                        <span class="sr-only" id="themeToggleLabel">
+                            Dark mode
+                        </span>
+                    </button>
+
+
+                    <div
+                        class="notification-center-wrapper"
+                        id="notificationCenterWrapper"
+                    >
+                        <button
+                            type="button"
+                            class="icon-action-button notification-button"
+                            id="notificationButton"
+                            aria-label="Open notifications"
+                            aria-expanded="false"
+                            aria-controls="notificationPanel"
+                            title="Notifications"
+                        >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    d="M12 22a2.4 2.4 0 0 0 2.3-2h-4.6A2.4 2.4 0 0 0 12 22Zm7-5-2-2v-4.5a5 5 0 0 0-4-4.9V4a1 1 0 0 0-2 0v1.6a5 5 0 0 0-4 4.9V15l-2 2v1h14v-1Z"
+                                />
+                            </svg>
+
+                            <span
+                                class="notification-badge"
+                                id="notificationBadge"
+                                hidden
+                            >
+                                0
+                            </span>
+                        </button>
+
+                        <section
+                            class="notification-panel"
+                            id="notificationPanel"
+                            aria-hidden="true"
+                            aria-label="Notification center"
+                        >
+                            <header class="notification-panel-header">
+                                <div>
+                                    <span class="notification-panel-kicker">
+                                        LifeOS activity
+                                    </span>
+
+                                    <h2>Notifications</h2>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    class="notification-panel-close"
+                                    id="notificationPanelClose"
+                                    aria-label="Close notifications"
+                                >
+                                    ×
+                                </button>
+                            </header>
+
+                            <div class="notification-panel-summary">
+                                <span id="notificationSummary">
+                                    You are all caught up
+                                </span>
+
+                                <button
+                                    type="button"
+                                    class="notification-text-action"
+                                    id="markAllNotificationsRead"
+                                >
+                                    Mark all read
+                                </button>
+                            </div>
+
+                            <div
+                                class="notification-filter-tabs"
+                                role="tablist"
+                                aria-label="Notification filters"
+                            >
+                                <button
+                                    type="button"
+                                    class="notification-filter-button active"
+                                    data-notification-filter="all"
+                                    role="tab"
+                                    aria-selected="true"
+                                >
+                                    All
+
+                                    <span id="allNotificationCount">
+                                        0
+                                    </span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="notification-filter-button"
+                                    data-notification-filter="unread"
+                                    role="tab"
+                                    aria-selected="false"
+                                >
+                                    Unread
+
+                                    <span id="unreadNotificationCount">
+                                        0
+                                    </span>
+                                </button>
+                            </div>
+
+                            <div
+                                class="notification-list"
+                                id="notificationList"
+                                aria-live="polite"
+                            ></div>
+
+                            <div
+                                class="notification-empty-state"
+                                id="notificationEmptyState"
+                                hidden
+                            >
+                                <span class="notification-empty-icon">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path
+                                            d="M12 22a2.4 2.4 0 0 0 2.3-2h-4.6A2.4 2.4 0 0 0 12 22Zm7-5-2-2v-4.5a5 5 0 0 0-4-4.9V4a1 1 0 0 0-2 0v1.6a5 5 0 0 0-4 4.9V15l-2 2v1h14v-1Z"
+                                        />
+                                    </svg>
+                                </span>
+
+                                <strong>No notifications here</strong>
+
+                                <p>
+                                    New activity and future deadline reminders
+                                    will appear in this panel.
+                                </p>
+                            </div>
+
+                            <footer class="notification-panel-footer">
+                                <button
+                                    type="button"
+                                    class="notification-footer-button"
+                                    id="clearReadNotifications"
+                                >
+                                    Clear read
+                                </button>
+
+                                <span>
+                                    Deadline intelligence coming next
+                                </span>
+                            </footer>
+                        </section>
+                    </div>
+
+                    <!-- Profile menu -->
+
+                    <div class="profile-menu-wrapper">
+
+                        <button
+                            type="button"
+                            class="profile-menu-button"
+                            id="profileMenuButton"
+                            aria-expanded="false"
+                            aria-controls="profileDropdown"
+                        >
+                            <span class="topbar-avatar">
+                                {{ current_user.name[0]|upper }}
+                            </span>
+
+                            <span class="topbar-user-copy">
+                                <strong>
+                                    {{ current_user.name.split()[0] }}
+                                </strong>
+
+                                <small>
+                                    Workspace owner
+                                </small>
+                            </span>
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    d="m7 10 5 5 5-5H7Z"
+                                />
+                            </svg>
+                        </button>
+
+
+                        <div
+                            class="profile-dropdown"
+                            id="profileDropdown"
+                        >
+
+                            <div class="profile-dropdown-header">
+
+                                <strong>
+                                    {{ current_user.name }}
+                                </strong>
+
+                                <span>
+                                    {{ current_user.email }}
+                                </span>
+
+                            </div>
+
+
+                            <span
+                                class="profile-dropdown-item
+                                profile-dropdown-disabled"
+                            >
+                                Profile settings
+                                <small>Phase 4</small>
+                            </span>
+
+
+                            <form
+                                method="POST"
+                                action="{{ url_for('auth_bp.logout') }}"
+                                data-confirm
+                                data-confirm-title="Log out?"
+                                data-confirm-message="You will be returned to the login page."
+                                data-confirm-text="Log out"
+                                data-confirm-cancel="Stay here"
+                                data-confirm-variant="default"
+                                data-confirm-icon="?"
+                                data-loading-title="Logging out"
+                                data-loading-message="Ending your LifeOS session safely..."
+                            >
+                                <button
+                                    type="submit"
+                                    class="profile-logout-button"
+                                >
+                                    Log out
+                                </button>
+                            </form>
+
                         </div>
+
+                    </div>
+
+                </div>
+
+            </header>
+
+
+            <!-- Main page content -->
+
+            <main class="app-content">
+
+                <!-- Flask messages -->
+
+                {% with messages =
+                    get_flashed_messages(
+                        with_categories=true
+                    )
+                %}
+
+                    {% if messages %}
+
+                        <div
+                            class="flash-container"
+                            aria-live="polite"
+                            aria-atomic="true"
+                        >
+
+                            {% for category, message in messages %}
+
+                                <div
+                                    class="flash
+                                    flash-{{ category }}"
+                                >
+                                    <span>
+                                        {{ message }}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        class="flash-close"
+                                        aria-label="Dismiss message"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+
+                            {% endfor %}
+
+                        </div>
+
                     {% endif %}
+
                 {% endwith %}
 
-                {% block content %}{% endblock %}
+
+                {% block content %}
+                {% endblock %}
+
             </main>
+
+        </div>
+
+    </div>
+
+    <!-- =================================================
+     PHASE 4.3 — GLOBAL CONFIRMATION MODAL
+     ================================================= -->
+
+    <div
+        class="confirmation-modal-backdrop"
+        id="confirmationModalBackdrop"
+        hidden
+    >
+        <section
+            class="confirmation-modal"
+            id="confirmationModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirmationModalTitle"
+            aria-describedby="confirmationModalMessage"
+        >
+            <div class="confirmation-modal-icon" id="confirmationModalIcon">
+                !
+            </div>
+
+            <div class="confirmation-modal-content">
+                <span class="confirmation-modal-kicker">
+                    Confirmation required
+                </span>
+
+                <h2 id="confirmationModalTitle">
+                    Are you sure?
+                </h2>
+
+                <p id="confirmationModalMessage">
+                    This action needs your confirmation before continuing.
+                </p>
+            </div>
+
+            <div class="confirmation-modal-actions">
+                <button
+                    type="button"
+                    class="confirmation-cancel-button"
+                    id="confirmationCancelButton"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="button"
+                    class="confirmation-confirm-button"
+                    id="confirmationConfirmButton"
+                >
+                    Confirm
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <!-- =================================================
+     PHASE 4.4 — GLOBAL LOADING OVERLAY
+     ================================================= -->
+
+    <div
+        class="global-loading-overlay"
+        id="globalLoadingOverlay"
+        aria-hidden="true"
+    >
+        <div class="global-loading-card">
+            <div class="global-loading-logo">
+                L
+            </div>
+
+            <div class="global-loading-copy">
+                <strong id="globalLoadingTitle">
+                    Preparing workspace
+                </strong>
+
+                <span id="globalLoadingMessage">
+                    LifeOS AI is processing your request...
+                </span>
+            </div>
+
+            <div class="global-loading-bar">
+                <span></span>
+            </div>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/main.js'
+        ) }}?v=phase4-ui-final-1"
+    ></script>
+
 </body>
 </html>

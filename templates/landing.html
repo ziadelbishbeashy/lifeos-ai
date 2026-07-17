@@ -1,0 +1,265 @@
+{% extends "public_base.html" %}
+
+{% block title %}
+    LifeOS AI | Execute Smarter
+{% endblock %}
+
+{% block content %}
+
+<main>
+    <section class="landing-hero">
+        <div class="hero-content">
+            <span class="hero-label">
+                Personal Execution Intelligence
+            </span>
+
+            <h1>
+                Stop managing scattered work.
+                <span>Start executing intelligently.</span>
+            </h1>
+
+            <p>
+                LifeOS AI connects your projects, tasks,
+                notes and documents, then helps you decide
+                what to work on next and why.
+            </p>
+
+            <div class="hero-actions">
+                <a
+                    href="{{ url_for('auth_bp.register') }}"
+                    class="primary-public-button"
+            data-loading-title="Opening registration"
+            data-loading-message="Preparing your LifeOS account setup..."
+                    data-loading-title="Opening registration"
+                    data-loading-message="Preparing your LifeOS account setup..."
+                >
+                    Build Your Workspace
+                </a>
+
+                <a
+                    href="#features"
+                    class="secondary-public-button"
+                >
+                    Explore Features
+                </a>
+            </div>
+
+            <div class="hero-points">
+                <span>No scattered notes</span>
+                <span>Clear priorities</span>
+                <span>Connected knowledge</span>
+            </div>
+        </div>
+
+        <div class="hero-preview">
+            <div class="preview-window">
+                <div class="preview-header">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+
+                    <strong>LifeOS Workspace</strong>
+                </div>
+
+                <div class="preview-layout">
+                    <aside class="preview-sidebar">
+                        <div class="preview-logo">L</div>
+                        <div class="preview-nav active"></div>
+                        <div class="preview-nav"></div>
+                        <div class="preview-nav"></div>
+                        <div class="preview-nav small"></div>
+                    </aside>
+
+                    <div class="preview-content">
+                        <div class="preview-title">
+                            <div>
+                                <small>GOOD EVENING</small>
+                                <h3>Your Execution Dashboard</h3>
+                            </div>
+
+                            <div class="preview-avatar">Z</div>
+                        </div>
+
+                        <div class="preview-statistics">
+                            <div>
+                                <span>Projects</span>
+                                <strong>6</strong>
+                            </div>
+
+                            <div>
+                                <span>Tasks</span>
+                                <strong>24</strong>
+                            </div>
+
+                            <div>
+                                <span>Completed</span>
+                                <strong>68%</strong>
+                            </div>
+                        </div>
+
+                        <div class="preview-priority">
+                            <small>SMART PRIORITY</small>
+                            <h4>Connect authentication to SQL Server</h4>
+                            <p>
+                                High importance · Database blocker
+                            </p>
+
+                            <div class="preview-progress">
+                                <span></span>
+                            </div>
+                        </div>
+
+                        <div class="preview-projects">
+                            <div></div>
+                            <div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section
+        class="landing-section"
+        id="features"
+    >
+        <div class="landing-section-heading">
+            <span>One connected workspace</span>
+
+            <h2>
+                Everything needed to move from ideas
+                to execution
+            </h2>
+
+            <p>
+                LifeOS does more than store information.
+                It connects your work and turns it into
+                practical next actions.
+            </p>
+        </div>
+
+        <div class="feature-grid">
+            <article class="feature-card">
+                <span class="feature-number">01</span>
+                <h3>Project Workspace</h3>
+
+                <p>
+                    Organize goals, technology, phases,
+                    deadlines, links and progress in one place.
+                </p>
+            </article>
+
+            <article class="feature-card">
+                <span class="feature-number">02</span>
+                <h3>Task Intelligence</h3>
+
+                <p>
+                    Track importance, difficulty, blockers,
+                    modules and completion across every project.
+                </p>
+            </article>
+
+            <article class="feature-card">
+                <span class="feature-number">03</span>
+                <h3>AI Notes</h3>
+
+                <p>
+                    Transform unstructured notes into detected
+                    modules, tasks and organized knowledge.
+                </p>
+            </article>
+
+            <article class="feature-card">
+                <span class="feature-number">04</span>
+                <h3>Document Brain</h3>
+
+                <p>
+                    Upload project documents, extract information
+                    and ask questions using connected context.
+                </p>
+            </article>
+
+            <article class="feature-card">
+                <span class="feature-number">05</span>
+                <h3>Smart Priorities</h3>
+
+                <p>
+                    Understand what should be done first based
+                    on urgency, importance and dependencies.
+                </p>
+            </article>
+
+            <article class="feature-card">
+                <span class="feature-number">06</span>
+                <h3>Execution Analytics</h3>
+
+                <p>
+                    Measure project progress, completed work,
+                    blocked tasks and productivity patterns.
+                </p>
+            </article>
+        </div>
+    </section>
+
+    <section
+        class="workflow-section"
+        id="workflow"
+    >
+        <div class="landing-section-heading">
+            <span>A clearer workflow</span>
+
+            <h2>
+                From scattered information to focused action
+            </h2>
+        </div>
+
+        <div class="workflow-grid">
+            <article>
+                <strong>1</strong>
+                <h3>Capture</h3>
+
+                <p>
+                    Add projects, tasks, notes and documents.
+                </p>
+            </article>
+
+            <article>
+                <strong>2</strong>
+                <h3>Connect</h3>
+
+                <p>
+                    LifeOS links information to the correct
+                    projects and modules.
+                </p>
+            </article>
+
+            <article>
+                <strong>3</strong>
+                <h3>Execute</h3>
+
+                <p>
+                    Receive a clear plan explaining what to
+                    work on next.
+                </p>
+            </article>
+        </div>
+    </section>
+
+    <section class="landing-cta">
+        <span>Build a better way to work</span>
+
+        <h2>
+            Your ideas deserve more than scattered files
+            and unfinished task lists.
+        </h2>
+
+        <a
+            href="{{ url_for('auth_bp.register') }}"
+            class="primary-public-button"
+        >
+            Create Your LifeOS
+        </a>
+    </section>
+</main>
+
+{% endblock %}

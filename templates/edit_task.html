@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Edit Task | LifeOS AI
+{% endblock %}
+
+{% block content %}
+
+<div class="edit-task-page">
+
+    <a
+        href="{{ url_for(
+            'project_bp.project_details',
+            project_id=task.project_id
+        ) }}#tasks"
+        class="workspace-back-link"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >
+        ← Back to Project Tasks
+    </a>
+
+
+    <header class="workspace-page-header">
+
+        <div>
+            <span class="workspace-eyebrow">
+                Task Settings
+            </span>
+
+            <h1>Edit Task</h1>
+
+            <p>
+                Update the task information, execution status,
+                priority and deadline.
+            </p>
+        </div>
+
+        <span
+            class="task-status-label
+            task-status-{{
+                task.status
+                | lower
+                | replace(' ', '-')
+            }}"
+        >
+            {{ task.status }}
+        </span>
+
+    </header>
+
+
+    <div class="edit-task-layout">
+
+        <!-- Task Form -->
+        <section class="edit-task-form-card">
+
+            <form
+                method="POST"
+                class="professional-task-form"
+                data-loading-title="Updating task"
+                data-loading-message="Saving your task changes..."
+                        >
+
+                <div class="task-form-section-heading">
+
+                    <span>01</span>
+
+                    <div>
+                        <h2>Task Information</h2>
+
+                        <p>
+                            Define the task and the project module it belongs to.
+                        </p>
+                    </div>
+
+                </div>
+
+
+                <div class="task-form-grid">
+
+                    <div class="task-form-field task-form-full">
+
+                        <label for="editTaskTitle">
+                            Task Title
+                            <span>*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            id="editTaskTitle"
+                            name="title"
+                            value="{{ task.title }}"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="task-form-field">
+
+                        <label for="editTaskModule">
+                            Module
+                        </label>
+
+                        <input
+                            type="text"
+                            id="editTaskModule"
+                            name="module"
+                            list="editTaskModuleOptions"
+                            value="{{ task.module or '' }}"
+                        >
+
+                        <datalist id="editTaskModuleOptions">
+                            <option value="Database">
+                            <option value="Backend">
+                            <option value="Frontend">
+                            <option value="Authentication">
+                            <option value="Dashboard">
+                            <option value="AI">
+                            <option value="Document Brain">
+                            <option value="Testing">
+                            <option value="Deployment">
+                            <option value="Documentation">
+                        </datalist>
+
+                    </div>
+
+
+                    <div class="task-form-field">
+
+                        <label for="editTaskStatus">
+                            Status
+                        </label>
+
+                        <select
+                            id="editTaskStatus"
+                            name="status"
+                        >
+                            {% for status in [
+                                "Pending",
+                                "In Progress",
+                                "Blocked",
+                                "Completed"
+                            ] %}
+
+                                <option
+                                    value="{{ status }}"
+                                    {% if task.status == status %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ status }}
+                                </option>
+
+                            {% endfor %}
+                        </select>
+
+                    </div>
+
+
+                    <div class="task-form-field task-form-full">
+
+                        <label for="editTaskDescription">
+                            Description
+                        </label>
+
+                        <textarea
+                            id="editTaskDescription"
+                            name="description"
+                        >{{ task.description or "" }}</textarea>
+
+                    </div>
+
+                </div>
+
+
+                <div class="task-form-section-heading">
+
+                    <span>02</span>
+
+                    <div>
+                        <h2>Execution Priority</h2>
+
+                        <p>
+                            Set the importance, difficulty and deadline.
+                        </p>
+                    </div>
+
+                </div>
+
+
+                <div class="task-form-grid">
+
+                    <div class="task-form-field">
+
+                        <label for="editTaskImportance">
+                            Importance
+                        </label>
+
+                        <select
+                            id="editTaskImportance"
+                            name="importance"
+                        >
+                            {% for importance in [
+                                "Low",
+                                "Medium",
+                                "High",
+                                "Critical"
+                            ] %}
+
+                                <option
+                                    value="{{ importance }}"
+                                    {% if task.importance == importance %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ importance }}
+                                </option>
+
+                            {% endfor %}
+                        </select>
+
+                    </div>
+
+
+                    <div class="task-form-field">
+
+                        <label for="editTaskDifficulty">
+                            Difficulty
+                        </label>
+
+                        <select
+                            id="editTaskDifficulty"
+                            name="difficulty"
+                        >
+                            {% for difficulty in [
+                                "Easy",
+                                "Medium",
+                                "Hard"
+                            ] %}
+
+                                <option
+                                    value="{{ difficulty }}"
+                                    {% if task.difficulty == difficulty %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ difficulty }}
+                                </option>
+
+                            {% endfor %}
+                        </select>
+
+                    </div>
+
+
+                    <div class="task-form-field task-form-full">
+
+                        <label for="editTaskDeadline">
+                            Deadline
+                        </label>
+
+                        <input
+                            type="date"
+                            id="editTaskDeadline"
+                            name="deadline"
+                            value="{% if task.deadline %}{{ task.deadline.strftime('%Y-%m-%d') }}{% endif %}"
+                            {% if not task.deadline %}
+                                disabled
+                            {% endif %}
+                        >
+
+                        <label class="professional-checkbox">
+
+                            <input
+                                type="checkbox"
+                                data-no-deadline
+                                data-deadline-target="editTaskDeadline"
+                                {% if not task.deadline %}
+                                    checked
+                                {% endif %}
+                            >
+
+                            <span>No deadline</span>
+
+                        </label>
+
+                    </div>
+
+                </div>
+
+
+                <div class="edit-task-actions">
+
+                    <a
+                        href="{{ url_for(
+                            'project_bp.project_details',
+                            project_id=task.project_id
+                        ) }}#tasks"
+                        class="workspace-secondary-button"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >
+                        Cancel
+                    </a>
+
+                    <button
+                        type="submit"
+                        class="workspace-primary-button"
+                    >
+                        Save Task Changes
+                    </button>
+
+                </div>
+
+            </form>
+
+        </section>
+
+
+        <!-- Task Preview Sidebar -->
+        <aside class="edit-task-sidebar">
+
+            <section class="task-preview-card">
+
+                <span class="workspace-eyebrow">
+                    Task Summary
+                </span>
+
+                <div class="task-preview-icon">
+                    ✓
+                </div>
+
+                <h2>{{ task.title }}</h2>
+
+                <p>
+                    {{
+                        task.module
+                        or "General Project Task"
+                    }}
+                </p>
+
+
+                <div class="task-preview-labels">
+
+                    <span
+                        class="task-importance-label
+                        task-importance-{{
+                            task.importance|lower
+                        }}"
+                    >
+                        {{ task.importance }}
+                    </span>
+
+                    <span
+                        class="task-status-label
+                        task-status-{{
+                            task.status
+                            | lower
+                            | replace(' ', '-')
+                        }}"
+                    >
+                        {{ task.status }}
+                    </span>
+
+                </div>
+
+
+                <div class="task-preview-details">
+
+                    <div>
+                        <span>Difficulty</span>
+                        <strong>{{ task.difficulty }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Priority Score</span>
+                        <strong>
+                            {{ task.priority_score|round(1) }}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>Deadline</span>
+
+                        <strong>
+                            {% if task.deadline %}
+                                {{
+                                    task.deadline.strftime(
+                                        "%d %b %Y"
+                                    )
+                                }}
+                            {% else %}
+                                No deadline
+                            {% endif %}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>Created</span>
+
+                        <strong>
+                            {{
+                                task.created_at.strftime(
+                                    "%d %b %Y"
+                                )
+                            }}
+                        </strong>
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="task-edit-help-card">
+
+                <span>Priority Preparation</span>
+
+                <h3>Why these fields matter</h3>
+
+                <p>
+                    Importance, difficulty, deadline and status will
+                    later be used by the Smart Priority Engine.
+                </p>
+
+                <ul>
+                    <li>Critical tasks receive greater weight.</li>
+                    <li>Upcoming deadlines increase urgency.</li>
+                    <li>Blocked tasks require resolution planning.</li>
+                    <li>Difficulty helps balance daily workload.</li>
+                </ul>
+
+            </section>
+
+        </aside>
+
+    </div>
+
+</div>
+
+{% endblock %}

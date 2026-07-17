@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Tasks | LifeOS AI
+{% endblock %}
+
+{% block content %}
+
+<div class="task-center-page">
+
+    <header class="workspace-page-header">
+        <div>
+            <span class="workspace-eyebrow">
+                Global Task Center
+            </span>
+
+            <h1>Tasks</h1>
+
+            <p>
+                View and manage tasks from all your projects
+                in one place.
+            </p>
+        </div>
+    </header>
+
+
+    <section class="project-summary-grid">
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-purple">
+                T
+            </div>
+
+            <div>
+                <span>Total Tasks</span>
+                <strong>{{ total_tasks }}</strong>
+            </div>
+        </article>
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-blue">
+                P
+            </div>
+
+            <div>
+                <span>In Progress</span>
+                <strong>{{ in_progress_tasks }}</strong>
+            </div>
+        </article>
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-green">
+                C
+            </div>
+
+            <div>
+                <span>Completed</span>
+                <strong>{{ completed_tasks }}</strong>
+            </div>
+        </article>
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-orange">
+                O
+            </div>
+
+            <div>
+                <span>Overdue</span>
+                <strong>{{ overdue_tasks|length }}</strong>
+            </div>
+        </article>
+
+    </section>
+
+
+    <section class="task-filter-panel">
+
+        <div class="task-search-wrapper">
+            <span>⌕</span>
+
+            <input
+                type="search"
+                id="taskSearchInput"
+                placeholder="Search all tasks..."
+                autocomplete="off"
+            >
+        </div>
+
+        <select id="taskStatusFilter">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in progress">In Progress</option>
+            <option value="blocked">Blocked</option>
+            <option value="completed">Completed</option>
+        </select>
+
+        <select id="taskImportanceFilter">
+            <option value="all">All importance</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+        </select>
+
+        <select id="taskProjectFilter">
+            <option value="all">All projects</option>
+
+            {% for project in projects %}
+                <option value="{{ project.id }}">
+                    {{ project.title }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <button
+            type="button"
+            class="clear-task-filters"
+            id="clearTaskFilters"
+        >
+            Clear
+        </button>
+
+    </section>
+
+
+    {% if tasks %}
+
+        <section
+            class="professional-task-list"
+            id="professionalTaskList"
+        >
+
+            {% for task in tasks %}
+
+                <article
+                    class="professional-task-card
+                    {% if task.status == 'Completed' %}
+                        completed
+                    {% endif %}
+                    {% if task.id in overdue_task_ids %}
+                        overdue
+                    {% endif %}"
+                    data-task-card
+                    data-title="{{ task.title|lower }}"
+                    data-description="{{ (task.description or '')|lower }}"
+                    data-module="{{ (task.module or '')|lower }}"
+                    data-status="{{ task.status|lower }}"
+                    data-importance="{{ task.importance|lower }}"
+                    data-project="{{ task.project_id }}"
+                >
+
+                    <form
+                        method="POST"
+                        action="{{ url_for(
+                            'task_bp.toggle_task',
+                            task_id=task.id
+                        ) }}"
+                            data-loading-title="Updating task"
+                            data-loading-message="Saving the task status change..."
+                            data-loading-delay="250"
+                        >
+                        <button
+                            type="submit"
+                            class="professional-task-toggle
+                            {% if task.status == 'Completed' %}
+                                checked
+                            {% endif %}"
+                            title="Toggle completion"
+                        >
+                            {% if task.status == "Completed" %}
+                                ✓
+                            {% endif %}
+                        </button>
+                    </form>
+
+
+                    <div class="professional-task-content">
+
+                        <div class="professional-task-labels">
+
+                            <span class="task-module-label">
+                                {{ task.project.title }}
+                            </span>
+
+                            {% if task.module %}
+                                <span class="task-module-label">
+                                    {{ task.module }}
+                                </span>
+                            {% endif %}
+
+                            <span
+                                class="task-importance-label
+                                task-importance-{{ task.importance|lower }}"
+                            >
+                                {{ task.importance }}
+                            </span>
+
+                            <span
+                                class="task-status-label
+                                task-status-{{
+                                    task.status
+                                    | lower
+                                    | replace(' ', '-')
+                                }}"
+                            >
+                                {{ task.status }}
+                            </span>
+
+                            {% if task.id in overdue_task_ids %}
+                                <span class="task-deadline-label overdue">
+                                    Overdue
+                                </span>
+                            {% elif task.id in due_soon_task_ids %}
+                                <span class="task-deadline-label upcoming">
+                                    Due Soon
+                                </span>
+                            {% endif %}
+
+                        </div>
+
+                        <h3>{{ task.title }}</h3>
+
+                        {% if task.description %}
+                            <p class="professional-task-description">
+                                {{ task.description }}
+                            </p>
+                        {% endif %}
+
+                        <div class="professional-task-meta">
+
+                            <div>
+                                <span>Project</span>
+                                <strong>
+                                    {{ task.project.title }}
+                                </strong>
+                            </div>
+
+                            <div>
+                                <span>Difficulty</span>
+                                <strong>
+                                    {{ task.difficulty }}
+                                </strong>
+                            </div>
+
+                            <div>
+                                <span>Deadline</span>
+                                <strong>
+                                    {% if task.deadline %}
+                                        {{
+                                            task.deadline.strftime(
+                                                "%d %b %Y"
+                                            )
+                                        }}
+                                    {% else %}
+                                        No deadline
+                                    {% endif %}
+                                </strong>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="professional-task-actions">
+
+                        <a
+                            href="{{ url_for(
+                                'project_bp.project_details',
+                                project_id=task.project_id
+                            ) }}#tasks"
+                            class="task-edit-action"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >
+                            Open Project
+                        </a>
+
+                        <a
+                            href="{{ url_for(
+                                'task_bp.edit_task',
+                                task_id=task.id
+                            ) }}"
+                            class="task-edit-action"
+                    data-page-loading
+                    data-loading-title="Opening task editor"
+                    data-loading-message="Preparing the task form..."
+                        >
+                            Edit
+                        </a>
+
+                    </div>
+
+                </article>
+
+            {% endfor %}
+
+        </section>
+
+
+        <section
+            class="task-no-results"
+            id="taskNoResults"
+            hidden
+        >
+            <div>⌕</div>
+
+            <h3>No matching tasks</h3>
+
+            <p>
+                Change the filters or search text.
+            </p>
+
+            <button
+                type="button"
+                class="workspace-secondary-button"
+                id="clearTaskFiltersEmpty"
+            >
+                Clear Filters
+            </button>
+        </section>
+
+    {% else %}
+
+        <section class="professional-task-empty-state">
+            <div class="empty-task-symbol">✓</div>
+
+            <span>Task Center</span>
+
+            <h2>No tasks available</h2>
+
+            <p>
+                Create tasks inside one of your projects
+                and they will appear here.
+            </p>
+
+            <a
+                href="{{ url_for('project_bp.projects') }}"
+                class="workspace-primary-button"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                        >
+                Open Projects
+            </a>
+        </section>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

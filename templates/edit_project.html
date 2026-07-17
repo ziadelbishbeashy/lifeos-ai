@@ -1,70 +1,53 @@
 {% extends "base.html" %}
 
+{% block title %}Edit {{ project.title }} | LifeOS AI{% endblock %}
+
 {% block content %}
+<header class="page-header">
+    <div>
+        <a href="{{ url_for('project_bp.project_details', project_id=project.id) }}" class="back-link"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >&larr; Back to Project</a>
+        <span class="eyebrow">Project Manager</span>
+        <h1>Edit Project</h1>
+        <p class="page-description">Update the project identity, resources, timeline and progress.</p>
+    </div>
+</header>
 
-<a href="{{ url_for('project_bp.project_details', project_id=project.id) }}">&larr; Back to Project</a>
-
-<section class="form-section">
-    <h2>Edit Project</h2>
-
-    <form method="POST" class="project-form">
-        <label>Project Title *</label>
-        <input type="text" name="title" value="{{ project.title }}" required>
-
-        <label>Project Type</label>
-        <input type="text" name="project_type" value="{{ project.project_type or '' }}">
-
-        <label>Description</label>
-        <textarea name="description">{{ project.description or '' }}</textarea>
-
-        <label>Goal</label>
-        <textarea name="goal">{{ project.goal or '' }}</textarea>
-
-        <label>Technology Stack</label>
-        <input type="text" name="tech_stack" value="{{ project.tech_stack or '' }}">
-
-        <label>Project Folder Path (optional)</label>
-        <input type="text" name="project_folder" value="{{ project.project_folder or '' }}">
-
-        <label>GitHub Link (optional)</label>
-        <input type="url" name="github_link" value="{{ project.github_link or '' }}">
-
-        <label>Demo Link (optional)</label>
-        <input type="url" name="demo_link" value="{{ project.demo_link or '' }}">
-
-        <label>Start Date</label>
-        <input type="date" name="start_date" value="{{ project.start_date or '' }}">
-
-        <label>Deadline</label>
-        <input type="date" name="deadline" id="deadline-input" value="{{ project.deadline or '' }}" {% if not project.deadline %}disabled{% endif %}>
-
-        <label class="checkbox-label">
-            <input type="checkbox" name="no_deadline" id="no-deadline-checkbox" {% if not project.deadline %}checked{% endif %}>
-            No Deadline
-        </label>
-
-        <label>Status</label>
-        <select name="status">
-            {% for option in ["Planning", "In Progress", "Completed", "Paused"] %}
-                <option value="{{ option }}" {% if project.status == option %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-        </select>
-
-        <label>Priority</label>
-        <select name="priority">
-            {% for option in ["Low", "Medium", "High"] %}
-                <option value="{{ option }}" {% if project.priority == option %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-        </select>
-
-        <label>Current Phase</label>
-        <input type="text" name="current_phase" value="{{ project.current_phase or '' }}">
-
-        <label>Progress %</label>
-        <input type="number" name="progress" min="0" max="100" value="{{ project.progress or 0 }}">
-
-        <button type="submit">Save Changes</button>
+<section class="content-panel project-form-panel">
+    <form method="POST" class="project-form"
+        data-loading-title="Updating project"
+        data-loading-message="Saving your project changes..."
+                        >
+        <div class="form-grid">
+            <div class="form-field"><label for="title">Project title <span class="required">*</span></label><input type="text" id="title" name="title" value="{{ project.title }}" required></div>
+            <div class="form-field"><label for="project_type">Project type</label><input type="text" id="project_type" name="project_type" value="{{ project.project_type or '' }}"></div>
+            <div class="form-field full-width"><label for="description">Description</label><textarea id="description" name="description">{{ project.description or '' }}</textarea></div>
+            <div class="form-field full-width"><label for="goal">Main goal</label><textarea id="goal" name="goal">{{ project.goal or '' }}</textarea></div>
+            <div class="form-field full-width"><label for="tech_stack">Technology stack</label><input type="text" id="tech_stack" name="tech_stack" value="{{ project.tech_stack or '' }}"></div>
+            <div class="form-field full-width"><label for="project_folder">Project folder path</label><input type="text" id="project_folder" name="project_folder" value="{{ project.project_folder or '' }}"></div>
+            <div class="form-field"><label for="github_link">GitHub link</label><input type="url" id="github_link" name="github_link" value="{{ project.github_link or '' }}"></div>
+            <div class="form-field"><label for="demo_link">Demo link</label><input type="url" id="demo_link" name="demo_link" value="{{ project.demo_link or '' }}"></div>
+            <div class="form-field"><label for="start_date">Start date</label><input type="date" id="start_date" name="start_date" value="{% if project.start_date %}{{ project.start_date.strftime('%Y-%m-%d') }}{% endif %}"></div>
+            <div class="form-field">
+                <label for="deadline-input">Deadline</label>
+                <div class="deadline-control">
+                    <input type="date" id="deadline-input" name="deadline" value="{% if project.deadline %}{{ project.deadline.strftime('%Y-%m-%d') }}{% endif %}" {% if not project.deadline %}disabled{% endif %}>
+                    <label class="checkbox-control"><input type="checkbox" name="no_deadline" id="no-deadline-checkbox" {% if not project.deadline %}checked{% endif %}><span>No deadline</span></label>
+                </div>
+            </div>
+            <div class="form-field"><label for="status">Status</label><select id="status" name="status">{% for item in ["Planning", "In Progress", "Paused", "Completed"] %}<option value="{{ item }}" {% if project.status == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+            <div class="form-field"><label for="priority">Priority</label><select id="priority" name="priority">{% for item in ["Low", "Medium", "High", "Critical"] %}<option value="{{ item }}" {% if project.priority == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+            <div class="form-field"><label for="current_phase">Current phase</label><input type="text" id="current_phase" name="current_phase" value="{{ project.current_phase or '' }}"></div>
+            <div class="form-field"><label for="progress">Progress percentage</label><input type="number" id="progress" name="progress" min="0" max="100" value="{{ project.progress or 0 }}"></div>
+        </div>
+        <div class="form-actions"><button type="submit" class="primary-button">Save Changes</button><a href="{{ url_for('project_bp.project_details', project_id=project.id) }}" class="outline-button"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >Cancel</a></div>
     </form>
 </section>
-
 {% endblock %}

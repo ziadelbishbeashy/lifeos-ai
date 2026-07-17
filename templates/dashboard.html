@@ -1,61 +1,465 @@
 {% extends "base.html" %}
 
+{% block title %}Dashboard | LifeOS AI{% endblock %}
+{% block page_kicker %}Execution overview{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
 {% block content %}
+<section class="dashboard-hero">
+    <div class="dashboard-hero-copy">
+        <span class="dashboard-eyebrow" id="dashboardGreeting">
+            Welcome back, {{ current_user.name.split()[0] }}
+        </span>
 
-<section class="hero">
-    <h1>LifeOS AI</h1>
-    <p>Personal Execution Intelligence Workspace</p>
+        <h1>
+            Turn today into
+            <span>measurable progress.</span>
+        </h1>
+
+        <p>
+            Your projects, tasks and execution signals are gathered
+            here so you can focus on the next meaningful action.
+        </p>
+
+        <div class="dashboard-hero-actions">
+            <a
+                href="{{ url_for('project_bp.projects') }}#new-project"
+                class="dashboard-primary-action"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                        >
+                <span>+</span>
+                Create Project
+            </a>
+
+            <a
+                href="{{ url_for('project_bp.projects') }}"
+                class="dashboard-secondary-action"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                        >
+                View Workspace
+            </a>
+        </div>
+    </div>
+
+    <div class="hero-execution-card">
+        <div class="execution-card-heading">
+            <div>
+                <span>Execution readiness</span>
+                <strong>{{ completion_rate }}%</strong>
+            </div>
+
+            <div
+                class="mini-progress-ring"
+                data-progress="{{ completion_rate }}"
+                aria-label="{{ completion_rate }} percent task completion"
+            >
+                <span></span>
+            </div>
+        </div>
+
+        <div class="execution-card-metrics">
+            <div>
+                <span>Active projects</span>
+                <strong>{{ active_projects_count }}</strong>
+            </div>
+
+            <div>
+                <span>Open actions</span>
+                <strong>{{ open_tasks_count }}</strong>
+            </div>
+
+            <div>
+                <span>Average progress</span>
+                <strong>{{ average_project_progress }}%</strong>
+            </div>
+        </div>
+
+        <p>
+            {% if overdue_tasks_count %}
+                {{ overdue_tasks_count }} overdue task{% if overdue_tasks_count != 1 %}s{% endif %}
+                need attention.
+            {% elif open_tasks_count %}
+                Your workspace is clear of overdue work.
+            {% else %}
+                Add tasks to begin measuring execution health.
+            {% endif %}
+        </p>
+    </div>
 </section>
 
-<section class="cards">
-    <div class="card">
-        <h3>Projects</h3>
-        <p>{{ projects_count }}</p>
-    </div>
+<section class="dashboard-stat-grid" aria-label="Workspace statistics">
+    <article class="dashboard-stat-card stat-card-purple">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2h7.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-10Z"/>
+            </svg>
+        </div>
 
-    <div class="card">
-        <h3>Tasks</h3>
-        <p>{{ tasks_count }}</p>
-    </div>
+        <div>
+            <span>Active Projects</span>
+            <strong>{{ active_projects_count }}</strong>
+            <small>{{ projects_count }} total workspaces</small>
+        </div>
+    </article>
 
-    <div class="card">
-        <h3>Notes</h3>
-        <p>{{ notes_count }}</p>
-    </div>
+    <article class="dashboard-stat-card stat-card-blue">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 5h11v2H9V5Zm0 6h11v2H9v-2Zm0 6h11v2H9v-2ZM4.5 4A1.5 1.5 0 1 1 3 5.5 1.5 1.5 0 0 1 4.5 4Zm0 6A1.5 1.5 0 1 1 3 11.5 1.5 1.5 0 0 1 4.5 10Zm0 6A1.5 1.5 0 1 1 3 17.5 1.5 1.5 0 0 1 4.5 16Z"/>
+            </svg>
+        </div>
 
-    <div class="card">
-        <h3>Documents</h3>
-        <p>{{ documents_count }}</p>
-    </div>
+        <div>
+            <span>Open Tasks</span>
+            <strong>{{ open_tasks_count }}</strong>
+            <small>{{ tasks_count }} total actions</small>
+        </div>
+    </article>
+
+    <article class="dashboard-stat-card stat-card-green">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9.5 16.2-3.7-3.7L4.4 14l5.1 5.1L20 8.6 18.6 7.2 9.5 16.2Z"/>
+            </svg>
+        </div>
+
+        <div>
+            <span>Completed</span>
+            <strong>{{ completed_tasks_count }}</strong>
+            <small>{{ completion_rate }}% completion rate</small>
+        </div>
+    </article>
+
+    <article class="dashboard-stat-card stat-card-red">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M11 7h2v6h-2V7Zm0 8h2v2h-2v-2Zm1-13 10 18H2L12 2Zm0 4.1L5.4 18h13.2L12 6.1Z"/>
+            </svg>
+        </div>
+
+        <div>
+            <span>Blocked Tasks</span>
+            <strong>{{ blocked_tasks_count }}</strong>
+            <small>{{ overdue_tasks_count }} overdue</small>
+        </div>
+    </article>
 </section>
 
-<a class="btn" href="{{ url_for('project_bp.projects') }}">Manage Projects</a>
+<section class="dashboard-main-grid">
+    <article class="dashboard-panel focus-panel">
+        <div class="dashboard-panel-heading">
+            <div>
+                <span class="panel-kicker">Smart focus</span>
+                <h2>Today's Priority</h2>
+            </div>
 
-<section class="section-block">
-    <h2>Latest Projects</h2>
+            <span class="live-status">
+                <i></i>
+                Live
+            </span>
+        </div>
 
-    {% if latest_projects %}
-        <div class="projects-grid">
-            {% for project in latest_projects %}
-                <a class="project-card-link" href="{{ url_for('project_bp.project_details', project_id=project.id) }}">
-                    <div class="project-card">
-                        <div class="project-card-header">
-                            <h3>{{ project.title }}</h3>
-                            <span class="badge status-{{ project.status|lower|replace(' ', '-') }}">{{ project.status }}</span>
-                        </div>
-                        <p class="muted">{{ project.project_type or "General" }}</p>
-                        <div class="progress-bar">
-                            <div class="progress-fill" data-progress="{{ project.progress or 0 }}"></div>
-                        </div>
-                    </div>
+        {% if focus_task %}
+            <div class="focus-task-card">
+                <div class="focus-task-topline">
+                    <span class="focus-importance importance-{{ focus_task.importance|lower }}">
+                        {{ focus_task.importance }} priority
+                    </span>
+
+                    <span class="focus-status">
+                        {{ focus_task.status }}
+                    </span>
+                </div>
+
+                <h3>{{ focus_task.title }}</h3>
+
+                <p>
+                    {{ focus_task.description or
+                       "This action has been selected from your active work based on status, importance and deadline." }}
+                </p>
+
+                <div class="focus-task-meta">
+                    <span>
+                        <small>Project</small>
+                        <strong>{{ focus_task.project.title }}</strong>
+                    </span>
+
+                    <span>
+                        <small>Module</small>
+                        <strong>{{ focus_task.module or "General" }}</strong>
+                    </span>
+
+                    <span>
+                        <small>Deadline</small>
+                        <strong>{{ focus_task.deadline or "No deadline" }}</strong>
+                    </span>
+                </div>
+
+                <div class="focus-task-actions">
+                    <a
+                        href="{{ url_for('project_bp.project_details', project_id=focus_task.project_id) }}"
+                        class="dashboard-primary-action compact"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >
+                        Open Project
+                    </a>
+
+                    <a
+                        href="{{ url_for('task_bp.edit_task', task_id=focus_task.id) }}"
+                        class="dashboard-secondary-action compact"
+                    data-page-loading
+                    data-loading-title="Opening task editor"
+                    data-loading-message="Preparing the task form..."
+                        >
+                        Edit Task
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            <div class="dashboard-empty-state compact-empty-state">
+                <div class="empty-state-icon">✓</div>
+                <h3>No active priority task</h3>
+                <p>
+                    Add a task or reopen an existing one to create your next focus.
+                </p>
+                <a href="{{ url_for('project_bp.projects') }}" class="dashboard-secondary-action compact"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                        >
+                    Open Projects
                 </a>
-            {% endfor %}
+            </div>
+        {% endif %}
+    </article>
+
+    <article class="dashboard-panel health-panel">
+        <div class="dashboard-panel-heading">
+            <div>
+                <span class="panel-kicker">Workspace signal</span>
+                <h2>Execution Health</h2>
+            </div>
         </div>
-    {% else %}
-        <div class="empty-state">
-            <p>No projects yet. <a href="{{ url_for('project_bp.projects') }}">Create your first project</a>.</p>
+
+        <div class="health-ring-layout">
+            <div
+                class="progress-ring"
+                data-progress="{{ completion_rate }}"
+                aria-label="{{ completion_rate }} percent complete"
+            >
+                <div class="progress-ring-inner">
+                    <strong>{{ completion_rate }}%</strong>
+                    <span>complete</span>
+                </div>
+            </div>
+
+            <div class="health-breakdown">
+                <div>
+                    <span class="health-dot completed-dot"></span>
+                    <small>Completed</small>
+                    <strong>{{ completed_tasks_count }}</strong>
+                </div>
+
+                <div>
+                    <span class="health-dot open-dot"></span>
+                    <small>Open</small>
+                    <strong>{{ open_tasks_count }}</strong>
+                </div>
+
+                <div>
+                    <span class="health-dot blocked-dot"></span>
+                    <small>Blocked</small>
+                    <strong>{{ blocked_tasks_count }}</strong>
+                </div>
+            </div>
         </div>
-    {% endif %}
+
+        <div class="health-message">
+            {% if completion_rate >= 75 %}
+                <strong>Strong execution momentum.</strong>
+                <span>Keep closing active work before adding more.</span>
+            {% elif completion_rate >= 40 %}
+                <strong>Healthy progress is building.</strong>
+                <span>Resolve blockers to improve your completion rate.</span>
+            {% elif tasks_count %}
+                <strong>Your workspace needs focus.</strong>
+                <span>Choose one important task and move it forward today.</span>
+            {% else %}
+                <strong>Your execution baseline is ready.</strong>
+                <span>Add project tasks to begin tracking progress.</span>
+            {% endif %}
+        </div>
+    </article>
 </section>
 
+<section class="dashboard-secondary-grid">
+    <article class="dashboard-panel projects-panel">
+        <div class="dashboard-panel-heading">
+            <div>
+                <span class="panel-kicker">Recent workspaces</span>
+                <h2>Projects</h2>
+            </div>
+
+            <a href="{{ url_for('project_bp.projects') }}" class="panel-link"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                        >
+                View all
+                <span>→</span>
+            </a>
+        </div>
+
+        {% if latest_projects %}
+            <div class="dashboard-project-list">
+                {% for project in latest_projects %}
+                    <a
+                        href="{{ url_for('project_bp.project_details', project_id=project.id) }}"
+                        class="dashboard-project-row"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >
+                        <div class="project-row-icon">
+                            {{ project.title[0]|upper }}
+                        </div>
+
+                        <div class="project-row-main">
+                            <div class="project-row-heading">
+                                <div>
+                                    <h3>{{ project.title }}</h3>
+                                    <p>{{ project.current_phase or project.project_type or "Project workspace" }}</p>
+                                </div>
+
+                                <span class="project-status status-{{ project.status|lower|replace(' ', '-') }}">
+                                    {{ project.status }}
+                                </span>
+                            </div>
+
+                            <div class="project-row-progress">
+                                <div class="progress-track">
+                                    <div
+                                        class="progress-fill"
+                                        data-progress="{{ project.progress or 0 }}"
+                                    ></div>
+                                </div>
+
+                                <strong>{{ project.progress or 0 }}%</strong>
+                            </div>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="dashboard-empty-state compact-empty-state">
+                <div class="empty-state-icon">P</div>
+                <h3>No projects created</h3>
+                <p>Create your first workspace to start organizing execution.</p>
+            </div>
+        {% endif %}
+    </article>
+
+    <article class="dashboard-panel deadlines-panel">
+        <div class="dashboard-panel-heading">
+            <div>
+                <span class="panel-kicker">Time awareness</span>
+                <h2>Upcoming Deadlines</h2>
+            </div>
+
+            <span class="panel-date">{{ today.strftime('%d %b') }}</span>
+        </div>
+
+        {% if upcoming_tasks %}
+            <div class="deadline-list">
+                {% for task in upcoming_tasks %}
+                    <a
+                        href="{{ url_for('project_bp.project_details', project_id=task.project_id) }}"
+                        class="deadline-row {% if task.deadline < today %}deadline-overdue{% endif %}"
+                    data-page-loading
+                    data-loading-title="Opening project workspace"
+                    data-loading-message="Loading project details and tasks..."
+                        >
+                        <div class="deadline-date-box">
+                            <strong>{{ task.deadline.strftime('%d') }}</strong>
+                            <span>{{ task.deadline.strftime('%b') }}</span>
+                        </div>
+
+                        <div class="deadline-main">
+                            <h3>{{ task.title }}</h3>
+                            <p>{{ task.project.title }}</p>
+                        </div>
+
+                        <span class="deadline-status">
+                            {% if task.deadline < today %}
+                                Overdue
+                            {% else %}
+                                {{ task.importance }}
+                            {% endif %}
+                        </span>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="dashboard-empty-state compact-empty-state">
+                <div class="empty-state-icon">D</div>
+                <h3>No upcoming deadlines</h3>
+                <p>Your current task list has no dated deadlines.</p>
+            </div>
+        {% endif %}
+    </article>
+</section>
+
+<section class="quick-actions-section">
+    <div class="quick-actions-heading">
+        <div>
+            <span class="panel-kicker">Move faster</span>
+            <h2>Quick Actions</h2>
+        </div>
+
+        <span>{{ notes_count }} notes · {{ documents_count }} documents</span>
+    </div>
+
+    <div class="quick-action-grid">
+        <a href="{{ url_for('project_bp.projects') }}#new-project" class="quick-action-card"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                        >
+            <span class="quick-action-icon">+</span>
+            <div>
+                <strong>Start a project</strong>
+                <small>Create a new execution workspace</small>
+            </div>
+            <em>→</em>
+        </a>
+
+        <a href="{{ url_for('project_bp.projects') }}" class="quick-action-card"
+                    data-page-loading
+                    data-loading-title="Opening projects"
+                    data-loading-message="Loading your project workspace..."
+                        >
+            <span class="quick-action-icon">T</span>
+            <div>
+                <strong>Add project tasks</strong>
+                <small>Open a project and plan the next actions</small>
+            </div>
+            <em>→</em>
+        </a>
+
+        <span class="quick-action-card quick-action-disabled">
+            <span class="quick-action-icon">AI</span>
+            <div>
+                <strong>Analyze a note</strong>
+                <small>Available in the AI Notes phase</small>
+            </div>
+            <em>Soon</em>
+        </span>
+    </div>
+</section>
 {% endblock %}
