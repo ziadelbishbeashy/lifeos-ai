@@ -1642,6 +1642,40 @@ svg {
     opacity: 0.55;
 }
 
+
+.email-notification-section {
+    border-color: rgba(109, 124, 255, 0.22);
+}
+
+.email-action-card {
+    width: 100%;
+    border: 1px solid var(--app-border);
+    cursor: default;
+    font-family: inherit;
+    text-align: left;
+}
+
+.email-action-card button {
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, var(--app-primary), var(--app-primary-light));
+    color: white;
+    font-family: inherit;
+    font-size: 8px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 12px 26px rgba(109, 124, 255, 0.22);
+}
+
+.email-action-card button:hover {
+    transform: translateY(-1px);
+}
+
+html[data-theme="light"] .email-action-card button {
+    color: white;
+}
+
 /* Generic private-page components used by the existing project/task templates. */
 .page-header {
     display: flex;
@@ -8835,5 +8869,256 @@ html[data-theme="light"] .profile-dropdown {
 
     .task-scope-option {
         padding: 13px;
+    }
+}
+
+/* =========================================================
+   PHASE 5.1 — PROFESSIONAL EMAIL NOTIFICATIONS
+   ========================================================= */
+.notification-settings-page {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.notification-settings-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.notification-settings-card,
+.notification-mini-card,
+.notification-history-table-card {
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.72);
+    border-radius: 26px;
+    padding: 1.5rem;
+    box-shadow: 0 24px 70px rgba(2, 6, 23, 0.28);
+}
+
+html[data-theme="light"] .notification-settings-card,
+html[data-theme="light"] .notification-mini-card,
+html[data-theme="light"] .notification-history-table-card {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(148, 163, 184, 0.25);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.notification-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 1rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.notification-status-pill.enabled {
+    color: #bbf7d0;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.notification-status-pill.disabled {
+    color: #fecaca;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.notification-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.1rem 0 2rem;
+}
+
+.notification-toggle-card {
+    display: flex;
+    gap: 0.9rem;
+    align-items: flex-start;
+    padding: 1rem;
+    border-radius: 20px;
+    cursor: pointer;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.48);
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+html[data-theme="light"] .notification-toggle-card {
+    background: rgba(248, 250, 252, 0.86);
+}
+
+.notification-toggle-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(129, 140, 248, 0.45);
+}
+
+.notification-toggle-card.master-toggle {
+    grid-column: 1 / -1;
+    border-color: rgba(129, 140, 248, 0.55);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(139, 92, 246, 0.12));
+}
+
+.notification-toggle-card input {
+    width: 18px;
+    height: 18px;
+    margin-top: 0.2rem;
+    accent-color: #818cf8;
+}
+
+.notification-toggle-card strong {
+    display: block;
+    margin-bottom: 0.3rem;
+}
+
+.notification-toggle-card small,
+.notification-time-grid small {
+    color: var(--muted-text, #94a3b8);
+    line-height: 1.5;
+}
+
+.notification-time-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.notification-settings-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.8rem;
+    margin-top: 1.5rem;
+}
+
+.notification-test-panel {
+    display: grid;
+    gap: 1rem;
+}
+
+.notification-mini-card h2 {
+    margin: 0.4rem 0 0.6rem;
+}
+
+.notification-mini-card form + form,
+.notification-mini-card a.full-width,
+.notification-mini-card .full-width + .full-width {
+    margin-top: 0.7rem;
+}
+
+.full-width {
+    width: 100%;
+    justify-content: center;
+}
+
+.notification-log-list {
+    display: grid;
+    gap: 0.75rem;
+    margin: 1rem 0;
+}
+
+.notification-log-list article {
+    padding: 0.9rem;
+    border-radius: 16px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(15, 23, 42, 0.4);
+}
+
+html[data-theme="light"] .notification-log-list article {
+    background: rgba(248, 250, 252, 0.9);
+}
+
+.notification-log-list strong,
+.notification-log-list span,
+.notification-log-list small {
+    display: block;
+}
+
+.notification-log-list span,
+.notification-log-list small {
+    margin-top: 0.25rem;
+    color: var(--muted-text, #94a3b8);
+    font-size: 0.82rem;
+}
+
+.notification-history-table-card {
+    overflow-x: auto;
+}
+
+.notification-history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.notification-history-table th,
+.notification-history-table td {
+    text-align: left;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    vertical-align: top;
+}
+
+.notification-history-table th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted-text, #94a3b8);
+}
+
+.notification-log-status {
+    display: inline-flex;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    background: rgba(34, 197, 94, 0.12);
+    color: #bbf7d0;
+}
+
+.notification-log-status.failed {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fecaca;
+}
+
+.task-reminder-label {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #c7d2fe;
+    background: rgba(99, 102, 241, 0.14);
+    border: 1px solid rgba(129, 140, 248, 0.26);
+}
+
+.reminder-form-grid {
+    margin-bottom: 1rem;
+}
+
+.reminder-master-checkbox {
+    padding: 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(129, 140, 248, 0.28);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+@media (max-width: 1100px) {
+    .notification-settings-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .notification-toggle-grid,
+    .notification-time-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .notification-settings-actions {
+        flex-direction: column-reverse;
     }
 }

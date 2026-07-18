@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Notification Settings | LifeOS AI{% endblock %}
+{% block page_kicker %}Phase 5.1{% endblock %}
+{% block page_title %}Smart Notifications{% endblock %}
+
+{% block content %}
+<div class="notification-settings-page">
+
+    <header class="workspace-page-header">
+        <div>
+            <span class="workspace-eyebrow">Email & Scheduling</span>
+            <h1>Notification Preferences</h1>
+            <p>
+                Control which LifeOS emails are sent, when daily checkups arrive,
+                and whether reminders are active for your workspace.
+            </p>
+        </div>
+
+        <div class="notification-status-pill {% if email_configured %}enabled{% else %}disabled{% endif %}">
+            {% if email_configured %}
+                Email configured
+            {% else %}
+                Email not configured
+            {% endif %}
+        </div>
+    </header>
+
+    <section class="notification-settings-layout">
+        <form
+            method="POST"
+            class="notification-settings-card"
+            data-loading-title="Saving notification preferences"
+            data-loading-message="Updating your LifeOS email controls..."
+        >
+            <div class="task-form-section-heading compact-section-heading">
+                <span>01</span>
+                <div>
+                    <h2>Main Email Controls</h2>
+                    <p>Turn the whole email channel on or off, then choose the categories you want.</p>
+                </div>
+            </div>
+
+            <div class="notification-toggle-grid">
+                <label class="notification-toggle-card master-toggle">
+                    <input type="checkbox" name="email_enabled" {% if preferences.email_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Email Notifications</strong>
+                        <small>Main switch for all LifeOS emails.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="task_reminders_enabled" {% if preferences.task_reminders_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Task Deadline Reminders</strong>
+                        <small>Send reminders before task deadlines.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="custom_task_reminders_enabled" {% if preferences.custom_task_reminders_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Custom Task Reminders</strong>
+                        <small>Send reminders based on each task's chosen reminder time.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="overdue_alerts_enabled" {% if preferences.overdue_alerts_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Overdue Alerts</strong>
+                        <small>Warn the user when tasks become late.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="daily_checkup_enabled" {% if preferences.daily_checkup_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Daily Checkup</strong>
+                        <small>Morning email with today's tasks and risks.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="weekly_summary_enabled" {% if preferences.weekly_summary_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Weekly Summary</strong>
+                        <small>Weekly workspace progress and upcoming actions.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="monthly_analytics_enabled" {% if preferences.monthly_analytics_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Monthly Analytics</strong>
+                        <small>Monthly productivity and project health email.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="project_deadline_alerts_enabled" {% if preferences.project_deadline_alerts_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Project Deadline Alerts</strong>
+                        <small>Prepared for project deadline reminders.</small>
+                    </span>
+                </label>
+
+                <label class="notification-toggle-card">
+                    <input type="checkbox" name="project_risk_alerts_enabled" {% if preferences.project_risk_alerts_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Project Risk Alerts</strong>
+                        <small>Prepared for project health score warnings.</small>
+                    </span>
+                </label>
+            </div>
+
+            <div class="task-form-section-heading compact-section-heading">
+                <span>02</span>
+                <div>
+                    <h2>Timing Rules</h2>
+                    <p>Choose when LifeOS should send recurring messages.</p>
+                </div>
+            </div>
+
+            <div class="notification-time-grid">
+                <div class="task-form-field">
+                    <label for="taskReminderDaysBefore">Task reminder days before deadline</label>
+                    <input
+                        type="number"
+                        min="0"
+                        max="14"
+                        id="taskReminderDaysBefore"
+                        name="task_reminder_days_before"
+                        value="{{ preferences.task_reminder_days_before }}"
+                    >
+                    <small>0 means only on the deadline day.</small>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="dailyCheckupTime">Daily checkup time</label>
+                    <input
+                        type="time"
+                        id="dailyCheckupTime"
+                        name="daily_checkup_time"
+                        value="{{ preferences.daily_checkup_time.strftime('%H:%M') }}"
+                    >
+                </div>
+
+                <div class="task-form-field">
+                    <label for="weeklySummaryDay">Weekly summary day</label>
+                    <select id="weeklySummaryDay" name="weekly_summary_day">
+                        {% set days = [(0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday')] %}
+                        {% for value, label in days %}
+                            <option value="{{ value }}" {% if preferences.weekly_summary_day == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="weeklySummaryTime">Weekly summary time</label>
+                    <input
+                        type="time"
+                        id="weeklySummaryTime"
+                        name="weekly_summary_time"
+                        value="{{ preferences.weekly_summary_time.strftime('%H:%M') }}"
+                    >
+                </div>
+
+                <div class="task-form-field">
+                    <label for="monthlyReportDay">Monthly report day</label>
+                    <input
+                        type="number"
+                        min="1"
+                        max="28"
+                        id="monthlyReportDay"
+                        name="monthly_report_day"
+                        value="{{ preferences.monthly_report_day }}"
+                    >
+                    <small>Use 1-28 to avoid month length problems.</small>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="monthlyReportTime">Monthly analytics time</label>
+                    <input
+                        type="time"
+                        id="monthlyReportTime"
+                        name="monthly_report_time"
+                        value="{{ preferences.monthly_report_time.strftime('%H:%M') }}"
+                    >
+                </div>
+
+                <div class="task-form-field">
+                    <label for="quietHoursStart">Quiet hours start</label>
+                    <input
+                        type="time"
+                        id="quietHoursStart"
+                        name="quiet_hours_start"
+                        value="{% if preferences.quiet_hours_start %}{{ preferences.quiet_hours_start.strftime('%H:%M') }}{% endif %}"
+                    >
+                </div>
+
+                <div class="task-form-field">
+                    <label for="quietHoursEnd">Quiet hours end</label>
+                    <input
+                        type="time"
+                        id="quietHoursEnd"
+                        name="quiet_hours_end"
+                        value="{% if preferences.quiet_hours_end %}{{ preferences.quiet_hours_end.strftime('%H:%M') }}{% endif %}"
+                    >
+                </div>
+            </div>
+
+            <div class="notification-settings-actions">
+                <a href="{{ url_for('dashboard') }}" class="workspace-secondary-button">Back to Dashboard</a>
+                <button type="submit" class="workspace-primary-button">Save Preferences</button>
+            </div>
+        </form>
+
+        <aside class="notification-test-panel">
+            <section class="notification-mini-card">
+                <span class="workspace-eyebrow">Testing</span>
+                <h2>Manual Email Controls</h2>
+                <p>Use these buttons while developing before turning on the background scheduler.</p>
+
+                <form method="POST" action="{{ url_for('notification_bp.send_test_notification_email') }}">
+                    <button type="submit" class="workspace-primary-button full-width">Send Test Email</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('notification_bp.run_my_email_notification_check') }}">
+                    <button type="submit" class="workspace-secondary-button full-width">Run Smart Check</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('notification_bp.send_my_daily_summary') }}">
+                    <button type="submit" class="workspace-secondary-button full-width">Send Daily Checkup</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('notification_bp.send_my_weekly_summary') }}">
+                    <button type="submit" class="workspace-secondary-button full-width">Send Weekly Summary</button>
+                </form>
+
+                <form method="POST" action="{{ url_for('notification_bp.send_my_monthly_analytics') }}">
+                    <button type="submit" class="workspace-secondary-button full-width">Send Monthly Analytics</button>
+                </form>
+            </section>
+
+            <section class="notification-mini-card">
+                <span class="workspace-eyebrow">Recent Logs</span>
+                <h2>Email History</h2>
+
+                {% if recent_logs %}
+                    <div class="notification-log-list compact">
+                        {% for log in recent_logs %}
+                            <article>
+                                <strong>{{ log.notification_type|replace('_', ' ')|title }}</strong>
+                                <span>{{ log.sent_at.strftime('%d %b %Y %H:%M') }}</span>
+                                <small>{{ log.sent_to }}</small>
+                            </article>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p>No emails have been logged yet.</p>
+                {% endif %}
+
+                <a href="{{ url_for('notification_bp.notification_history') }}" class="workspace-secondary-button full-width">View Full History</a>
+            </section>
+        </aside>
+    </section>
+</div>
+{% endblock %}

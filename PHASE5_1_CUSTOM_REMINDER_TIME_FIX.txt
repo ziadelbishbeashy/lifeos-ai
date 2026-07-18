@@ -1,0 +1,14 @@
+Phase 5.1 Custom Reminder Time Fix
+
+What changed:
+- LifeOS no longer forces reminders to 9:00 AM.
+- The reminder time input is now used for all reminder types.
+- Deadline-based reminders use the task deadline date + the selected reminder time.
+- Custom reminders require both custom reminder date and custom reminder time.
+
+No database migration is required for this fix.
+
+Files changed:
+- routes/task_routes.py
+- templates/tasks.html
+- templates/edit_task.html

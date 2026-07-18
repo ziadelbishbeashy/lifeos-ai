@@ -439,6 +439,73 @@
     </article>
 </section>
 
+<section class="quick-actions-section email-notification-section">
+    <div class="quick-actions-heading">
+        <div>
+            <span class="panel-kicker">Phase 5.1</span>
+            <h2>Smart Notifications</h2>
+        </div>
+
+        <span>User-controlled reminders, daily checkups, and analytics emails</span>
+    </div>
+
+    <div class="quick-action-grid">
+        <a
+            href="{{ url_for('notification_bp.notification_settings') }}"
+            class="quick-action-card email-action-card"
+            data-page-loading
+            data-loading-title="Opening notification settings"
+            data-loading-message="Loading your email preferences..."
+        >
+            <span class="quick-action-icon">⚙</span>
+            <div>
+                <strong>Notification Settings</strong>
+                <small>Control reminders, daily checkups, weekly summaries, and monthly analytics.</small>
+            </div>
+            <em>→</em>
+        </a>
+
+        <form
+            action="{{ url_for('notification_bp.run_my_email_notification_check') }}"
+            method="POST"
+            class="quick-action-card email-action-card"
+        >
+            <span class="quick-action-icon">!</span>
+            <div>
+                <strong>Run Smart Check</strong>
+                <small>Check custom reminders, deadlines, daily checkups, weekly summaries, and monthly analytics.</small>
+            </div>
+            <button type="submit">Check</button>
+        </form>
+
+        <form
+            action="{{ url_for('notification_bp.send_my_daily_summary') }}"
+            method="POST"
+            class="quick-action-card email-action-card"
+        >
+            <span class="quick-action-icon">D</span>
+            <div>
+                <strong>Daily Checkup</strong>
+                <small>Send today's open, overdue, and upcoming tasks summary.</small>
+            </div>
+            <button type="submit">Send</button>
+        </form>
+
+        <form
+            action="{{ url_for('notification_bp.send_my_monthly_analytics') }}"
+            method="POST"
+            class="quick-action-card email-action-card"
+        >
+            <span class="quick-action-icon">M</span>
+            <div>
+                <strong>Monthly Analytics</strong>
+                <small>Email the user's productivity and project health snapshot.</small>
+            </div>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+</section>
+
 <section class="quick-actions-section">
     <div class="quick-actions-heading">
         <div>

@@ -2,6 +2,47 @@
 
 {% block title %}
     Tasks | LifeOS AI
+<script>
+(function () {
+    const reminderType = document.getElementById("workspaceTaskReminderType");
+    const reminderDate = document.getElementById("workspaceTaskReminderDate");
+    const reminderDateLabel = document.getElementById("workspaceTaskReminderDateLabel");
+    const reminderDateHint = document.getElementById("workspaceTaskReminderDateHint");
+
+    function updateReminderDateState() {
+        if (!reminderType || !reminderDate) {
+            return;
+        }
+
+        const isCustom = reminderType.value === "custom";
+        reminderDate.disabled = !isCustom;
+        reminderDate.required = isCustom;
+
+        if (!isCustom) {
+            reminderDate.value = "";
+            if (reminderDateLabel) {
+                reminderDateLabel.textContent = "Custom reminder date";
+            }
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Deadline-based reminders use the task deadline date. Only the time is customized here.";
+            }
+        } else {
+            if (reminderDateLabel) {
+                reminderDateLabel.textContent = "Custom reminder date";
+            }
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Choose the exact reminder date for this custom reminder.";
+            }
+        }
+    }
+
+    if (reminderType) {
+        reminderType.addEventListener("change", updateReminderDateState);
+        updateReminderDateState();
+    }
+})();
+</script>
+
 {% endblock %}
 
 {% block content %}
@@ -237,6 +278,12 @@
                             {% elif task.id in due_soon_task_ids %}
                                 <span class="task-deadline-label upcoming">
                                     Due Soon
+                                </span>
+                            {% endif %}
+
+                            {% if task.reminder_enabled and task.reminder_datetime %}
+                                <span class="task-reminder-label">
+                                    Reminder {{ task.reminder_datetime.strftime('%d %b %H:%M') }}
                                 </span>
                             {% endif %}
 
@@ -603,6 +650,47 @@
                 </div>
             </div>
 
+            <div class="task-form-section-heading compact-section-heading">
+                <span>03</span>
+
+                <div>
+                    <h2>Reminder</h2>
+                    <p>Let the user choose the exact reminder date and time for this task.</p>
+                </div>
+            </div>
+
+            <div class="task-form-grid reminder-form-grid">
+                <div class="task-form-field task-form-full">
+                    <label class="professional-checkbox reminder-master-checkbox">
+                        <input type="checkbox" name="reminder_enabled">
+                        <span>Enable email reminder for this task</span>
+                    </label>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskReminderType">Reminder type</label>
+                    <select id="workspaceTaskReminderType" name="reminder_type">
+                        <option value="custom" selected>Custom date and time</option>
+                        <option value="due_time">On deadline day at chosen time</option>
+                        <option value="one_day_before">1 day before deadline at chosen time</option>
+                        <option value="three_days_before">3 days before deadline at chosen time</option>
+                        <option value="one_hour_before">1 hour before chosen deadline time</option>
+                    </select>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskReminderDate" id="workspaceTaskReminderDateLabel">Custom reminder date</label>
+                    <input type="date" id="workspaceTaskReminderDate" name="reminder_date">
+                    <small id="workspaceTaskReminderDateHint">Used only when reminder type is custom.</small>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskReminderTime">Reminder time</label>
+                    <input type="time" id="workspaceTaskReminderTime" name="reminder_time">
+                    <small>Choose the exact time. LifeOS will not force 9:00 AM anymore.</small>
+                </div>
+            </div>
+
             <div class="task-modal-actions">
                 <button
                     type="button"
@@ -622,5 +710,46 @@
         </form>
     </section>
 </div>
+
+<script>
+(function () {
+    const reminderType = document.getElementById("workspaceTaskReminderType");
+    const reminderDate = document.getElementById("workspaceTaskReminderDate");
+    const reminderDateLabel = document.getElementById("workspaceTaskReminderDateLabel");
+    const reminderDateHint = document.getElementById("workspaceTaskReminderDateHint");
+
+    function updateReminderDateState() {
+        if (!reminderType || !reminderDate) {
+            return;
+        }
+
+        const isCustom = reminderType.value === "custom";
+        reminderDate.disabled = !isCustom;
+        reminderDate.required = isCustom;
+
+        if (!isCustom) {
+            reminderDate.value = "";
+            if (reminderDateLabel) {
+                reminderDateLabel.textContent = "Custom reminder date";
+            }
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Deadline-based reminders use the task deadline date. Only the time is customized here.";
+            }
+        } else {
+            if (reminderDateLabel) {
+                reminderDateLabel.textContent = "Custom reminder date";
+            }
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Choose the exact reminder date for this custom reminder.";
+            }
+        }
+    }
+
+    if (reminderType) {
+        reminderType.addEventListener("change", updateReminderDateState);
+        updateReminderDateState();
+    }
+})();
+</script>
 
 {% endblock %}

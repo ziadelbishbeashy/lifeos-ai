@@ -33,6 +33,90 @@ def parse_date(value):
         return None
 
 
+
+
+def parse_time_value(value):
+    if not value:
+        return None
+
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except ValueError:
+        return None
+
+
+def combine_date_time(date_value, time_value):
+    """
+    Build an exact reminder datetime.
+
+    Important: do not silently default to 09:00.
+    The user must choose the reminder time from the form.
+    """
+
+    if not date_value or not time_value:
+        return None
+
+    return datetime.combine(date_value, time_value)
+
+
+def build_reminder_datetime(form, deadline):
+    reminder_enabled = form.get("reminder_enabled") == "on"
+
+    if not reminder_enabled:
+        return False, "none", None
+
+    reminder_type = form.get("reminder_type") or "custom"
+
+    # Backward compatibility with the previous 9:00 AM option name.
+    if reminder_type == "due_morning":
+        reminder_type = "due_time"
+
+    reminder_time = parse_time_value(form.get("reminder_time"))
+
+    if not reminder_time:
+        raise ValueError("Please choose a reminder time.")
+
+    if reminder_type == "custom":
+        reminder_date = parse_date(form.get("reminder_date"))
+
+        if not reminder_date:
+            raise ValueError("Please choose a custom reminder date.")
+
+        reminder_datetime = combine_date_time(reminder_date, reminder_time)
+
+    else:
+        if not deadline:
+            raise ValueError(
+                "Please set a task deadline before using deadline-based reminders."
+            )
+
+        reminder_datetime = combine_date_time(deadline, reminder_time)
+
+        if reminder_type == "one_day_before":
+            reminder_datetime = reminder_datetime - timedelta(days=1)
+
+        elif reminder_type == "three_days_before":
+            reminder_datetime = reminder_datetime - timedelta(days=3)
+
+        elif reminder_type == "one_hour_before":
+            reminder_datetime = reminder_datetime - timedelta(hours=1)
+
+        elif reminder_type != "due_time":
+            reminder_type = "custom"
+            reminder_date = parse_date(form.get("reminder_date"))
+
+            if not reminder_date:
+                raise ValueError("Please choose a custom reminder date.")
+
+            reminder_datetime = combine_date_time(reminder_date, reminder_time)
+
+    if not reminder_datetime:
+        raise ValueError(
+            "Reminder is enabled, but no valid reminder time could be created."
+        )
+
+    return True, reminder_type, reminder_datetime
+
 def clean_optional_text(value):
     if value is None:
         return None
@@ -58,14 +142,24 @@ def get_owned_task_or_404(task_id):
 
 
 def get_task_fields_from_form(form):
+    deadline = parse_date(form.get("deadline"))
+
+    reminder_enabled, reminder_type, reminder_datetime = build_reminder_datetime(
+        form,
+        deadline,
+    )
+
     return {
         "title": form.get("title", "").strip(),
         "description": clean_optional_text(form.get("description")),
         "module": clean_optional_text(form.get("module")),
         "importance": form.get("importance", "Medium"),
         "difficulty": form.get("difficulty", "Medium"),
-        "deadline": parse_date(form.get("deadline")),
+        "deadline": deadline,
         "status": form.get("status", "Pending"),
+        "reminder_enabled": reminder_enabled,
+        "reminder_type": reminder_type,
+        "reminder_datetime": reminder_datetime,
     }
 
 
@@ -224,7 +318,11 @@ def add_workspace_task():
     - Project Task: project_id = selected project id
     """
 
-    task_data = get_task_fields_from_form(request.form)
+    try:
+        task_data = get_task_fields_from_form(request.form)
+    except ValueError as error:
+        flash(str(error), "error")
+        return redirect(url_for("task_bp.all_tasks"))
 
     if not task_data["title"]:
         flash("Task title is required.", "error")
@@ -273,7 +371,17 @@ def add_task(project_id):
     """
 
     project = get_owned_project_or_404(project_id)
-    task_data = get_task_fields_from_form(request.form)
+
+    try:
+        task_data = get_task_fields_from_form(request.form)
+    except ValueError as error:
+        flash(str(error), "error")
+        return redirect(
+            url_for(
+                "project_bp.project_details",
+                project_id=project.id,
+            )
+        )
 
     if not task_data["title"]:
         flash("Task title is required.", "error")
@@ -313,7 +421,11 @@ def edit_task(task_id):
     task = get_owned_task_or_404(task_id)
 
     if request.method == "POST":
-        task_data = get_task_fields_from_form(request.form)
+        try:
+            task_data = get_task_fields_from_form(request.form)
+        except ValueError as error:
+            flash(str(error), "error")
+            return redirect(url_for("task_bp.edit_task", task_id=task.id))
 
         if not task_data["title"]:
             flash("Task title is required.", "error")

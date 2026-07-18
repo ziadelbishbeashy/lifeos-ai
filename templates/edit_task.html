@@ -2,6 +2,45 @@
 
 {% block title %}
     Edit Task | LifeOS AI
+<script>
+(function () {
+    const reminderType = document.getElementById("editTaskReminderType");
+    const reminderDate = document.getElementById("editTaskReminderDate");
+    const reminderDateLabel = document.getElementById("editTaskReminderDateLabel");
+    const reminderDateHint = document.getElementById("editTaskReminderDateHint");
+
+    function updateReminderDateState() {
+        if (!reminderType || !reminderDate) {
+            return;
+        }
+
+        const isCustom = reminderType.value === "custom";
+        reminderDate.disabled = !isCustom;
+        reminderDate.required = isCustom;
+
+        if (!isCustom) {
+            reminderDate.value = "";
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Deadline-based reminders use the task deadline date. Only the time is customized here.";
+            }
+        } else {
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Choose the exact reminder date for this custom reminder.";
+            }
+        }
+
+        if (reminderDateLabel) {
+            reminderDateLabel.textContent = "Custom reminder date";
+        }
+    }
+
+    if (reminderType) {
+        reminderType.addEventListener("change", updateReminderDateState);
+        updateReminderDateState();
+    }
+})();
+</script>
+
 {% endblock %}
 
 {% block content %}
@@ -297,6 +336,75 @@
                     </div>
                 </div>
 
+                <div class="task-form-section-heading">
+                    <span>04</span>
+
+                    <div>
+                        <h2>Email Reminder</h2>
+
+                        <p>
+                            Set an exact email reminder time for this task. The reminder will only be sent
+                            if custom task reminders are enabled in notification settings.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="task-form-grid reminder-form-grid">
+                    <div class="task-form-field task-form-full">
+                        <label class="professional-checkbox reminder-master-checkbox">
+                            <input
+                                type="checkbox"
+                                name="reminder_enabled"
+                                {% if task.reminder_enabled %}checked{% endif %}
+                            >
+                            <span>Enable email reminder for this task</span>
+                        </label>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskReminderType">Reminder type</label>
+                        <select id="editTaskReminderType" name="reminder_type">
+                            {% set reminder_options = [
+                                ('custom', 'Custom date and time'),
+                                ('due_time', 'On deadline day at chosen time'),
+                                ('one_day_before', '1 day before deadline at chosen time'),
+                                ('three_days_before', '3 days before deadline at chosen time'),
+                                ('one_hour_before', '1 hour before chosen deadline time')
+                            ] %}
+                            {% for value, label in reminder_options %}
+                                <option
+                                    value="{{ value }}"
+                                    {% if task.reminder_type == value or (value == 'due_time' and task.reminder_type == 'due_morning') %}selected{% endif %}
+                                >
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskReminderDate" id="editTaskReminderDateLabel">Custom reminder date</label>
+                        <input
+                            type="date"
+                            id="editTaskReminderDate"
+                            name="reminder_date"
+                            value="{% if task.reminder_type == 'custom' and task.reminder_datetime %}{{ task.reminder_datetime.strftime('%Y-%m-%d') }}{% endif %}"
+                        >
+                        <small id="editTaskReminderDateHint">Used only when reminder type is custom.</small>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskReminderTime">Reminder time</label>
+                        <input
+                            type="time"
+                            id="editTaskReminderTime"
+                            name="reminder_time"
+                            value="{% if task.reminder_datetime %}{{ task.reminder_datetime.strftime('%H:%M') }}{% endif %}"
+                        >
+                        <small>Choose the exact time. LifeOS will not force 9:00 AM anymore.</small>
+                    </div>
+                </div>
+
                 <div class="edit-task-actions">
                     {% if task.project_id %}
                         <a
@@ -408,6 +516,17 @@
                             {{ task.created_at.strftime("%d %b %Y") }}
                         </strong>
                     </div>
+
+                    <div>
+                        <span>Reminder</span>
+                        <strong>
+                            {% if task.reminder_enabled and task.reminder_datetime %}
+                                {{ task.reminder_datetime.strftime("%d %b %Y %H:%M") }}
+                            {% else %}
+                                Disabled
+                            {% endif %}
+                        </strong>
+                    </div>
                 </div>
             </section>
 
@@ -430,5 +549,44 @@
         </aside>
     </div>
 </div>
+
+<script>
+(function () {
+    const reminderType = document.getElementById("editTaskReminderType");
+    const reminderDate = document.getElementById("editTaskReminderDate");
+    const reminderDateLabel = document.getElementById("editTaskReminderDateLabel");
+    const reminderDateHint = document.getElementById("editTaskReminderDateHint");
+
+    function updateReminderDateState() {
+        if (!reminderType || !reminderDate) {
+            return;
+        }
+
+        const isCustom = reminderType.value === "custom";
+        reminderDate.disabled = !isCustom;
+        reminderDate.required = isCustom;
+
+        if (!isCustom) {
+            reminderDate.value = "";
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Deadline-based reminders use the task deadline date. Only the time is customized here.";
+            }
+        } else {
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Choose the exact reminder date for this custom reminder.";
+            }
+        }
+
+        if (reminderDateLabel) {
+            reminderDateLabel.textContent = "Custom reminder date";
+        }
+    }
+
+    if (reminderType) {
+        reminderType.addEventListener("change", updateReminderDateState);
+        updateReminderDateState();
+    }
+})();
+</script>
 
 {% endblock %}

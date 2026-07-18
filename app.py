@@ -21,6 +21,8 @@ from flask_migrate import Migrate
 from database import db, get_database_uri
 from models import (
     Document,
+    EmailNotificationLog,
+    NotificationPreference,
     Note,
     Project,
     Task,
@@ -30,6 +32,8 @@ from models import (
 from routes.auth_routes import auth_bp
 from routes.project_routes import project_bp
 from routes.task_routes import task_bp
+from routes.notification_routes import notification_bp
+from services.scheduler_service import start_notification_scheduler
 
 
 load_dotenv()
@@ -89,6 +93,7 @@ def load_user(user_id):
 app.register_blueprint(auth_bp)
 app.register_blueprint(project_bp)
 app.register_blueprint(task_bp)
+app.register_blueprint(notification_bp)
 
 
 @app.route("/")
@@ -266,6 +271,8 @@ def dashboard():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+
+    start_notification_scheduler(app)
 
     print("\nREGISTERED ROUTES:")
 

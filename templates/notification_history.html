@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Notification History | LifeOS AI{% endblock %}
+{% block page_kicker %}Phase 5.1{% endblock %}
+{% block page_title %}Email History{% endblock %}
+
+{% block content %}
+<div class="notification-settings-page">
+    <header class="workspace-page-header">
+        <div>
+            <span class="workspace-eyebrow">Delivery Logs</span>
+            <h1>Notification History</h1>
+            <p>Review which emails were sent by LifeOS and when they were triggered.</p>
+        </div>
+
+        <a href="{{ url_for('notification_bp.notification_settings') }}" class="workspace-primary-button">
+            Notification Settings
+        </a>
+    </header>
+
+    {% if logs %}
+        <section class="notification-history-table-card">
+            <table class="notification-history-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Subject</th>
+                        <th>Recipient</th>
+                        <th>Status</th>
+                        <th>Sent At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                        <tr>
+                            <td>{{ log.notification_type|replace('_', ' ')|title }}</td>
+                            <td>{{ log.subject or 'No subject saved' }}</td>
+                            <td>{{ log.sent_to }}</td>
+                            <td>
+                                <span class="notification-log-status {{ log.status }}">
+                                    {{ log.status|title }}
+                                </span>
+                            </td>
+                            <td>{{ log.sent_at.strftime('%d %b %Y %H:%M') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    {% else %}
+        <section class="professional-task-empty-state">
+            <div class="empty-task-symbol">@</div>
+            <span>Email History</span>
+            <h2>No email logs yet</h2>
+            <p>Send a test email or run a smart notification check to create your first log.</p>
+            <a href="{{ url_for('notification_bp.notification_settings') }}" class="workspace-primary-button">Open Settings</a>
+        </section>
+    {% endif %}
+</div>
+{% endblock %}

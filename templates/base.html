@@ -43,7 +43,7 @@
         href="{{ url_for(
             'static',
             filename='css/style.css'
-        ) }}?v=phase5-task-logic-1"
+        ) }}?v=phase5-email-1"
     >
 </head>
 
@@ -203,6 +203,39 @@
 
                     <span>Tasks</span>
                     <small>All projects</small>
+                </a>
+
+
+                <!-- Smart Notifications -->
+
+                <a
+                    href="{{ url_for(
+                        'notification_bp.notification_settings'
+                    ) }}"
+                    class="navigation-link
+                    {{
+                        'active'
+                        if request.endpoint
+                        and request.endpoint.startswith(
+                            'notification_bp'
+                        )
+                        else ''
+                    }}"
+                    data-page-loading
+                    data-loading-title="Opening notifications"
+                    data-loading-message="Loading notification preferences..."
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M12 22a2.8 2.8 0 0 0 2.7-2h-5.4A2.8 2.8 0 0 0 12 22Zm8-6h-1V11a7 7 0 0 0-5-6.7V3a2 2 0 0 0-4 0v1.3A7 7 0 0 0 5 11v5H4a1 1 0 0 0 0 2h16a1 1 0 0 0 0-2Z"
+                        />
+                    </svg>
+
+                    <span>Notifications</span>
+                    <small>Phase 5.1</small>
                 </a>
 
 
@@ -805,7 +838,7 @@
         src="{{ url_for(
             'static',
             filename='js/main.js'
-        ) }}?v=phase5-task-logic-1"
+        ) }}?v=phase5-email-1"
     ></script>
 
 </body>

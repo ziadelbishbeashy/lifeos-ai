@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -20,6 +20,21 @@ class User(UserMixin, db.Model):
     tasks = db.relationship(
         "Task",
         back_populates="owner",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    email_notifications = db.relationship(
+        "EmailNotificationLog",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    notification_preferences = db.relationship(
+        "NotificationPreference",
+        back_populates="user",
+        uselist=False,
         lazy=True,
         cascade="all, delete-orphan",
     )
@@ -99,6 +114,13 @@ class Task(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True, index=True)
     project = db.relationship("Project", back_populates="tasks")
 
+    email_notifications = db.relationship(
+        "EmailNotificationLog",
+        back_populates="task",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     title = db.Column(db.Unicode(200), nullable=False)
     description = db.Column(db.UnicodeText, nullable=True)
     module = db.Column(db.Unicode(100), nullable=True)
@@ -108,6 +130,14 @@ class Task(db.Model):
     status = db.Column(db.Unicode(50), default="Pending")
     priority_score = db.Column(db.Float, default=0)
     reason = db.Column(db.UnicodeText, nullable=True)
+
+    # Phase 5.1 Professional Notifications:
+    # Custom user-controlled reminder per task.
+    reminder_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    reminder_type = db.Column(db.Unicode(50), nullable=False, default="none")
+    reminder_datetime = db.Column(db.DateTime, nullable=True)
+    last_reminder_sent_at = db.Column(db.DateTime, nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     @property
@@ -120,6 +150,102 @@ class Task(db.Model):
 
     def __repr__(self):
         return f"<Task {self.title}>"
+
+
+class NotificationPreference(db.Model):
+    __tablename__ = "notification_preferences"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    # Master switch
+    email_enabled = db.Column(db.Boolean, nullable=False, default=True)
+
+    # Email categories
+    task_reminders_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    custom_task_reminders_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    overdue_alerts_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    project_deadline_alerts_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    project_risk_alerts_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    daily_checkup_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    weekly_summary_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    monthly_analytics_enabled = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Timing preferences
+    task_reminder_days_before = db.Column(db.Integer, nullable=False, default=1)
+    project_reminder_days_before = db.Column(db.Integer, nullable=False, default=3)
+    daily_checkup_time = db.Column(db.Time, nullable=False, default=lambda: time(8, 0))
+    weekly_summary_day = db.Column(db.Integer, nullable=False, default=6)  # Monday=0, Sunday=6
+    weekly_summary_time = db.Column(db.Time, nullable=False, default=lambda: time(18, 0))
+    monthly_report_day = db.Column(db.Integer, nullable=False, default=1)
+    monthly_report_time = db.Column(db.Time, nullable=False, default=lambda: time(8, 0))
+    quiet_hours_start = db.Column(db.Time, nullable=True)
+    quiet_hours_end = db.Column(db.Time, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    user = db.relationship("User", back_populates="notification_preferences")
+
+    def __repr__(self):
+        return f"<NotificationPreference user_id={self.user_id}>"
+
+
+class EmailNotificationLog(db.Model):
+    __tablename__ = "email_notification_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+    )
+
+    project_id = db.Column(
+        db.Integer,
+        db.ForeignKey("projects.id"),
+        nullable=True,
+        index=True,
+    )
+
+    notification_type = db.Column(db.Unicode(80), nullable=False)
+    sent_to = db.Column(db.Unicode(255), nullable=False)
+    subject = db.Column(db.Unicode(255), nullable=True)
+    status = db.Column(db.Unicode(50), nullable=False, default="sent")
+    error_message = db.Column(db.UnicodeText, nullable=True)
+
+    # unique_key prevents duplicate reminders for the same user/task/day.
+    unique_key = db.Column(db.Unicode(255), nullable=False, unique=True, index=True)
+
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship("User", back_populates="email_notifications")
+    task = db.relationship("Task", back_populates="email_notifications")
+    project = db.relationship("Project")
+
+    def __repr__(self):
+        return f"<EmailNotificationLog {self.notification_type}>"
 
 
 class Note(db.Model):
