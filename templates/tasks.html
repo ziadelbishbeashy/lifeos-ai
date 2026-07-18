@@ -17,10 +17,19 @@
             <h1>Tasks</h1>
 
             <p>
-                View and manage tasks from all your projects
-                in one place.
+                View and manage both general workspace tasks and
+                project-connected tasks in one place.
             </p>
         </div>
+
+        <button
+            type="button"
+            class="workspace-primary-button"
+            data-open-task-modal
+        >
+            <span class="button-icon">+</span>
+            New Task
+        </button>
     </header>
 
 
@@ -43,8 +52,8 @@
             </div>
 
             <div>
-                <span>In Progress</span>
-                <strong>{{ in_progress_tasks }}</strong>
+                <span>General Tasks</span>
+                <strong>{{ general_tasks_count }}</strong>
             </div>
         </article>
 
@@ -54,8 +63,8 @@
             </div>
 
             <div>
-                <span>Completed</span>
-                <strong>{{ completed_tasks }}</strong>
+                <span>Project Tasks</span>
+                <strong>{{ project_tasks_count }}</strong>
             </div>
         </article>
 
@@ -102,8 +111,15 @@
             <option value="critical">Critical</option>
         </select>
 
+        <select id="taskScopeFilter">
+            <option value="all">All task scopes</option>
+            <option value="general">General workspace</option>
+            <option value="project">Project tasks</option>
+        </select>
+
         <select id="taskProjectFilter">
             <option value="all">All projects</option>
+            <option value="general">General Workspace</option>
 
             {% for project in projects %}
                 <option value="{{ project.id }}">
@@ -146,7 +162,8 @@
                     data-module="{{ (task.module or '')|lower }}"
                     data-status="{{ task.status|lower }}"
                     data-importance="{{ task.importance|lower }}"
-                    data-project="{{ task.project_id }}"
+                    data-scope="{% if task.project_id %}project{% else %}general{% endif %}"
+                    data-project="{% if task.project_id %}{{ task.project_id }}{% else %}general{% endif %}"
                 >
 
                     <form
@@ -159,6 +176,7 @@
                             data-loading-message="Saving the task status change..."
                             data-loading-delay="250"
                         >
+                        <input type="hidden" name="next" value="tasks">
                         <button
                             type="submit"
                             class="professional-task-toggle
@@ -178,8 +196,14 @@
 
                         <div class="professional-task-labels">
 
-                            <span class="task-module-label">
-                                {{ task.project.title }}
+                            <span
+                                class="task-scope-badge {% if task.project_id %}task-scope-project{% else %}task-scope-general{% endif %}"
+                            >
+                                {% if task.project_id %}
+                                    {{ task.project.title }}
+                                {% else %}
+                                    General Workspace
+                                {% endif %}
                             </span>
 
                             {% if task.module %}
@@ -229,9 +253,13 @@
                         <div class="professional-task-meta">
 
                             <div>
-                                <span>Project</span>
+                                <span>Scope</span>
                                 <strong>
-                                    {{ task.project.title }}
+                                    {% if task.project_id %}
+                                        {{ task.project.title }}
+                                    {% else %}
+                                        General Workspace
+                                    {% endif %}
                                 </strong>
                             </div>
 
@@ -263,19 +291,21 @@
 
 
                     <div class="professional-task-actions">
-
-                        <a
-                            href="{{ url_for(
-                                'project_bp.project_details',
-                                project_id=task.project_id
-                            ) }}#tasks"
-                            class="task-edit-action"
-                    data-page-loading
-                    data-loading-title="Opening project workspace"
-                    data-loading-message="Loading project details and tasks..."
-                        >
-                            Open Project
-                        </a>
+                        {% if task.project_id %}
+                            <a
+                                href="{{ url_for('project_bp.project_details', project_id=task.project_id) }}#tasks"
+                                class="task-edit-action"
+                                data-page-loading
+                                data-loading-title="Opening project workspace"
+                                data-loading-message="Loading project details and tasks..."
+                            >
+                                Open Project
+                            </a>
+                        {% else %}
+                            <span class="task-edit-action task-action-muted">
+                                General Task
+                            </span>
+                        {% endif %}
 
                         <a
                             href="{{ url_for(
@@ -331,23 +361,266 @@
             <h2>No tasks available</h2>
 
             <p>
-                Create tasks inside one of your projects
-                and they will appear here.
+                Create a general workspace task or connect a task
+                to one of your projects.
             </p>
 
-            <a
-                href="{{ url_for('project_bp.projects') }}"
+            <button
+                type="button"
                 class="workspace-primary-button"
-                    data-page-loading
-                    data-loading-title="Opening projects"
-                    data-loading-message="Loading your project workspace..."
-                        >
-                Open Projects
-            </a>
+                data-open-task-modal
+            >
+                Create Task
+            </button>
         </section>
 
     {% endif %}
 
+</div>
+
+
+<!-- =================================================
+     PHASE 5.0 — GLOBAL TASK CREATION MODAL
+     ================================================= -->
+
+<div
+    class="task-modal-overlay"
+    id="taskModalOverlay"
+    aria-hidden="true"
+>
+    <section
+        class="task-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="addWorkspaceTaskModalTitle"
+    >
+        <div class="task-modal-header">
+            <div>
+                <span class="workspace-eyebrow">
+                    New Workspace Action
+                </span>
+
+                <h2 id="addWorkspaceTaskModalTitle">
+                    Add Task
+                </h2>
+
+                <p>
+                    Create a general workspace task or attach it to a project.
+                </p>
+            </div>
+
+            <button
+                type="button"
+                class="task-modal-close"
+                data-close-task-modal
+                aria-label="Close task form"
+            >
+                
+            </button>
+        </div>
+
+        <form
+            method="POST"
+            action="/tasks/add"
+            class="professional-task-form"
+            data-loading-title="Creating task"
+            data-loading-message="Adding the task to your workspace..."
+        >
+            <div class="task-form-section-heading compact-section-heading">
+                <span>01</span>
+
+                <div>
+                    <h2>Task Scope</h2>
+                    <p>Choose whether this is a general task or project task.</p>
+                </div>
+            </div>
+
+            <div class="task-scope-options task-form-full">
+                <label class="task-scope-option">
+                    <input
+                        type="radio"
+                        name="task_scope"
+                        value="general"
+                        data-task-scope-control
+                        checked
+                    >
+                    <span>
+                        <strong>General Workspace Task</strong>
+                        <small>For study, job search, emails, reminders, and personal actions.</small>
+                    </span>
+                </label>
+
+                <label class="task-scope-option">
+                    <input
+                        type="radio"
+                        name="task_scope"
+                        value="project"
+                        data-task-scope-control
+                    >
+                    <span>
+                        <strong>Project Task</strong>
+                        <small>Attach this task to one of your active project workspaces.</small>
+                    </span>
+                </label>
+            </div>
+
+            <div
+                class="task-form-field task-form-full task-project-field"
+                data-task-project-field
+            >
+                <label for="workspaceTaskProject">
+                    Project
+                </label>
+
+                <select
+                    id="workspaceTaskProject"
+                    name="project_id"
+                >
+                    <option value="">
+                        Select a project
+                    </option>
+                    {% for project in projects %}
+                        <option value="{{ project.id }}">
+                            {{ project.title }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="task-form-grid">
+                <div class="task-form-field task-form-full">
+                    <label for="workspaceTaskTitle">
+                        Task Title
+                        <span>*</span>
+                    </label>
+
+                    <input
+                        type="text"
+                        id="workspaceTaskTitle"
+                        name="title"
+                        placeholder="Example: Update CV or fix dashboard layout"
+                        required
+                    >
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskModule">
+                        Module / Area
+                    </label>
+
+                    <input
+                        type="text"
+                        id="workspaceTaskModule"
+                        name="module"
+                        list="workspaceTaskModuleOptions"
+                        placeholder="Example: Career, Backend, Study"
+                    >
+
+                    <datalist id="workspaceTaskModuleOptions">
+                        <option value="Career">
+                        <option value="Study">
+                        <option value="Communication">
+                        <option value="Database">
+                        <option value="Backend">
+                        <option value="Frontend">
+                        <option value="Dashboard">
+                        <option value="AI">
+                        <option value="Testing">
+                        <option value="Deployment">
+                        <option value="Documentation">
+                    </datalist>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskStatus">
+                        Status
+                    </label>
+
+                    <select id="workspaceTaskStatus" name="status">
+                        <option value="Pending" selected>Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Blocked">Blocked</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                </div>
+
+                <div class="task-form-field task-form-full">
+                    <label for="workspaceTaskDescription">
+                        Description
+                    </label>
+
+                    <textarea
+                        id="workspaceTaskDescription"
+                        name="description"
+                        placeholder="Describe what needs to be done..."
+                    ></textarea>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskImportance">
+                        Importance
+                    </label>
+
+                    <select id="workspaceTaskImportance" name="importance">
+                        <option value="Low">Low</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                    </select>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskDifficulty">
+                        Difficulty
+                    </label>
+
+                    <select id="workspaceTaskDifficulty" name="difficulty">
+                        <option value="Easy">Easy</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="Hard">Hard</option>
+                    </select>
+                </div>
+
+                <div class="task-form-field task-form-full">
+                    <label for="workspaceTaskDeadline">
+                        Deadline
+                    </label>
+
+                    <input
+                        type="date"
+                        id="workspaceTaskDeadline"
+                        name="deadline"
+                    >
+
+                    <label class="professional-checkbox">
+                        <input
+                            type="checkbox"
+                            data-no-deadline
+                            data-deadline-target="workspaceTaskDeadline"
+                        >
+                        <span>No deadline</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="task-modal-actions">
+                <button
+                    type="button"
+                    class="workspace-secondary-button"
+                    data-close-task-modal
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    Add Task
+                </button>
+            </div>
+        </form>
+    </section>
 </div>
 
 {% endblock %}

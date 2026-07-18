@@ -111,13 +111,20 @@ def dashboard():
 
     tasks = (
         Task.query
-        .join(Project)
-        .filter(Project.user_id == current_user.id)
+        .filter_by(user_id=current_user.id)
         .all()
     )
 
     projects_count = len(projects)
     tasks_count = len(tasks)
+
+    general_tasks_count = sum(
+        1
+        for task in tasks
+        if task.project_id is None
+    )
+
+    project_tasks_count = tasks_count - general_tasks_count
 
     active_projects_count = sum(
         1
@@ -240,6 +247,8 @@ def dashboard():
         projects_count=projects_count,
         active_projects_count=active_projects_count,
         tasks_count=tasks_count,
+        general_tasks_count=general_tasks_count,
+        project_tasks_count=project_tasks_count,
         open_tasks_count=open_tasks_count,
         completed_tasks_count=completed_tasks_count,
         blocked_tasks_count=blocked_tasks_count,

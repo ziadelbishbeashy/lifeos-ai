@@ -1,11 +1,12 @@
-from datetime import date, datetime, timedelta 
+from datetime import date, datetime, timedelta
+
 from flask import (
     Blueprint,
     flash,
     redirect,
     render_template,
     request,
-    url_for
+    url_for,
 )
 from flask_login import current_user, login_required
 
@@ -14,18 +15,122 @@ from models import Project, Task
 
 
 task_bp = Blueprint("task_bp", __name__)
-@task_bp.route("/tasks")
+
+
+@task_bp.before_request
 @login_required
+def protect_task_routes():
+    return None
+
+
+def parse_date(value):
+    if not value:
+        return None
+
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def clean_optional_text(value):
+    if value is None:
+        return None
+
+    value = value.strip()
+    return value if value else None
+
+
+def get_owned_project_or_404(project_id):
+    return (
+        Project.query
+        .filter_by(id=project_id, user_id=current_user.id)
+        .first_or_404()
+    )
+
+
+def get_owned_task_or_404(task_id):
+    return (
+        Task.query
+        .filter_by(id=task_id, user_id=current_user.id)
+        .first_or_404()
+    )
+
+
+def get_task_fields_from_form(form):
+    return {
+        "title": form.get("title", "").strip(),
+        "description": clean_optional_text(form.get("description")),
+        "module": clean_optional_text(form.get("module")),
+        "importance": form.get("importance", "Medium"),
+        "difficulty": form.get("difficulty", "Medium"),
+        "deadline": parse_date(form.get("deadline")),
+        "status": form.get("status", "Pending"),
+    }
+
+
+def resolve_project_from_task_scope(form):
+    """
+    Return the selected Project for a project task.
+    Return None when the task is a General Workspace Task.
+    """
+
+    scope = form.get("task_scope", "general")
+
+    if scope != "project":
+        return None
+
+    project_id = form.get("project_id")
+
+    if not project_id:
+        raise ValueError("A project must be selected for project tasks.")
+
+    try:
+        project_id = int(project_id)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid project selected.")
+
+    project = (
+        Project.query
+        .filter_by(id=project_id, user_id=current_user.id)
+        .first()
+    )
+
+    if not project:
+        raise ValueError("Invalid project selected.")
+
+    return project
+
+
+def redirect_after_task_action(project_id=None):
+    """
+    Return the user to the page where the action happened.
+    Global task actions return to the Tasks page.
+    Project task actions return to the Project Details page.
+    """
+
+    next_page = request.form.get("next") or request.args.get("next")
+
+    if next_page == "tasks":
+        return redirect(url_for("task_bp.all_tasks"))
+
+    if project_id:
+        return redirect(
+            url_for(
+                "project_bp.project_details",
+                project_id=project_id,
+            )
+        )
+
+    return redirect(url_for("task_bp.all_tasks"))
+
+
+@task_bp.route("/tasks")
 def all_tasks():
     tasks = (
         Task.query
-        .join(Project)
-        .filter(
-            Project.user_id == current_user.id
-        )
-        .order_by(
-            Task.created_at.desc()
-        )
+        .filter_by(user_id=current_user.id)
+        .order_by(Task.created_at.desc())
         .all()
     )
 
@@ -35,28 +140,26 @@ def all_tasks():
     total_tasks = len(tasks)
 
     completed_tasks = sum(
-        1
-        for task in tasks
-        if task.status == "Completed"
+        1 for task in tasks if task.status == "Completed"
     )
 
     pending_tasks = sum(
-        1
-        for task in tasks
-        if task.status == "Pending"
+        1 for task in tasks if task.status == "Pending"
     )
 
     in_progress_tasks = sum(
-        1
-        for task in tasks
-        if task.status == "In Progress"
+        1 for task in tasks if task.status == "In Progress"
     )
 
     blocked_tasks = sum(
-        1
-        for task in tasks
-        if task.status == "Blocked"
+        1 for task in tasks if task.status == "Blocked"
     )
+
+    general_tasks_count = sum(
+        1 for task in tasks if task.project_id is None
+    )
+
+    project_tasks_count = total_tasks - general_tasks_count
 
     overdue_tasks = [
         task
@@ -80,12 +183,8 @@ def all_tasks():
 
     projects = (
         Project.query
-        .filter_by(
-            user_id=current_user.id
-        )
-        .order_by(
-            Project.title.asc()
-        )
+        .filter_by(user_id=current_user.id)
+        .order_by(Project.title.asc())
         .all()
     )
 
@@ -107,211 +206,157 @@ def all_tasks():
         pending_tasks=pending_tasks,
         in_progress_tasks=in_progress_tasks,
         blocked_tasks=blocked_tasks,
+        general_tasks_count=general_tasks_count,
+        project_tasks_count=project_tasks_count,
         overdue_tasks=overdue_tasks,
         due_soon_tasks=due_soon_tasks,
-        overdue_task_ids=[
-            task.id
-            for task in overdue_tasks
-        ],
-        due_soon_task_ids=[
-            task.id
-            for task in due_soon_tasks
-        ]
-    )
-
-@task_bp.before_request
-@login_required
-def protect_task_routes():
-    return None
-
-
-def get_owned_project_or_404(project_id):
-    return (
-        Project.query
-        .filter_by(
-            id=project_id,
-            user_id=current_user.id
-        )
-        .first_or_404()
+        overdue_task_ids=[task.id for task in overdue_tasks],
+        due_soon_task_ids=[task.id for task in due_soon_tasks],
     )
 
 
-def get_owned_task_or_404(task_id):
-    return (
-        Task.query
-        .join(Project)
-        .filter(
-            Task.id == task_id,
-            Project.user_id == current_user.id
-        )
-        .first_or_404()
-    )
+@task_bp.route("/tasks/add", methods=["POST"], endpoint="add_workspace_task")
+def add_workspace_task():
+    """
+    Create a task from the global Tasks page.
+    It can be either:
+    - General Workspace Task: project_id = None
+    - Project Task: project_id = selected project id
+    """
 
+    task_data = get_task_fields_from_form(request.form)
 
-def parse_date(value):
-    if not value:
-        return None
+    if not task_data["title"]:
+        flash("Task title is required.", "error")
+        return redirect(url_for("task_bp.all_tasks"))
 
     try:
-        return datetime.strptime(
-            value,
-            "%Y-%m-%d"
-        ).date()
-    except ValueError:
-        return None
-
-
-def clean_optional_text(value):
-    if value is None:
-        return None
-
-    value = value.strip()
-    return value if value else None
-
-
-@task_bp.route(
-    "/projects/<int:project_id>/tasks/add",
-    methods=["POST"]
-)
-def add_task(project_id):
-    project = get_owned_project_or_404(project_id)
-
-    title = request.form.get("title", "").strip()
-
-    if not title:
-        flash("Task title is required.", "error")
-
-        return redirect(
-            url_for(
-                "project_bp.project_details",
-                project_id=project.id
-            )
-        )
+        project = resolve_project_from_task_scope(request.form)
+    except ValueError as error:
+        flash(str(error), "error")
+        return redirect(url_for("task_bp.all_tasks"))
 
     task = Task(
-        project_id=project.id,
-        title=title,
-        description=clean_optional_text(
-            request.form.get("description")
-        ),
-        module=clean_optional_text(
-            request.form.get("module")
-        ),
-        importance=request.form.get(
-            "importance",
-            "Medium"
-        ),
-        difficulty=request.form.get(
-            "difficulty",
-            "Medium"
-        ),
-        deadline=parse_date(
-            request.form.get("deadline")
-        ),
-        status=request.form.get(
-            "status",
-            "Pending"
-        )
+        user_id=current_user.id,
+        project_id=project.id if project else None,
+        **task_data,
     )
 
     try:
         db.session.add(task)
         db.session.commit()
 
-        flash(
-            f'Task "{task.title}" added successfully.',
-            "success"
+        if project:
+            flash(
+                f'Task "{task.title}" added to "{project.title}".',
+                "success",
+            )
+        else:
+            flash(
+                f'General task "{task.title}" added successfully.',
+                "success",
+            )
+
+    except Exception as error:
+        db.session.rollback()
+        print("Add workspace task error:", error)
+        flash("The task could not be saved.", "error")
+
+    return redirect(url_for("task_bp.all_tasks"))
+
+
+@task_bp.route("/projects/<int:project_id>/tasks/add", methods=["POST"])
+def add_task(project_id):
+    """
+    Create a task from inside a project details page.
+    This always creates a project task.
+    """
+
+    project = get_owned_project_or_404(project_id)
+    task_data = get_task_fields_from_form(request.form)
+
+    if not task_data["title"]:
+        flash("Task title is required.", "error")
+        return redirect(
+            url_for(
+                "project_bp.project_details",
+                project_id=project.id,
+            )
         )
+
+    task = Task(
+        user_id=current_user.id,
+        project_id=project.id,
+        **task_data,
+    )
+
+    try:
+        db.session.add(task)
+        db.session.commit()
+        flash(f'Task "{task.title}" added successfully.', "success")
+
     except Exception as error:
         db.session.rollback()
         print("Add task error:", error)
-        flash(
-            "The task could not be saved.",
-            "error"
-        )
+        flash("The task could not be saved.", "error")
 
     return redirect(
         url_for(
             "project_bp.project_details",
-            project_id=project.id
+            project_id=project.id,
         )
     )
 
 
-@task_bp.route(
-    "/tasks/<int:task_id>/edit",
-    methods=["GET", "POST"]
-)
+@task_bp.route("/tasks/<int:task_id>/edit", methods=["GET", "POST"])
 def edit_task(task_id):
     task = get_owned_task_or_404(task_id)
 
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
+        task_data = get_task_fields_from_form(request.form)
 
-        if not title:
+        if not task_data["title"]:
             flash("Task title is required.", "error")
+            return redirect(url_for("task_bp.edit_task", task_id=task.id))
 
-            return redirect(
-                url_for(
-                    "task_bp.edit_task",
-                    task_id=task.id
-                )
-            )
+        try:
+            project = resolve_project_from_task_scope(request.form)
+        except ValueError as error:
+            flash(str(error), "error")
+            return redirect(url_for("task_bp.edit_task", task_id=task.id))
 
-        task.title = title
-        task.description = clean_optional_text(
-            request.form.get("description")
-        )
-        task.module = clean_optional_text(
-            request.form.get("module")
-        )
-        task.importance = request.form.get(
-            "importance",
-            "Medium"
-        )
-        task.difficulty = request.form.get(
-            "difficulty",
-            "Medium"
-        )
-        task.deadline = parse_date(
-            request.form.get("deadline")
-        )
-        task.status = request.form.get(
-            "status",
-            "Pending"
-        )
+        task.user_id = current_user.id
+        task.project_id = project.id if project else None
+
+        for field_name, field_value in task_data.items():
+            setattr(task, field_name, field_value)
 
         try:
             db.session.commit()
-            flash(
-                f'Task "{task.title}" updated successfully.',
-                "success"
-            )
+            flash(f'Task "{task.title}" updated successfully.', "success")
+
         except Exception as error:
             db.session.rollback()
             print("Edit task error:", error)
-            flash(
-                "The task could not be updated.",
-                "error"
-            )
+            flash("The task could not be updated.", "error")
 
-        return redirect(
-            url_for(
-                "project_bp.project_details",
-                project_id=task.project_id
-            )
-        )
+        return redirect_after_task_action(task.project_id)
+
+    projects = (
+        Project.query
+        .filter_by(user_id=current_user.id)
+        .order_by(Project.title.asc())
+        .all()
+    )
 
     return render_template(
         "edit_task.html",
-        task=task
+        task=task,
+        projects=projects,
     )
 
 
-@task_bp.route(
-    "/tasks/<int:task_id>/toggle",
-    methods=["POST"]
-)
+@task_bp.route("/tasks/<int:task_id>/toggle", methods=["POST"])
 def toggle_task(task_id):
     task = get_owned_task_or_404(task_id)
 
@@ -322,29 +367,21 @@ def toggle_task(task_id):
         task.status = "Completed"
         message = f'Task "{task.title}" completed.'
 
+    project_id = task.project_id
+
     try:
         db.session.commit()
         flash(message, "success")
+
     except Exception as error:
         db.session.rollback()
         print("Toggle task error:", error)
-        flash(
-            "The task status could not be updated.",
-            "error"
-        )
+        flash("The task status could not be updated.", "error")
 
-    return redirect(
-        url_for(
-            "project_bp.project_details",
-            project_id=task.project_id
-        )
-    )
+    return redirect_after_task_action(project_id)
 
 
-@task_bp.route(
-    "/tasks/<int:task_id>/delete",
-    methods=["POST"]
-)
+@task_bp.route("/tasks/<int:task_id>/delete", methods=["POST"])
 def delete_task(task_id):
     task = get_owned_task_or_404(task_id)
 
@@ -354,22 +391,11 @@ def delete_task(task_id):
     try:
         db.session.delete(task)
         db.session.commit()
+        flash(f'Task "{task_title}" deleted.', "success")
 
-        flash(
-            f'Task "{task_title}" deleted.',
-            "success"
-        )
     except Exception as error:
         db.session.rollback()
         print("Delete task error:", error)
-        flash(
-            "The task could not be deleted.",
-            "error"
-        )
+        flash("The task could not be deleted.", "error")
 
-    return redirect(
-        url_for(
-            "project_bp.project_details",
-            project_id=project_id
-        )
-    )
+    return redirect_after_task_action(project_id)

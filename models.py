@@ -17,6 +17,13 @@ class User(UserMixin, db.Model):
 
     projects = db.relationship("Project", back_populates="owner", lazy=True)
 
+    tasks = db.relationship(
+        "Task",
+        back_populates="owner",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -57,7 +64,7 @@ class Project(db.Model):
 
     tasks = db.relationship(
         "Task",
-        backref="project",
+        back_populates="project",
         lazy=True,
         cascade="all, delete-orphan",
     )
@@ -82,7 +89,16 @@ class Task(db.Model):
     __tablename__ = "tasks"
 
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+
+    # Phase 5.0:
+    # Every task belongs to the user workspace.
+    # It may optionally also belong to a project.
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    owner = db.relationship("User", back_populates="tasks")
+
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True, index=True)
+    project = db.relationship("Project", back_populates="tasks")
+
     title = db.Column(db.Unicode(200), nullable=False)
     description = db.Column(db.UnicodeText, nullable=True)
     module = db.Column(db.Unicode(100), nullable=True)
@@ -93,6 +109,14 @@ class Task(db.Model):
     priority_score = db.Column(db.Float, default=0)
     reason = db.Column(db.UnicodeText, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def is_general(self):
+        return self.project_id is None
+
+    @property
+    def scope_label(self):
+        return "General Workspace" if self.is_general else "Project Task"
 
     def __repr__(self):
         return f"<Task {self.title}>"

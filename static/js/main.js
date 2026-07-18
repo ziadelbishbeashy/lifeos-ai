@@ -1849,3 +1849,263 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     });
 });
+
+/* =========================================================
+   PHASE 5.0 — GENERAL / PROJECT TASK LOGIC UI
+   ========================================================= */
+
+document.addEventListener("DOMContentLoaded", function () {
+    "use strict";
+
+    function updateTaskScopeFields(scopeRoot) {
+        const checkedScope = scopeRoot.querySelector(
+            "input[name='task_scope']:checked"
+        );
+
+        const projectField = scopeRoot.querySelector(
+            "[data-task-project-field]"
+        );
+
+        if (!projectField || !checkedScope) {
+            return;
+        }
+
+        const projectSelect = projectField.querySelector("select");
+        const isProjectTask = checkedScope.value === "project";
+
+        projectField.hidden = !isProjectTask;
+        projectField.classList.toggle("is-visible", isProjectTask);
+
+        if (projectSelect) {
+            projectSelect.required = isProjectTask;
+
+            if (!isProjectTask) {
+                projectSelect.value = "";
+            }
+        }
+    }
+
+    document
+        .querySelectorAll("form.professional-task-form")
+        .forEach(function (form) {
+            if (!form.querySelector("[data-task-scope-control]")) {
+                return;
+            }
+
+            form
+                .querySelectorAll("[data-task-scope-control]")
+                .forEach(function (radio) {
+                    radio.addEventListener("change", function () {
+                        updateTaskScopeFields(form);
+                    });
+                });
+
+            updateTaskScopeFields(form);
+        });
+
+    const taskCards = Array.from(
+        document.querySelectorAll("[data-task-card]")
+    );
+
+    const taskSearchInput = document.getElementById("taskSearchInput");
+    const taskStatusFilter = document.getElementById("taskStatusFilter");
+    const taskImportanceFilter = document.getElementById("taskImportanceFilter");
+    const taskScopeFilter = document.getElementById("taskScopeFilter");
+    const taskProjectFilter = document.getElementById("taskProjectFilter");
+    const taskNoResults = document.getElementById("taskNoResults");
+    const taskList = document.getElementById("professionalTaskList");
+
+    function taskMatchesSearch(taskCard, searchValue) {
+        if (!searchValue) {
+            return true;
+        }
+
+        const searchableContent = [
+            taskCard.dataset.title,
+            taskCard.dataset.description,
+            taskCard.dataset.module,
+            taskCard.textContent
+        ]
+            .join(" ")
+            .toLowerCase();
+
+        return searchableContent.includes(searchValue);
+    }
+
+    function applyTaskFilters() {
+        if (!taskCards.length) {
+            return;
+        }
+
+        const searchValue = taskSearchInput
+            ? taskSearchInput.value.trim().toLowerCase()
+            : "";
+
+        const statusValue = taskStatusFilter
+            ? taskStatusFilter.value
+            : "all";
+
+        const importanceValue = taskImportanceFilter
+            ? taskImportanceFilter.value
+            : "all";
+
+        const scopeValue = taskScopeFilter
+            ? taskScopeFilter.value
+            : "all";
+
+        const projectValue = taskProjectFilter
+            ? taskProjectFilter.value
+            : "all";
+
+        let visibleCount = 0;
+
+        taskCards.forEach(function (taskCard) {
+            const matchesSearch = taskMatchesSearch(
+                taskCard,
+                searchValue
+            );
+
+            const matchesStatus =
+                statusValue === "all" ||
+                taskCard.dataset.status === statusValue;
+
+            const matchesImportance =
+                importanceValue === "all" ||
+                taskCard.dataset.importance === importanceValue;
+
+            const matchesScope =
+                scopeValue === "all" ||
+                taskCard.dataset.scope === scopeValue;
+
+            const matchesProject =
+                projectValue === "all" ||
+                taskCard.dataset.project === projectValue;
+
+            const isVisible =
+                matchesSearch &&
+                matchesStatus &&
+                matchesImportance &&
+                matchesScope &&
+                matchesProject;
+
+            taskCard.hidden = !isVisible;
+
+            if (isVisible) {
+                visibleCount += 1;
+            }
+        });
+
+        if (taskNoResults) {
+            taskNoResults.hidden = visibleCount !== 0;
+        }
+
+        if (taskList) {
+            taskList.hidden = visibleCount === 0;
+        }
+    }
+
+    [
+        taskSearchInput,
+        taskStatusFilter,
+        taskImportanceFilter,
+        taskScopeFilter,
+        taskProjectFilter
+    ]
+        .filter(Boolean)
+        .forEach(function (control) {
+            control.addEventListener(
+                control.tagName.toLowerCase() === "input"
+                    ? "input"
+                    : "change",
+                applyTaskFilters
+            );
+        });
+
+    function clearTaskFilters() {
+        if (taskSearchInput) taskSearchInput.value = "";
+        if (taskStatusFilter) taskStatusFilter.value = "all";
+        if (taskImportanceFilter) taskImportanceFilter.value = "all";
+        if (taskScopeFilter) taskScopeFilter.value = "all";
+        if (taskProjectFilter) taskProjectFilter.value = "all";
+        applyTaskFilters();
+    }
+
+    [
+        document.getElementById("clearTaskFilters"),
+        document.getElementById("clearTaskFiltersEmpty")
+    ]
+        .filter(Boolean)
+        .forEach(function (button) {
+            button.addEventListener("click", clearTaskFilters);
+        });
+
+    applyTaskFilters();
+});
+
+/* =========================================================
+   PHASE 5.0 — TASK MODAL OPEN/CLOSE SUPPORT
+   ========================================================= */
+
+document.addEventListener("DOMContentLoaded", function () {
+    "use strict";
+
+    const taskModalOverlay = document.getElementById("taskModalOverlay");
+
+    if (!taskModalOverlay) {
+        return;
+    }
+
+    const openTaskButtons = document.querySelectorAll("[data-open-task-modal]");
+    const closeTaskButtons = document.querySelectorAll("[data-close-task-modal]");
+
+    function openTaskModal() {
+        taskModalOverlay.classList.add("open");
+        taskModalOverlay.setAttribute("aria-hidden", "false");
+        document.body.classList.add("project-modal-open");
+
+        const firstInput = taskModalOverlay.querySelector(
+            "input[name='title'], input, select, textarea"
+        );
+
+        window.setTimeout(function () {
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }, 100);
+    }
+
+    function closeTaskModal() {
+        taskModalOverlay.classList.remove("open");
+        taskModalOverlay.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("project-modal-open");
+    }
+
+    openTaskButtons.forEach(function (button) {
+        button.addEventListener("click", function (event) {
+            event.preventDefault();
+            openTaskModal();
+        });
+    });
+
+    closeTaskButtons.forEach(function (button) {
+        button.addEventListener("click", function (event) {
+            event.preventDefault();
+            closeTaskModal();
+        });
+    });
+
+    taskModalOverlay.addEventListener("click", function (event) {
+        if (event.target === taskModalOverlay) {
+            closeTaskModal();
+        }
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (
+            event.key === "Escape" &&
+            taskModalOverlay.classList.contains("open")
+        ) {
+            closeTaskModal();
+        }
+    });
+});

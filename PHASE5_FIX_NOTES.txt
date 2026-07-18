@@ -1,0 +1,25 @@
+Phase 5.0 fix included in this folder:
+
+1. routes/task_routes.py now registers:
+   - task_bp.add_workspace_task -> POST /tasks/add
+   - task_bp.add_task -> POST /projects/<int:project_id>/tasks/add
+
+2. templates/tasks.html uses action="/tasks/add" for the global task form.
+   This avoids the repeated BuildError during template rendering.
+
+3. Local/private files were intentionally excluded from this ZIP:
+   - .env
+   - .git
+   - instance/
+   - __pycache__/
+
+After copying the files, restart Flask fully:
+   taskkill /F /IM python.exe
+   python app.py
+
+Optional route check:
+   python -c "from app import app; [print(r.endpoint, r.rule, r.methods) for r in app.url_map.iter_rules() if 'task_bp' in r.endpoint]"
+
+You should see:
+   task_bp.add_workspace_task /tasks/add {'POST', 'OPTIONS'}
+   task_bp.add_task /projects/<int:project_id>/tasks/add {'POST', 'OPTIONS'}

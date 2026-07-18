@@ -8720,3 +8720,120 @@ html[data-theme="light"] .profile-dropdown {
         width: 100%;
     }
 }
+
+
+/* =========================================================
+   PHASE 5.0 — GENERAL / PROJECT TASK LOGIC UI
+   ========================================================= */
+
+.task-scope-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.task-scope-option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.025);
+    cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        transform 0.2s ease;
+}
+
+.task-scope-option:hover {
+    border-color: rgba(157, 167, 255, 0.28);
+    background: rgba(109, 124, 255, 0.055);
+    transform: translateY(-1px);
+}
+
+.task-scope-option input {
+    width: auto;
+    height: auto;
+    margin-top: 3px;
+    accent-color: var(--app-primary-light);
+}
+
+.task-scope-option strong,
+.task-scope-option small {
+    display: block;
+}
+
+.task-scope-option strong {
+    color: var(--app-text);
+    font-size: 12px;
+}
+
+.task-scope-option small {
+    margin-top: 6px;
+    color: var(--app-muted);
+    font-size: 9px;
+    line-height: 1.55;
+}
+
+.task-project-field[hidden] {
+    display: none !important;
+}
+
+.task-project-field.is-visible {
+    animation: lifeOSPageEnter 0.2s ease both;
+}
+
+.task-scope-badge {
+    display: inline-flex;
+    min-height: 24px;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 8px;
+    font-weight: 850;
+    letter-spacing: 0.35px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.task-scope-general {
+    border: 1px solid rgba(65, 215, 220, 0.20);
+    background: rgba(65, 215, 220, 0.09);
+    color: #8ff4f7;
+}
+
+.task-scope-project {
+    border: 1px solid rgba(109, 124, 255, 0.24);
+    background: rgba(109, 124, 255, 0.11);
+    color: #c7ceff;
+}
+
+.task-action-muted {
+    cursor: default;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.compact-section-heading {
+    margin-bottom: 12px;
+}
+
+.task-filter-panel #taskScopeFilter,
+.task-filter-panel #taskProjectFilter {
+    min-width: 175px;
+}
+
+@media (max-width: 760px) {
+    .task-scope-options {
+        grid-template-columns: 1fr;
+    }
+
+    .task-scope-option {
+        padding: 13px;
+    }
+}

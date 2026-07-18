@@ -184,8 +184,14 @@
 
                 <div class="focus-task-meta">
                     <span>
-                        <small>Project</small>
-                        <strong>{{ focus_task.project.title }}</strong>
+                        <small>Scope</small>
+                        <strong>
+                            {% if focus_task.project_id %}
+                                {{ focus_task.project.title }}
+                            {% else %}
+                                General Workspace
+                            {% endif %}
+                        </strong>
                     </span>
 
                     <span>
@@ -200,15 +206,27 @@
                 </div>
 
                 <div class="focus-task-actions">
-                    <a
-                        href="{{ url_for('project_bp.project_details', project_id=focus_task.project_id) }}"
-                        class="dashboard-primary-action compact"
-                    data-page-loading
-                    data-loading-title="Opening project workspace"
-                    data-loading-message="Loading project details and tasks..."
+                    {% if focus_task.project_id %}
+                        <a
+                            href="{{ url_for('project_bp.project_details', project_id=focus_task.project_id) }}"
+                            class="dashboard-primary-action compact"
+                            data-page-loading
+                            data-loading-title="Opening project workspace"
+                            data-loading-message="Loading project details and tasks..."
                         >
-                        Open Project
-                    </a>
+                            Open Project
+                        </a>
+                    {% else %}
+                        <a
+                            href="{{ url_for('task_bp.all_tasks') }}"
+                            class="dashboard-primary-action compact"
+                            data-page-loading
+                            data-loading-title="Opening task center"
+                            data-loading-message="Loading your general workspace tasks..."
+                        >
+                            Open Task Center
+                        </a>
+                    {% endif %}
 
                     <a
                         href="{{ url_for('task_bp.edit_task', task_id=focus_task.id) }}"
@@ -379,12 +397,12 @@
             <div class="deadline-list">
                 {% for task in upcoming_tasks %}
                     <a
-                        href="{{ url_for('project_bp.project_details', project_id=task.project_id) }}"
+                        href="{% if task.project_id %}{{ url_for('project_bp.project_details', project_id=task.project_id) }}{% else %}{{ url_for('task_bp.all_tasks') }}{% endif %}"
                         class="deadline-row {% if task.deadline < today %}deadline-overdue{% endif %}"
-                    data-page-loading
-                    data-loading-title="Opening project workspace"
-                    data-loading-message="Loading project details and tasks..."
-                        >
+                        data-page-loading
+                        data-loading-title="{% if task.project_id %}Opening project workspace{% else %}Opening task center{% endif %}"
+                        data-loading-message="{% if task.project_id %}Loading project details and tasks...{% else %}Loading your general workspace tasks...{% endif %}"
+                    >
                         <div class="deadline-date-box">
                             <strong>{{ task.deadline.strftime('%d') }}</strong>
                             <span>{{ task.deadline.strftime('%b') }}</span>
@@ -392,7 +410,13 @@
 
                         <div class="deadline-main">
                             <h3>{{ task.title }}</h3>
-                            <p>{{ task.project.title }}</p>
+                            <p>
+                                {% if task.project_id %}
+                                    {{ task.project.title }}
+                                {% else %}
+                                    General Workspace
+                                {% endif %}
+                            </p>
                         </div>
 
                         <span class="deadline-status">
