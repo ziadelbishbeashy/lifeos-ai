@@ -1,0 +1,28 @@
+LifeOS AI - Phase 5.2 Recurring Tasks
+======================================
+
+WHAT WAS ADDED
+- Daily, weekly, monthly, and custom-day recurring tasks.
+- Optional repeat interval (for example, every 2 weeks).
+- Optional recurrence end date.
+- Automatic creation of exactly one next occurrence when a task is completed.
+- Reminder date/time is shifted to the next occurrence automatically.
+- Recurring badges and recurring-task filter.
+- Recurrence works for both General Workspace and Project tasks.
+
+DATABASE STEP
+1. Open SQL Server Management Studio.
+2. Run: sql/phase5_2_recurring_tasks.sql
+3. Restart the Flask application.
+
+TEST
+1. Create a task due today.
+2. Enable "Repeat this task".
+3. Choose Daily and interval 1.
+4. Complete the task.
+5. LifeOS should create a new Pending task due tomorrow.
+
+NOTES
+- LifeOS creates only the next occurrence, not hundreds of future records.
+- A recurrence end date is optional.
+- No new Python package is required.

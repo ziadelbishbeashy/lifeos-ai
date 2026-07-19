@@ -1,0 +1,85 @@
+LifeOS AI — Focus Studio v2.1 + v2.2
+=====================================
+
+This package upgrades the basic Focus Mode into a complete Focus Studio.
+
+NEW IN v2.1
+-----------
+- Multiple focus cycles
+- Automatic or manual break transitions
+- Dedicated break mode
+- Distraction Inbox with saved text
+- Convert a distraction into a LifeOS task
+- Reliable phase recovery after refresh/browser close using database timestamps
+- Fullscreen focus workspace
+- Structured post-session review
+
+NEW IN v2.2
+-----------
+- Completely redesigned responsive UI
+- Daily focus goal preferences
+- Rule-based Focus Coach recommendations
+- Focus themes: Midnight, Aurora, Forest, Ember
+- Generated ambient sounds: Brown noise, White noise, Soft rain
+  (No external audio files are required.)
+- Weekly focus chart
+- Focus allocation by project/workspace
+- Best focus hour
+- Goal achievement rate
+- Focus streak and achievements
+- Improved session history cards
+
+DATABASE
+--------
+Run these files in SQL Server Management Studio in this order:
+
+1. sql/phase5_5_focus_mode.sql
+2. sql/phase5_5_focus_mode_v2.sql
+3. sql/phase5_5_focus_mode_v2_1_2.sql
+
+If the first two were already run, only run the third migration.
+
+FILES ADDED
+-----------
+- static/css/focus.css
+- sql/phase5_5_focus_mode_v2_1_2.sql
+- PHASE5_5_FOCUS_STUDIO_V2_2_SETUP.txt
+
+FILES UPDATED
+-------------
+- models.py
+- routes/focus_routes.py
+- templates/base.html
+- templates/focus_mode.html
+- static/js/focus.js
+
+RUN
+---
+1. Stop Flask.
+2. Run the SQL migration.
+3. Replace the project files with this package.
+4. Start Flask again:
+
+   python app.py
+
+5. Open:
+
+   http://127.0.0.1:5000/focus/
+
+QUICK TEST
+----------
+1. Create a 2-cycle Pomodoro session.
+2. Disable auto-start breaks and next focus.
+3. Complete/temporarily test with a short Custom session.
+4. Confirm the phase overlay appears.
+5. Start the break and then the next focus block.
+6. Capture a distraction and convert it into a task.
+7. Refresh the browser during an active block; the timer should recover.
+8. Finish the session and complete the review.
+9. Check charts, achievements, and history.
+
+NOTE ABOUT TESTING SPEED
+------------------------
+The UI enforces a minimum custom focus duration of 5 minutes. For a very fast
+technical test, temporarily change min="5" to min="1" in focus_mode.html and
+change the route clamp minimum from 5 to 1. Restore it afterwards.

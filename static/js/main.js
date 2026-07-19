@@ -1967,7 +1967,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const matchesStatus =
                 statusValue === "all" ||
-                taskCard.dataset.status === statusValue;
+                (statusValue === "recurring"
+                    ? taskCard.dataset.recurring === "true"
+                    : taskCard.dataset.status === statusValue);
 
             const matchesImportance =
                 importanceValue === "all" ||

@@ -22,6 +22,7 @@ from database import db, get_database_uri
 from models import (
     Document,
     EmailNotificationLog,
+    FocusSession,
     NotificationPreference,
     Note,
     Project,
@@ -33,6 +34,7 @@ from routes.auth_routes import auth_bp
 from routes.project_routes import project_bp
 from routes.task_routes import task_bp
 from routes.notification_routes import notification_bp
+from routes.focus_routes import focus_bp
 from services.scheduler_service import start_notification_scheduler
 
 
@@ -94,6 +96,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(project_bp)
 app.register_blueprint(task_bp)
 app.register_blueprint(notification_bp)
+app.register_blueprint(focus_bp)
 
 
 @app.route("/")

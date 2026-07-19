@@ -12,6 +12,7 @@ from flask_login import current_user, login_required
 
 from database import db
 from models import Project, Task
+from services.recurring_task_service import calculate_next_date, generate_next_occurrence
 
 
 task_bp = Blueprint("task_bp", __name__)
@@ -117,6 +118,48 @@ def build_reminder_datetime(form, deadline):
 
     return True, reminder_type, reminder_datetime
 
+def build_recurrence_fields(form, deadline):
+    is_recurring = form.get("is_recurring") == "on"
+
+    if not is_recurring:
+        return {
+            "is_recurring": False,
+            "recurrence_type": "none",
+            "recurrence_interval": 1,
+            "recurrence_end_date": None,
+            "next_occurrence_date": None,
+        }
+
+    recurrence_type = form.get("recurrence_type", "daily")
+    if recurrence_type not in {"daily", "weekly", "monthly", "custom_days"}:
+        raise ValueError("Please choose a valid repeat pattern.")
+
+    try:
+        recurrence_interval = max(int(form.get("recurrence_interval", 1)), 1)
+    except (TypeError, ValueError):
+        raise ValueError("Repeat interval must be a positive number.")
+
+    if recurrence_interval > 365:
+        raise ValueError("Repeat interval is too large.")
+
+    recurrence_end_date = parse_date(form.get("recurrence_end_date"))
+    base_date = deadline or date.today()
+    next_occurrence_date = calculate_next_date(
+        base_date, recurrence_type, recurrence_interval
+    )
+
+    if recurrence_end_date and recurrence_end_date < next_occurrence_date:
+        raise ValueError("Recurrence end date must allow at least one future occurrence.")
+
+    return {
+        "is_recurring": True,
+        "recurrence_type": recurrence_type,
+        "recurrence_interval": recurrence_interval,
+        "recurrence_end_date": recurrence_end_date,
+        "next_occurrence_date": next_occurrence_date,
+    }
+
+
 def clean_optional_text(value):
     if value is None:
         return None
@@ -149,6 +192,8 @@ def get_task_fields_from_form(form):
         deadline,
     )
 
+    recurrence_data = build_recurrence_fields(form, deadline)
+
     return {
         "title": form.get("title", "").strip(),
         "description": clean_optional_text(form.get("description")),
@@ -160,6 +205,7 @@ def get_task_fields_from_form(form):
         "reminder_enabled": reminder_enabled,
         "reminder_type": reminder_type,
         "reminder_datetime": reminder_datetime,
+        **recurrence_data,
     }
 
 
@@ -254,6 +300,7 @@ def all_tasks():
     )
 
     project_tasks_count = total_tasks - general_tasks_count
+    recurring_tasks_count = sum(1 for task in tasks if task.is_recurring)
 
     overdue_tasks = [
         task
@@ -302,6 +349,7 @@ def all_tasks():
         blocked_tasks=blocked_tasks,
         general_tasks_count=general_tasks_count,
         project_tasks_count=project_tasks_count,
+        recurring_tasks_count=recurring_tasks_count,
         overdue_tasks=overdue_tasks,
         due_soon_tasks=due_soon_tasks,
         overdue_task_ids=[task.id for task in overdue_tasks],
@@ -342,6 +390,9 @@ def add_workspace_task():
 
     try:
         db.session.add(task)
+        db.session.flush()
+        if task.is_recurring and not task.recurrence_series_id:
+            task.recurrence_series_id = task.id
         db.session.commit()
 
         if project:
@@ -400,6 +451,9 @@ def add_task(project_id):
 
     try:
         db.session.add(task)
+        db.session.flush()
+        if task.is_recurring and not task.recurrence_series_id:
+            task.recurrence_series_id = task.id
         db.session.commit()
         flash(f'Task "{task.title}" added successfully.', "success")
 
@@ -443,6 +497,9 @@ def edit_task(task_id):
         for field_name, field_value in task_data.items():
             setattr(task, field_name, field_value)
 
+        if task.is_recurring and not task.recurrence_series_id:
+            task.recurrence_series_id = task.id
+
         try:
             db.session.commit()
             flash(f'Task "{task.title}" updated successfully.', "success")
@@ -477,7 +534,14 @@ def toggle_task(task_id):
         message = f'Task "{task.title}" reopened.'
     else:
         task.status = "Completed"
-        message = f'Task "{task.title}" completed.'
+        next_task = generate_next_occurrence(task)
+        if next_task:
+            message = (
+                f'Task "{task.title}" completed. '
+                f'Next occurrence created for {next_task.deadline.strftime("%d %b %Y")}.'
+            )
+        else:
+            message = f'Task "{task.title}" completed.'
 
     project_id = task.project_id
 

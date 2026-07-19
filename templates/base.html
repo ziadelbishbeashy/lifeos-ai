@@ -43,12 +43,12 @@
         href="{{ url_for(
             'static',
             filename='css/style.css'
-        ) }}?v=phase5-email-1"
+        ) }}?v=phase5-focus-balanced-1"
     >
 </head>
 
 <body
-    class="app-body"
+    class="app-body{% if request.endpoint and request.endpoint.startswith('focus_bp.') %} focus-page-shell{% endif %}{% if request.endpoint == 'focus_bp.focus_mode' and active_session is defined and active_session %} focus-immersive-active{% endif %}"
     data-notification-user="{{ current_user.id }}"
 >
 
@@ -203,6 +203,29 @@
 
                     <span>Tasks</span>
                     <small>All projects</small>
+                </a>
+
+
+                <!-- Focus Mode -->
+
+                <a
+                    href="{{ url_for('focus_bp.focus_mode') }}"
+                    class="navigation-link
+                    {{
+                        'active'
+                        if request.endpoint
+                        and request.endpoint.startswith('focus_bp')
+                        else ''
+                    }}"
+                    data-page-loading
+                    data-loading-title="Opening focus mode"
+                    data-loading-message="Preparing your deep-work workspace..."
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 11h4v-2h-3V6h-2v7h1Z"/>
+                    </svg>
+                    <span>Focus Mode</span>
+                    <small>Deep work</small>
                 </a>
 
 
@@ -838,8 +861,10 @@
         src="{{ url_for(
             'static',
             filename='js/main.js'
-        ) }}?v=phase5-email-1"
+        ) }}?v=phase5-focus-1"
     ></script>
+
+    {% block scripts %}{% endblock %}
 
 </body>
 </html>

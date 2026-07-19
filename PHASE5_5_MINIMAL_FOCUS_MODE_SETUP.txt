@@ -1,0 +1,38 @@
+LIFEOS AI — PHASE 5.5 MINIMAL FOCUS MODE
+============================================
+
+This build intentionally removes the crowded Focus Studio interface.
+The active timer now contains only the task, goal, time, three controls,
+and a small Park a thought input.
+
+INSTALLATION
+------------
+1. Stop Flask completely:
+   taskkill /F /IM python.exe
+
+2. Extract this ZIP directly into your current LifeOS project folder.
+   Choose Replace all files.
+
+3. In SQL Server Management Studio run:
+   sql/phase5_5_minimal_focus_mode.sql
+
+   The migration is safe if you already ran the old Focus v2 migrations.
+
+4. Start LifeOS:
+   python app.py
+
+5. Open:
+   http://127.0.0.1:5000/focus/
+
+TEST
+----
+- Start a 25-minute task session.
+- Confirm the sidebar/topbar disappear during the session.
+- Pause, resume, and add 5 minutes.
+- Park a thought and verify the count increases.
+- Refresh the page and confirm the timer recovers.
+- End the session and save the short review.
+- Open /focus/insights to see history and weekly activity.
+
+No Focus Studio preferences, ambient themes, coach cards, cycle panels,
+or achievements are displayed in the active focus screen.

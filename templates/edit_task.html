@@ -338,6 +338,39 @@
 
                 <div class="task-form-section-heading">
                     <span>04</span>
+                    <div>
+                        <h2>Recurring Task</h2>
+                        <p>Automatically create the next occurrence after completion.</p>
+                    </div>
+                </div>
+
+                <div class="task-form-grid recurrence-form-grid">
+                    <div class="task-form-field task-form-full">
+                        <label class="professional-checkbox">
+                            <input type="checkbox" name="is_recurring" {% if task.is_recurring %}checked{% endif %}>
+                            <span>Repeat this task</span>
+                        </label>
+                    </div>
+                    <div class="task-form-field">
+                        <label for="editRecurrenceType">Repeat pattern</label>
+                        <select id="editRecurrenceType" name="recurrence_type">
+                            {% for value, label in [('daily','Daily'),('weekly','Weekly'),('monthly','Monthly'),('custom_days','Custom number of days')] %}
+                                <option value="{{ value }}" {% if task.recurrence_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="task-form-field">
+                        <label for="editRecurrenceInterval">Repeat every</label>
+                        <input type="number" id="editRecurrenceInterval" name="recurrence_interval" min="1" max="365" value="{{ task.recurrence_interval or 1 }}">
+                    </div>
+                    <div class="task-form-field">
+                        <label for="editRecurrenceEnd">End date (optional)</label>
+                        <input type="date" id="editRecurrenceEnd" name="recurrence_end_date" value="{% if task.recurrence_end_date %}{{ task.recurrence_end_date.strftime('%Y-%m-%d') }}{% endif %}">
+                    </div>
+                </div>
+
+                <div class="task-form-section-heading">
+                    <span>05</span>
 
                     <div>
                         <h2>Email Reminder</h2>

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Focus Insights | LifeOS AI{% endblock %}
+{% block page_kicker %}Focus history{% endblock %}
+{% block page_title %}Insights{% endblock %}
+
+{% block content %}
+<section class="focus-insights-page">
+    <header class="focus-insights-header">
+        <div>
+            <span class="focus-setup-eyebrow">Focus insights</span>
+            <h1>See the pattern, not the noise.</h1>
+            <p>Your focus activity is kept here, away from the active timer.</p>
+        </div>
+        <a href="{{ url_for('focus_bp.focus_mode') }}" class="focus-insights-button">Start focus</a>
+    </header>
+
+    <section class="focus-insight-summary">
+        <article><strong>{{ week_minutes }}</strong><span>minutes this week</span></article>
+        <article><strong>{{ week_sessions }}</strong><span>completed sessions</span></article>
+        <article><strong>{{ average_rating or '—' }}</strong><span>average focus rating</span></article>
+        <article><strong>{{ week_distractions }}</strong><span>parked thoughts</span></article>
+    </section>
+
+    <section class="focus-insight-panel">
+        <div class="focus-panel-heading">
+            <div><span>Last 7 days</span><h2>Focused minutes</h2></div>
+        </div>
+        <div class="focus-week-bars" aria-label="Focused minutes in the last seven days">
+            {% for day in daily_data %}
+            <div class="focus-day-column" title="{{ day.date }}: {{ day.minutes }} minutes">
+                <div class="focus-bar-track"><span style="height: {{ day.height }}%"></span></div>
+                <strong>{{ day.minutes }}</strong>
+                <small>{{ day.label }}</small>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <div class="focus-insights-grid">
+        <section class="focus-insight-panel">
+            <div class="focus-panel-heading"><div><span>Allocation</span><h2>Time by project</h2></div></div>
+            {% if project_data %}
+            <div class="focus-project-list">
+                {% for project in project_data %}
+                <div><span>{{ project.name }}</span><strong>{{ project.minutes }} min</strong></div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="focus-empty-copy">Complete a focus session to see project allocation.</p>
+            {% endif %}
+        </section>
+
+        <section class="focus-insight-panel">
+            <div class="focus-panel-heading"><div><span>History</span><h2>Recent sessions</h2></div></div>
+            {% if recent_sessions %}
+            <div class="focus-recent-list">
+                {% for session in recent_sessions %}
+                <article>
+                    <div>
+                        <strong>{{ session.title }}</strong>
+                        <span>{{ session.completed_at.strftime('%d %b · %H:%M') if session.completed_at else session.created_at.strftime('%d %b · %H:%M') }}</span>
+                    </div>
+                    <div>
+                        <strong>{{ session.actual_minutes or 0 }} min</strong>
+                        {% if session.focus_rating %}<span>{{ session.focus_rating }}/5 focus</span>{% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="focus-empty-copy">No completed sessions yet.</p>
+            {% endif %}
+        </section>
+    </div>
+</section>
+{% endblock %}

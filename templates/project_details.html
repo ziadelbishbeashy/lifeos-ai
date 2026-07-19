@@ -1430,6 +1430,39 @@
             </div>
 
 
+            <div class="task-form-section-heading compact-section-heading">
+                <span>03</span>
+                <div>
+                    <h2>Repeat</h2>
+                    <p>Automatically create the next task after this one is completed.</p>
+                </div>
+            </div>
+            <div class="task-form-grid recurrence-form-grid">
+                <div class="task-form-field task-form-full">
+                    <label class="professional-checkbox">
+                        <input type="checkbox" name="is_recurring">
+                        <span>Repeat this task</span>
+                    </label>
+                </div>
+                <div class="task-form-field">
+                    <label for="projectRecurrenceType">Repeat pattern</label>
+                    <select id="projectRecurrenceType" name="recurrence_type">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="custom_days">Custom number of days</option>
+                    </select>
+                </div>
+                <div class="task-form-field">
+                    <label for="projectRecurrenceInterval">Repeat every</label>
+                    <input type="number" id="projectRecurrenceInterval" name="recurrence_interval" min="1" max="365" value="1">
+                </div>
+                <div class="task-form-field">
+                    <label for="projectRecurrenceEnd">End date (optional)</label>
+                    <input type="date" id="projectRecurrenceEnd" name="recurrence_end_date">
+                </div>
+            </div>
+
             <div class="task-modal-actions">
 
                 <button

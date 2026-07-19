@@ -1,0 +1,35 @@
+Phase 5.1 Reminder Scheduler Fix
+
+Problem:
+The reminder was saved correctly in the task card, but the automatic scheduler did not send it immediately.
+
+Cause:
+The previous scheduler forced a minimum interval of 15 minutes and also slept before running the first notification check.
+So even if the reminder time was 16:32, the email could wait until the next scheduler cycle.
+
+Fix:
+services/scheduler_service.py was updated to:
+1. Allow EMAIL_SCHEDULER_INTERVAL_MINUTES=1 for testing.
+2. Run one notification check immediately when Flask starts.
+3. Continue checking every configured interval.
+
+Recommended .env while testing:
+ENABLE_EMAIL_SCHEDULER=True
+EMAIL_SCHEDULER_INTERVAL_MINUTES=1
+SEND_DAILY_SUMMARY_EMAIL=True
+
+After testing:
+EMAIL_SCHEDULER_INTERVAL_MINUTES=15
+
+Restart Flask after changing .env:
+taskkill /F /IM python.exe
+python app.py
+
+To test:
+1. Make sure Notification Settings are ON:
+   - Email Notifications
+   - Custom Task Reminders
+   - Task Deadline Reminders
+2. Create a task reminder 2 minutes from now.
+3. Keep the Flask terminal open.
+4. Open /notifications/history after the reminder time.

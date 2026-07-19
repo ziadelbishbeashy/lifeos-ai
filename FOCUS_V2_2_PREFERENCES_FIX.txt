@@ -1,0 +1,15 @@
+LifeOS Focus Studio v2.2 — preferences undefined fix
+
+Replace these files:
+- routes/focus_routes.py
+- templates/focus_mode.html
+
+Why the error occurred:
+The v2.2 template expected a variable named `preferences`, but the running route did not pass it (usually because an older focus_routes.py was still in the project while the newer template was copied).
+
+This fix does two things:
+1. Passes the FocusPreference object explicitly in the route context.
+2. Adds safe template defaults so the page does not crash if the variable is ever absent.
+
+No database migration is required for this specific fix.
+Restart Flask after replacing the files.

@@ -1,0 +1,57 @@
+LifeOS AI — Phase 5.5 Focus Mode v2.0
+======================================
+
+This update replaces the basic timer page with a structured focus workspace:
+
+1. Prepare
+   - Link a project or general task
+   - Define one concrete session outcome
+   - Choose Pomodoro, Deep Work, Extended, or Custom duration
+   - Complete an optional attention-preparation checklist
+   - Preview the selected task and daily focus target
+
+2. Focus
+   - Immersive circular progress timer
+   - Pause/resume
+   - Add five minutes without restarting
+   - Capture distraction count
+   - Fullscreen support
+   - Session intention and task context remain visible
+
+3. Review
+   - Goal result: fully, partially, or not yet
+   - Focus quality, difficulty, and energy ratings
+   - Reflection notes
+   - Optional linked-task completion
+
+DATABASE
+--------
+Run this file in SQL Server Management Studio:
+
+    sql/phase5_5_focus_mode_v2.sql
+
+This migration must be run after:
+
+    sql/phase5_5_focus_mode.sql
+
+START
+-----
+Restart Flask after replacing the project files:
+
+    taskkill /F /IM python.exe
+    python app.py
+
+Then open:
+
+    http://127.0.0.1:5000/focus/
+
+TEST
+----
+1. Start a Pomodoro session linked to a task.
+2. Verify that the selected-task preview changes.
+3. Confirm that the goal field is required.
+4. Pause and resume the timer.
+5. Add five minutes.
+6. Capture a distraction.
+7. Open the session review and save ratings.
+8. Confirm that the session appears in recent history.

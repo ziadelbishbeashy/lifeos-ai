@@ -1,0 +1,27 @@
+LifeOS Phase 5.5 - End Session reliability fix
+
+Changed files:
+- routes/focus_routes.py
+- templates/focus_mode.html
+- static/js/focus.js
+- static/css/style.css
+
+What changed:
+- End Session now submits a normal HTML form to /focus/<session_id>/review.
+- The backend pauses the active session and opens the review step.
+- The action no longer depends on JavaScript to open the review modal.
+- Review Session at timer completion uses the same reliable flow.
+- Return to focus is a normal link.
+
+No SQL migration is required.
+
+Restart:
+  taskkill /F /IM python.exe
+  python app.py
+
+Test:
+1. Start a focus session.
+2. Wait a few seconds.
+3. Click End session.
+4. Confirm the review form opens.
+5. Save the session and confirm it appears in Focus Insights.

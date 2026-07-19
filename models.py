@@ -31,6 +31,20 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
     )
 
+    focus_sessions = db.relationship(
+        "FocusSession",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    focus_distractions = db.relationship(
+        "FocusDistraction",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     notification_preferences = db.relationship(
         "NotificationPreference",
         back_populates="user",
@@ -121,6 +135,12 @@ class Task(db.Model):
         cascade="all, delete-orphan",
     )
 
+    focus_sessions = db.relationship(
+        "FocusSession",
+        back_populates="task",
+        lazy=True,
+    )
+
     title = db.Column(db.Unicode(200), nullable=False)
     description = db.Column(db.UnicodeText, nullable=True)
     module = db.Column(db.Unicode(100), nullable=True)
@@ -138,6 +158,28 @@ class Task(db.Model):
     reminder_datetime = db.Column(db.DateTime, nullable=True)
     last_reminder_sent_at = db.Column(db.DateTime, nullable=True)
 
+    # Phase 5.2 Recurring Tasks
+    is_recurring = db.Column(db.Boolean, nullable=False, default=False)
+    recurrence_type = db.Column(db.Unicode(30), nullable=False, default="none")
+    recurrence_interval = db.Column(db.Integer, nullable=False, default=1)
+    recurrence_end_date = db.Column(db.Date, nullable=True)
+    recurrence_parent_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+    )
+    recurrence_series_id = db.Column(db.Integer, nullable=True, index=True)
+    next_occurrence_date = db.Column(db.Date, nullable=True)
+    last_generated_at = db.Column(db.DateTime, nullable=True)
+
+    recurrence_parent = db.relationship(
+        "Task",
+        remote_side=[id],
+        foreign_keys=[recurrence_parent_id],
+        backref=db.backref("generated_occurrences", lazy=True),
+    )
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     @property
@@ -150,6 +192,74 @@ class Task(db.Model):
 
     def __repr__(self):
         return f"<Task {self.title}>"
+
+
+class FocusSession(db.Model):
+    __tablename__ = "focus_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("tasks.id"), nullable=True, index=True)
+
+    title = db.Column(db.Unicode(200), nullable=False)
+    goal = db.Column(db.UnicodeText, nullable=True)
+    planned_minutes = db.Column(db.Integer, nullable=False, default=25)
+    actual_minutes = db.Column(db.Integer, nullable=False, default=0)
+    elapsed_seconds = db.Column(db.Integer, nullable=False, default=0)
+    status = db.Column(db.Unicode(30), nullable=False, default="running", index=True)
+    distraction_count = db.Column(db.Integer, nullable=False, default=0)
+    goal_result = db.Column(db.Unicode(20), nullable=True)
+    focus_rating = db.Column(db.Integer, nullable=True)
+    notes = db.Column(db.UnicodeText, nullable=True)
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = db.relationship("User", back_populates="focus_sessions")
+    task = db.relationship("Task", back_populates="focus_sessions")
+    distractions = db.relationship(
+        "FocusDistraction",
+        back_populates="session",
+        lazy=True,
+        cascade="all, delete-orphan",
+        order_by="FocusDistraction.captured_at.asc()",
+    )
+
+    def __repr__(self):
+        return f"<FocusSession {self.title}>"
+
+
+class FocusDistraction(db.Model):
+    __tablename__ = "focus_distractions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(
+        db.Integer,
+        db.ForeignKey("focus_sessions.id"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    content = db.Column(db.Unicode(500), nullable=False)
+    captured_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    converted_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+    )
+
+    session = db.relationship("FocusSession", back_populates="distractions")
+    user = db.relationship("User", back_populates="focus_distractions")
+    converted_task = db.relationship("Task", foreign_keys=[converted_task_id])
+
+    def __repr__(self):
+        return f"<FocusDistraction {self.content[:40]}>"
 
 
 class NotificationPreference(db.Model):

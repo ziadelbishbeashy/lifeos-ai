@@ -138,6 +138,7 @@
 
         <select id="taskStatusFilter">
             <option value="all">All statuses</option>
+            <option value="recurring">Recurring tasks</option>
             <option value="pending">Pending</option>
             <option value="in progress">In Progress</option>
             <option value="blocked">Blocked</option>
@@ -201,7 +202,7 @@
                     data-title="{{ task.title|lower }}"
                     data-description="{{ (task.description or '')|lower }}"
                     data-module="{{ (task.module or '')|lower }}"
-                    data-status="{{ task.status|lower }}"
+                    data-status="{{ task.status|lower }}" data-recurring="{{ 'true' if task.is_recurring else 'false' }}"
                     data-importance="{{ task.importance|lower }}"
                     data-scope="{% if task.project_id %}project{% else %}general{% endif %}"
                     data-project="{% if task.project_id %}{{ task.project_id }}{% else %}general{% endif %}"
@@ -284,6 +285,12 @@
                             {% if task.reminder_enabled and task.reminder_datetime %}
                                 <span class="task-reminder-label">
                                     Reminder {{ task.reminder_datetime.strftime('%d %b %H:%M') }}
+                                </span>
+                            {% endif %}
+                            {% if task.is_recurring %}
+                                <span class="task-recurring-label">
+                                    Repeats {{ task.recurrence_type|replace('_', ' ')|title }}
+                                    {% if task.recurrence_interval and task.recurrence_interval > 1 %} every {{ task.recurrence_interval }}{% endif %}
                                 </span>
                             {% endif %}
 
@@ -652,6 +659,42 @@
 
             <div class="task-form-section-heading compact-section-heading">
                 <span>03</span>
+                <div>
+                    <h2>Repeat</h2>
+                    <p>Create the next occurrence automatically when this task is completed.</p>
+                </div>
+            </div>
+
+            <div class="task-form-grid recurrence-form-grid">
+                <div class="task-form-field task-form-full">
+                    <label class="professional-checkbox">
+                        <input type="checkbox" name="is_recurring" id="workspaceTaskRecurring">
+                        <span>Repeat this task</span>
+                    </label>
+                </div>
+                <div class="task-form-field">
+                    <label for="workspaceRecurrenceType">Repeat pattern</label>
+                    <select id="workspaceRecurrenceType" name="recurrence_type">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="custom_days">Custom number of days</option>
+                    </select>
+                </div>
+                <div class="task-form-field">
+                    <label for="workspaceRecurrenceInterval">Repeat every</label>
+                    <input type="number" id="workspaceRecurrenceInterval" name="recurrence_interval" min="1" max="365" value="1">
+                    <small>Example: 2 + Weekly means every 2 weeks.</small>
+                </div>
+                <div class="task-form-field">
+                    <label for="workspaceRecurrenceEnd">End date (optional)</label>
+                    <input type="date" id="workspaceRecurrenceEnd" name="recurrence_end_date">
+                    <small>Leave empty to repeat without an end date.</small>
+                </div>
+            </div>
+
+            <div class="task-form-section-heading compact-section-heading">
+                <span>04</span>
 
                 <div>
                     <h2>Reminder</h2>

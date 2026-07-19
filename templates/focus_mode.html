@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}Focus Studio | LifeOS AI{% endblock %}
+{% block page_kicker %}Deep work workspace{% endblock %}
+{% block page_title %}Focus Studio{% endblock %}
+
+{% block content %}
+{% if active_session %}
+<section
+    class="focus-calm-session"
+    id="focusSession"
+    data-session-id="{{ active_session.id }}"
+    data-status="{{ active_session.status }}"
+    data-elapsed="{{ elapsed_seconds }}"
+    data-duration="{{ active_session.planned_minutes * 60 }}"
+>
+    <header class="focus-session-topbar">
+        <div class="focus-session-identity">
+            <span class="focus-session-logo">L</span>
+            <div>
+                <strong>LifeOS Focus</strong>
+                <span>
+                    {% if active_session.task %}
+                        {{ active_session.task.title }}
+                        {% if active_session.task.project %} · {{ active_session.task.project.title }}{% endif %}
+                    {% else %}
+                        General focus session
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <div class="focus-session-top-actions">
+            <button type="button" class="focus-icon-button" id="openFocusTools" aria-label="Open focus tools" title="Focus tools">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.43-2.53c.04-.32.07-.65.07-.97s-.03-.65-.08-.97l2.11-1.65-2-3.46-2.49 1a7.55 7.55 0 0 0-1.68-.97L15 3.27h-4l-.37 2.68c-.6.24-1.16.56-1.68.97l-2.49-1-2 3.46 2.11 1.65c-.04.32-.07.65-.07.97s.03.65.08.97l-2.11 1.65 2 3.46 2.49-1c.52.41 1.08.73 1.68.97l.36 2.68h4l.37-2.68c.6-.24 1.16-.56 1.68-.97l2.49 1 2-3.46-2.11-1.65Z"/></svg>
+            </button>
+            <button type="button" class="focus-icon-button" id="focusFullscreenButton" aria-label="Toggle fullscreen" title="Fullscreen">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5v2H6v3H4Zm11-5h5v5h-2V6h-3V4ZM6 15v3h3v2H4v-5h2Zm12 3v-3h2v5h-5v-2h3Z"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="focus-session-main">
+        <div class="focus-session-labels">
+            <span class="focus-phase-pill" id="focusPhasePill">Focus session</span>
+            <span class="focus-method-pill" id="focusMethodLabel">Deep focus</span>
+        </div>
+
+        <p class="focus-session-goal-label">Current outcome</p>
+        <h1 class="focus-session-goal">
+            {{ active_session.goal or 'Make meaningful progress on this task.' }}
+        </h1>
+
+        <div class="focus-timer-ring" id="focusTimerRing" aria-label="Focus timer">
+            <div class="focus-timer-ring-inner">
+                <strong id="focusTimer">00:00</strong>
+                <span id="focusTimerCaption">remaining</span>
+            </div>
+        </div>
+
+        <div class="focus-session-controls">
+            <button type="button" class="focus-action-button secondary" id="pauseResumeButton">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"/></svg>
+                <span>{{ 'Resume' if active_session.status == 'paused' else 'Pause' }}</span>
+            </button>
+            <button type="button" class="focus-action-button quiet" id="extendFocusButton">+5 minutes</button>
+            <form method="POST" action="{{ url_for('focus_bp.begin_review', session_id=active_session.id) }}" class="focus-inline-action-form">
+                <button type="submit" class="focus-action-button primary">End session</button>
+            </form>
+        </div>
+
+        <nav class="focus-tool-dock" aria-label="Focus session tools">
+            <button type="button" id="startBreakButton">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v2h-1v5a4 4 0 0 1-3 3.87V18h3v2H8v-2h3v-3.13A4 4 0 0 1 8 11V6H7V4Zm3 2v5a2 2 0 1 0 4 0V6h-4Z"/></svg>
+                <span>Take a break</span>
+            </button>
+            <button type="button" id="openThoughtPanel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H7l-3 3V4Zm3 4v2h10V8H7Zm0 4v2h7v-2H7Z"/></svg>
+                <span>Park a thought</span>
+                <b id="parkedThoughtCount" {% if not active_session.distraction_count %}hidden{% endif %}>{{ active_session.distraction_count or 0 }}</b>
+            </button>
+            <button type="button" id="toggleAmbientSound">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4Zm12.5 2a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Zm-2.5-8.48v2.06A7 7 0 0 1 14 18.42v2.06A9 9 0 0 0 14 3.52Z"/></svg>
+                <span id="ambientSoundLabel">Sound off</span>
+            </button>
+        </nav>
+    </main>
+
+    <form
+        method="POST"
+        action="{{ url_for('focus_bp.cancel_focus', session_id=active_session.id) }}"
+        class="focus-session-exit"
+        data-confirm
+        data-confirm-title="Leave this session?"
+        data-confirm-message="The elapsed time will be kept, but the session will be marked as cancelled."
+        data-confirm-text="Leave session"
+        data-confirm-cancel="Keep focusing"
+    >
+        <button type="submit">Exit without completing</button>
+    </form>
+</section>
+
+<!-- Focus tools drawer -->
+<div class="focus-side-backdrop" id="focusToolsBackdrop" hidden></div>
+<aside class="focus-side-panel" id="focusToolsPanel" aria-labelledby="focusToolsTitle" aria-hidden="true">
+    <header>
+        <div>
+            <span>Session controls</span>
+            <h2 id="focusToolsTitle">Focus tools</h2>
+        </div>
+        <button type="button" class="focus-panel-close" data-close-panel="focusToolsPanel" aria-label="Close tools">×</button>
+    </header>
+
+    <section class="focus-tool-section">
+        <div class="focus-tool-heading">
+            <h3>Background</h3>
+            <p>Choose a calmer workspace without changing the whole app theme.</p>
+        </div>
+        <div class="focus-theme-options" id="activeThemeOptions">
+            <button type="button" data-focus-theme="mist" class="active"><i class="theme-mist"></i><span>Mist</span></button>
+            <button type="button" data-focus-theme="sage"><i class="theme-sage"></i><span>Sage</span></button>
+            <button type="button" data-focus-theme="lavender"><i class="theme-lavender"></i><span>Lavender</span></button>
+            <button type="button" data-focus-theme="sand"><i class="theme-sand"></i><span>Sand</span></button>
+        </div>
+    </section>
+
+    <section class="focus-tool-section">
+        <div class="focus-tool-heading">
+            <h3>Ambient sound</h3>
+            <p>Generated in the browser. No external audio files are required.</p>
+        </div>
+        <div class="focus-sound-options" id="activeSoundOptions">
+            <button type="button" data-focus-sound="none" class="active">None</button>
+            <button type="button" data-focus-sound="rain">Rain</button>
+            <button type="button" data-focus-sound="brown">Brown noise</button>
+            <button type="button" data-focus-sound="white">White noise</button>
+        </div>
+        <label class="focus-volume-control">
+            <span>Volume</span>
+            <input type="range" id="focusSoundVolume" min="0" max="100" value="22">
+        </label>
+    </section>
+
+    <section class="focus-tool-section compact">
+        <button type="button" class="focus-wide-tool-button" id="wakeLockButton">
+            <span>Keep screen awake</span>
+            <small id="wakeLockStatus">Off</small>
+        </button>
+    </section>
+</aside>
+
+<!-- Parked thoughts drawer -->
+<div class="focus-side-backdrop" id="thoughtPanelBackdrop" hidden></div>
+<aside class="focus-side-panel" id="thoughtPanel" aria-labelledby="thoughtPanelTitle" aria-hidden="true">
+    <header>
+        <div>
+            <span>Distraction inbox</span>
+            <h2 id="thoughtPanelTitle">Park it and return</h2>
+        </div>
+        <button type="button" class="focus-panel-close" data-close-panel="thoughtPanel" aria-label="Close thoughts">×</button>
+    </header>
+
+    <form class="focus-thought-compose" id="parkThoughtForm">
+        <label for="parkThoughtInput">What is pulling your attention?</label>
+        <textarea id="parkThoughtInput" maxlength="500" rows="3" placeholder="Write it here so you do not have to hold it in your mind."></textarea>
+        <div>
+            <small id="parkThoughtFeedback" aria-live="polite"></small>
+            <button type="submit">Park thought</button>
+        </div>
+    </form>
+
+    <div class="focus-thought-list" id="parkedThoughtList">
+        {% for thought in active_session.distractions %}
+        <article data-thought-id="{{ thought.id }}">
+            <p>{{ thought.content }}</p>
+            <div>
+                <span>{{ thought.captured_at.strftime('%H:%M') }}</span>
+                {% if thought.converted_task_id %}
+                <small>Added to tasks</small>
+                {% else %}
+                <button type="button" class="convert-thought-button" data-thought-id="{{ thought.id }}">Convert to task</button>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+        <p class="focus-empty-thoughts" id="emptyThoughtMessage" {% if active_session.distractions %}hidden{% endif %}>Nothing parked yet.</p>
+    </div>
+</aside>
+
+<!-- Break overlay -->
+<div class="focus-break-overlay" id="focusBreakOverlay" hidden>
+    <section class="focus-break-card">
+        <span class="focus-break-icon">☕</span>
+        <p>Reset, do not scroll.</p>
+        <strong id="focusBreakTimer">05:00</strong>
+        <div class="focus-break-suggestions">
+            <span>Look away from the screen</span>
+            <span>Stand and stretch</span>
+            <span>Drink water</span>
+        </div>
+        <div class="focus-break-actions">
+            <button type="button" class="focus-action-button secondary" id="skipBreakButton">Skip break</button>
+            <button type="button" class="focus-action-button primary" id="resumeAfterBreakButton">Resume focus</button>
+        </div>
+    </section>
+</div>
+
+<!-- Timer complete sheet -->
+<div class="focus-complete-sheet" id="focusCompleteSheet" hidden>
+    <section>
+        <span>Focus block complete</span>
+        <h2>You reached your planned time.</h2>
+        <p>Choose what helps you continue intentionally.</p>
+        <div>
+            <button type="button" class="focus-action-button secondary" id="completeTakeBreak">Take a break</button>
+            <button type="button" class="focus-action-button quiet" id="continueOvertime">Continue working</button>
+            <form method="POST" action="{{ url_for('focus_bp.begin_review', session_id=active_session.id) }}" class="focus-inline-action-form">
+                <button type="submit" class="focus-action-button primary">Review session</button>
+            </form>
+        </div>
+    </section>
+</div>
+
+<!-- Review modal -->
+<div class="focus-review-backdrop" id="finishFocusModal" {% if not review_requested %}hidden{% endif %}>
+    <section class="focus-review-card" role="dialog" aria-modal="true" aria-labelledby="focusReviewTitle">
+        <span class="review-check">✓</span>
+        <p class="review-kicker">Session complete</p>
+        <h2 id="focusReviewTitle">Close the loop</h2>
+        <form method="POST" action="{{ url_for('focus_bp.finish_focus', session_id=active_session.id) }}">
+            {% if active_session.goal %}
+            <fieldset class="review-choice-group">
+                <legend>Did you achieve the outcome?</legend>
+                <label><input type="radio" name="goal_result" value="full"><span>Yes</span></label>
+                <label><input type="radio" name="goal_result" value="partial"><span>Partly</span></label>
+                <label><input type="radio" name="goal_result" value="not_yet"><span>Not yet</span></label>
+            </fieldset>
+            {% endif %}
+
+            <label class="review-field">
+                <span>Session note <small>(optional)</small></span>
+                <textarea name="notes" rows="3" placeholder="What moved forward, and what should happen next?"></textarea>
+            </label>
+
+            <label class="review-field compact">
+                <span>Focus quality <small>(optional)</small></span>
+                <select name="focus_rating">
+                    <option value="">Not rated</option>
+                    <option value="5">5 — Fully focused</option>
+                    <option value="4">4 — Focused</option>
+                    <option value="3">3 — Mixed</option>
+                    <option value="2">2 — Distracted</option>
+                    <option value="1">1 — Very distracted</option>
+                </select>
+            </label>
+
+            {% if active_session.task %}
+            <label class="review-task-check">
+                <input type="checkbox" name="complete_task">
+                <span>Mark “{{ active_session.task.title }}” as completed</span>
+            </label>
+            {% endif %}
+
+            <div class="review-actions review-actions-complete">
+                <a href="{{ url_for('focus_bp.focus_mode') }}" class="focus-action-button quiet review-return-button">Return to session</a>
+                <button type="submit" name="destination" value="focus" class="focus-action-button secondary">Save &amp; Focus Home</button>
+                <button type="submit" name="destination" value="dashboard" class="focus-action-button primary review-dashboard-button">Save &amp; Dashboard</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+{% else %}
+<section class="focus-studio-setup" id="focusSetupPage">
+    <header class="focus-setup-header">
+        <div>
+            <span class="focus-setup-eyebrow">Focus studio</span>
+            <h1>Set up the space, then do the work.</h1>
+            <p>Useful options are available, but they stay organized around one clear starting point.</p>
+        </div>
+        <div class="focus-setup-header-actions">
+            <div class="focus-today-pill">
+                <span>Today</span>
+                <strong>{{ today_minutes }} min</strong>
+            </div>
+            <a href="{{ url_for('focus_bp.insights') }}" class="focus-insights-button">View insights</a>
+        </div>
+    </header>
+
+    <form class="focus-setup-layout" id="focusSetupForm" method="POST" action="{{ url_for('focus_bp.start_focus') }}">
+        <main class="focus-setup-main-card">
+            <section class="focus-setup-section">
+                <div class="focus-section-heading">
+                    <span>01</span>
+                    <div><h2>Choose the work</h2><p>Link a task or start a general session.</p></div>
+                </div>
+
+                <label class="focus-form-field">
+                    <span>Task</span>
+                    <select name="task_id" id="focusTaskSelect">
+                        <option value="" data-project="General workspace" data-priority="Flexible" data-deadline="No deadline">General focus session</option>
+                        {% for task in tasks %}
+                        <option
+                            value="{{ task.id }}"
+                            data-project="{{ task.project.title if task.project else 'General workspace' }}"
+                            data-priority="{{ task.importance or 'Medium' }} priority"
+                            data-deadline="{{ task.deadline.strftime('%d %b %Y') if task.deadline else 'No deadline' }}"
+                        >
+                            {{ task.title }}{% if task.project %} — {{ task.project.title }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <div class="focus-task-preview" id="focusTaskPreview">
+                    <div><span>Workspace</span><strong id="focusPreviewProject">General workspace</strong></div>
+                    <div><span>Priority</span><strong id="focusPreviewPriority">Flexible</strong></div>
+                    <div><span>Deadline</span><strong id="focusPreviewDeadline">No deadline</strong></div>
+                </div>
+
+                <label class="focus-form-field">
+                    <span>Session outcome</span>
+                    <input type="text" name="goal" maxlength="500" placeholder="Example: Finish and test the reminder scheduler">
+                    <small>One clear result is easier to focus on than a broad task.</small>
+                </label>
+            </section>
+
+            <section class="focus-setup-section">
+                <div class="focus-section-heading">
+                    <span>02</span>
+                    <div><h2>Choose a rhythm</h2><p>Select a ready method or set your own duration.</p></div>
+                </div>
+
+                <div class="focus-method-grid" id="focusMethodGrid">
+                    <button type="button" class="focus-method-card active" data-method="sprint" data-minutes="25">
+                        <span>Quick sprint</span><strong>25 min</strong><small>Small, clear task</small>
+                    </button>
+                    <button type="button" class="focus-method-card" data-method="deep" data-minutes="50">
+                        <span>Deep work</span><strong>50 min</strong><small>Focused building</small>
+                    </button>
+                    <button type="button" class="focus-method-card" data-method="flow" data-minutes="90">
+                        <span>Flow block</span><strong>90 min</strong><small>Long creative work</small>
+                    </button>
+                    <button type="button" class="focus-method-card" data-method="custom" data-minutes="40">
+                        <span>Custom</span><strong id="customMethodMinutes">40 min</strong><small>Your own pace</small>
+                    </button>
+                </div>
+
+                <div class="focus-custom-duration" id="focusCustomDuration" hidden>
+                    <label>
+                        <span>Custom focus duration</span>
+                        <input type="number" id="focusCustomMinutes" min="5" max="180" value="40">
+                    </label>
+                </div>
+
+                <input type="hidden" name="duration_minutes" id="focusDurationInput" value="25">
+            </section>
+        </main>
+
+        <aside class="focus-session-tools-card">
+            <div class="focus-tools-card-heading">
+                <span>Optional</span>
+                <h2>Session tools</h2>
+                <p>Set the environment once. These controls stay out of the way after you start.</p>
+            </div>
+
+            <section class="focus-tool-setting">
+                <div><h3>Break length</h3><p>Used by the break button during the session.</p></div>
+                <div class="focus-segmented-control" id="setupBreakOptions">
+                    <button type="button" data-break="5" class="active">5 min</button>
+                    <button type="button" data-break="10">10 min</button>
+                    <button type="button" data-break="15">15 min</button>
+                </div>
+            </section>
+
+            <section class="focus-tool-setting">
+                <div><h3>Workspace color</h3><p>Choose the active timer palette. The Focus dashboard follows your LifeOS theme.</p></div>
+                <div class="focus-theme-options" id="setupThemeOptions">
+                    <button type="button" data-focus-theme="mist" class="active"><i class="theme-mist"></i><span>Mist</span></button>
+                    <button type="button" data-focus-theme="sage"><i class="theme-sage"></i><span>Sage</span></button>
+                    <button type="button" data-focus-theme="lavender"><i class="theme-lavender"></i><span>Lavender</span></button>
+                    <button type="button" data-focus-theme="sand"><i class="theme-sand"></i><span>Sand</span></button>
+                </div>
+            </section>
+
+            <section class="focus-tool-setting">
+                <div><h3>Ambient sound</h3><p>Start silent or choose a generated sound.</p></div>
+                <div class="focus-sound-options" id="setupSoundOptions">
+                    <button type="button" data-focus-sound="none" class="active">None</button>
+                    <button type="button" data-focus-sound="rain">Rain</button>
+                    <button type="button" data-focus-sound="brown">Brown</button>
+                    <button type="button" data-focus-sound="white">White</button>
+                </div>
+            </section>
+
+            <section class="focus-tool-toggles">
+                <label><input type="checkbox" id="setupFullscreen"><span><strong>Start fullscreen</strong><small>Hide browser distractions when supported.</small></span></label>
+                <label><input type="checkbox" id="setupChime" checked><span><strong>Completion chime</strong><small>Play a gentle tone when time ends.</small></span></label>
+                <label><input type="checkbox" id="setupWakeLock"><span><strong>Keep screen awake</strong><small>Prevent the screen from sleeping.</small></span></label>
+            </section>
+        </aside>
+
+        <footer class="focus-start-bar">
+            <div>
+                <span>Ready session</span>
+                <strong id="focusSetupSummary">25-minute quick sprint · 5-minute break · Mist</strong>
+            </div>
+            <button type="submit" class="focus-start-button">
+                <span>Start focus</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6-1.4 1.4 4.6 4.6-4.6 4.6L9 18Z"/></svg>
+            </button>
+        </footer>
+    </form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/focus.js') }}?v=phase5-focus-theme-sync-1"></script>
+{% endblock %}
