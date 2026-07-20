@@ -35,6 +35,7 @@ from routes.project_routes import project_bp
 from routes.task_routes import task_bp
 from routes.notification_routes import notification_bp
 from routes.focus_routes import focus_bp
+from routes.analytics_routes import analytics_bp
 from services.scheduler_service import start_notification_scheduler
 
 
@@ -97,6 +98,7 @@ app.register_blueprint(project_bp)
 app.register_blueprint(task_bp)
 app.register_blueprint(notification_bp)
 app.register_blueprint(focus_bp)
+app.register_blueprint(analytics_bp)
 
 
 @app.route("/")

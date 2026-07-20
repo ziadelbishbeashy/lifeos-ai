@@ -9,6 +9,7 @@ from models import (
     User,
 )
 from services.email_service import send_email
+from services.analytics_service import get_monthly_summary, previous_calendar_month
 
 
 DEFAULT_APP_NAME = "LifeOS AI"
@@ -515,105 +516,86 @@ def send_monthly_analytics_email(user, force=False):
         if not _is_time_reached(target_time):
             return False
 
-    today = _today()
-    month_key = today.strftime("%Y-%m")
-
-    tasks = (
-        Task.query
-        .filter(Task.user_id == user.id)
-        .all()
-    )
-
-    projects = (
-        Project.query
-        .filter(Project.user_id == user.id)
-        .all()
-    )
-
-    completed_tasks = [task for task in tasks if task.status == "Completed"]
-    open_tasks = [task for task in tasks if task.status != "Completed"]
-    overdue_tasks = [
-        task for task in open_tasks
-        if task.deadline and task.deadline < today
-    ]
-    blocked_tasks = [task for task in tasks if task.status == "Blocked"]
-
-    completion_rate = 0
-    if tasks:
-        completion_rate = round(len(completed_tasks) / len(tasks) * 100)
-
-    active_projects = [
-        project for project in projects
-        if project.status not in ("Completed", "Paused")
-    ]
-
-    avg_project_progress = 0
-    if projects:
-        avg_project_progress = round(
-            sum(project.progress or 0 for project in projects) / len(projects)
-        )
-
-    most_active_project = "No project activity yet"
-    project_task_counts = []
-
-    for project in projects:
-        project_task_counts.append((project, len(project.tasks or [])))
-
-    if project_task_counts:
-        most_active_project = max(
-            project_task_counts,
-            key=lambda item: item[1],
-        )[0].title
+    report_year, report_month = previous_calendar_month(_today())
+    analytics = get_monthly_summary(user.id, report_year, report_month)
+    summary = analytics["summary"]
+    month_key = analytics["month_key"]
+    month_label = analytics["month_label"]
 
     unique_key = f"monthly_analytics_{user.id}_{month_key}"
 
     if log_exists(unique_key):
         return False
 
-    subject = f"LifeOS Monthly Analytics - {month_key}"
+    most_focused_project = (
+        analytics["focus_by_project"][0]["name"]
+        if analytics["focus_by_project"]
+        else "No focus activity recorded"
+    )
+
+    open_overdue = (
+        Task.query
+        .filter(
+            Task.user_id == user.id,
+            Task.status != "Completed",
+            Task.deadline.isnot(None),
+            Task.deadline < _today(),
+        )
+        .order_by(Task.deadline.asc())
+        .limit(8)
+        .all()
+    )
+
+    subject = f"LifeOS Monthly Analytics - {month_label}"
 
     text_lines = [
         f"Hi {user.name},",
         "",
-        "Here is your LifeOS monthly productivity report.",
+        f"Here is your LifeOS productivity report for {month_label}.",
         "",
-        f"Total tasks: {len(tasks)}",
-        f"Completed tasks: {len(completed_tasks)}",
-        f"Open tasks: {len(open_tasks)}",
-        f"Overdue tasks: {len(overdue_tasks)}",
-        f"Blocked tasks: {len(blocked_tasks)}",
-        f"Completion rate: {completion_rate}%",
-        f"Active projects: {len(active_projects)}",
-        f"Average project progress: {avg_project_progress}%",
-        f"Most active project: {most_active_project}",
+        f"Tasks completed: {summary['completed_in_period']}",
+        f"Tasks created: {summary['created_in_period']}",
+        f"Overall completion rate: {summary['completion_rate']}%",
+        f"Focus time: {summary['focus_label']}",
+        f"Focus sessions: {summary['focus_sessions']}",
+        f"Average focus session: {summary['average_session_label']}",
+        f"Current overdue tasks: {summary['overdue_tasks']}",
+        f"Active projects: {summary['active_projects']}",
+        f"Most focused area: {most_focused_project}",
         "",
         DEFAULT_APP_NAME,
     ]
 
     html_body = _email_shell(
         "Monthly Analytics",
-        "Your monthly LifeOS productivity snapshot and project health overview.",
+        f"Your LifeOS productivity report for {month_label}.",
         [
             (
-                "Task Analytics",
+                "Task Activity",
                 [
-                    f"Total tasks: {len(tasks)}",
-                    f"Completed tasks: {len(completed_tasks)}",
-                    f"Open tasks: {len(open_tasks)}",
-                    f"Overdue tasks: {len(overdue_tasks)}",
-                    f"Blocked tasks: {len(blocked_tasks)}",
-                    f"Completion rate: {completion_rate}%",
+                    f"Tasks completed: {summary['completed_in_period']}",
+                    f"Tasks created: {summary['created_in_period']}",
+                    f"Overall completion rate: {summary['completion_rate']}%",
+                    f"Current overdue tasks: {summary['overdue_tasks']}",
                 ],
             ),
             (
-                "Project Analytics",
+                "Focus Activity",
                 [
-                    f"Active projects: {len(active_projects)}",
-                    f"Average project progress: {avg_project_progress}%",
-                    f"Most active project: {most_active_project}",
+                    f"Focused time: {summary['focus_label']}",
+                    f"Sessions completed: {summary['focus_sessions']}",
+                    f"Average session: {summary['average_session_label']}",
+                    f"Most focused area: {most_focused_project}",
                 ],
             ),
-            ("Highest Risk Tasks", [_task_line(task) for task in overdue_tasks[:8]]),
+            (
+                "Project Activity",
+                [
+                    f"Active projects: {summary['active_projects']}",
+                    f"Recurring task completion: {summary['recurring_completion_rate']}%",
+                ],
+            ),
+            ("Current Overdue Work", [_task_line(task) for task in open_overdue]),
         ],
     )
 

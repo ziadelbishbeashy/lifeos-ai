@@ -181,6 +181,7 @@ class Task(db.Model):
     )
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True, index=True)
 
     @property
     def is_general(self):

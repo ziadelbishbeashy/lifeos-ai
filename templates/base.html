@@ -229,6 +229,29 @@
                 </a>
 
 
+                <!-- Analytics -->
+
+                <a
+                    href="{{ url_for('analytics_bp.analytics_dashboard') }}"
+                    class="navigation-link
+                    {{
+                        'active'
+                        if request.endpoint
+                        and request.endpoint.startswith('analytics_bp')
+                        else ''
+                    }}"
+                    data-page-loading
+                    data-loading-title="Opening analytics"
+                    data-loading-message="Calculating your workspace performance..."
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 19h16v2H2V3h2v16Zm3-3h3V9H7v7Zm5 0h3V5h-3v11Zm5 0h3v-4h-3v4Z"/>
+                    </svg>
+                    <span>Analytics</span>
+                    <small>Trends & reports</small>
+                </a>
+
+
                 <!-- Smart Notifications -->
 
                 <a

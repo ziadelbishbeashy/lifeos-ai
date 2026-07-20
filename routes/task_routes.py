@@ -168,6 +168,15 @@ def clean_optional_text(value):
     return value if value else None
 
 
+def sync_completed_at(task, previous_status=None):
+    """Keep the analytics completion timestamp aligned with task status."""
+    if task.status == "Completed":
+        if previous_status != "Completed" or not task.completed_at:
+            task.completed_at = datetime.utcnow()
+    else:
+        task.completed_at = None
+
+
 def get_owned_project_or_404(project_id):
     return (
         Project.query
@@ -387,6 +396,7 @@ def add_workspace_task():
         project_id=project.id if project else None,
         **task_data,
     )
+    sync_completed_at(task)
 
     try:
         db.session.add(task)
@@ -448,6 +458,7 @@ def add_task(project_id):
         project_id=project.id,
         **task_data,
     )
+    sync_completed_at(task)
 
     try:
         db.session.add(task)
@@ -491,11 +502,14 @@ def edit_task(task_id):
             flash(str(error), "error")
             return redirect(url_for("task_bp.edit_task", task_id=task.id))
 
+        previous_status = task.status
         task.user_id = current_user.id
         task.project_id = project.id if project else None
 
         for field_name, field_value in task_data.items():
             setattr(task, field_name, field_value)
+
+        sync_completed_at(task, previous_status)
 
         if task.is_recurring and not task.recurrence_series_id:
             task.recurrence_series_id = task.id
@@ -531,9 +545,11 @@ def toggle_task(task_id):
 
     if task.status == "Completed":
         task.status = "Pending"
+        task.completed_at = None
         message = f'Task "{task.title}" reopened.'
     else:
         task.status = "Completed"
+        task.completed_at = datetime.utcnow()
         next_task = generate_next_occurrence(task)
         if next_task:
             message = (

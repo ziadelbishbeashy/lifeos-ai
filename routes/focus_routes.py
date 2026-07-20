@@ -313,6 +313,7 @@ def finish_focus(session_id):
 
     if session.task and request.form.get("complete_task") == "on":
         session.task.status = "Completed"
+        session.task.completed_at = datetime.utcnow()
         generate_next_occurrence(session.task)
 
     db.session.commit()
