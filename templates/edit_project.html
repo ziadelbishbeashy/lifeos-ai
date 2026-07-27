@@ -21,6 +21,7 @@
         data-loading-title="Updating project"
         data-loading-message="Saving your project changes..."
                         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-grid">
             <div class="form-field"><label for="title">Project title <span class="required">*</span></label><input type="text" id="title" name="title" value="{{ project.title }}" required></div>
             <div class="form-field"><label for="project_type">Project type</label><input type="text" id="project_type" name="project_type" value="{{ project.project_type or '' }}"></div>

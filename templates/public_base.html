@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}LifeOS AI{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}?v=phase4-ui-final-1">
@@ -149,6 +150,8 @@
             <div class="public-loading-bar"><i></i></div>
         </div>
     </div>
+
+    <script src="{{ url_for('static', filename='js/security.js') }}?v=architecture-step2"></script>
 
     <script>
         (function () {

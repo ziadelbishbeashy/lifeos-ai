@@ -6,20 +6,15 @@
 
 {% block content %}
 
-<div class="projects-page">
+<div class="projects-page project-studio-index">
 
-    <!-- Page Header -->
-    <header class="workspace-page-header">
+    <header class="workspace-page-header project-studio-index-header">
         <div>
-            <span class="workspace-eyebrow">
-                Project Workspace
-            </span>
-
-            <h1>Projects</h1>
-
+            <span class="workspace-eyebrow">Project workspace</span>
+            <h1>Keep every project moving.</h1>
             <p>
-                Manage your goals, deadlines, resources and execution
-                progress from one connected workspace.
+                See what needs attention, continue the right task, and keep
+                notes and execution connected without opening every project.
             </p>
         </div>
 
@@ -28,492 +23,229 @@
             class="workspace-primary-button"
             data-open-project-modal
         >
-            <span class="button-icon">+</span>
-            New Project
+            + New Project
         </button>
     </header>
 
 
-    <!-- Project Summary -->
-    <section class="project-summary-grid">
-
-        <article class="project-summary-item">
-            <div class="summary-icon summary-icon-purple">
-                P
-            </div>
-
-            <div>
-                <span>Total Projects</span>
-                <strong>{{ projects|length }}</strong>
-            </div>
+    <section class="project-studio-summary" aria-label="Project summary">
+        <article>
+            <span>Active projects</span>
+            <strong>{{ active_count }}</strong>
+            <small>Currently moving</small>
         </article>
 
-        <article class="project-summary-item">
-            <div class="summary-icon summary-icon-blue">
-                A
-            </div>
-
-            <div>
-                <span>Active</span>
-
-                <strong>
-                    {{
-                        projects
-                        | selectattr("status", "equalto", "In Progress")
-                        | list
-                        | length
-                    }}
-                </strong>
-            </div>
+        <article>
+            <span>Need attention</span>
+            <strong>{{ attention_count }}</strong>
+            <small>Overdue, blocked, or close to deadline</small>
         </article>
 
-        <article class="project-summary-item">
-            <div class="summary-icon summary-icon-green">
-                C
-            </div>
-
-            <div>
-                <span>Completed</span>
-
-                <strong>
-                    {{
-                        projects
-                        | selectattr("status", "equalto", "Completed")
-                        | list
-                        | length
-                    }}
-                </strong>
-            </div>
+        <article>
+            <span>Completed</span>
+            <strong>{{ completed_count }}</strong>
+            <small>Finished workspaces</small>
         </article>
-
-        <article class="project-summary-item">
-            <div class="summary-icon summary-icon-orange">
-                H
-            </div>
-
-            <div>
-                <span>High Priority</span>
-
-                <strong>
-                    {{
-                        projects
-                        | selectattr("priority", "equalto", "High")
-                        | list
-                        | length
-                        +
-                        projects
-                        | selectattr("priority", "equalto", "Critical")
-                        | list
-                        | length
-                    }}
-                </strong>
-            </div>
-        </article>
-
     </section>
 
 
-    <!-- Filters -->
-    <section class="project-filter-panel">
+    {% if project_cards %}
 
-        <div class="project-search-wrapper">
-            <span class="project-search-icon">⌕</span>
+        <section class="project-filter-panel project-studio-filter">
+            <div class="project-search-wrapper">
+                <span class="project-search-icon">⌕</span>
+                <input
+                    type="search"
+                    id="projectSearchInput"
+                    placeholder="Search projects, goals, technologies, or phases..."
+                    autocomplete="off"
+                >
+            </div>
 
-            <input
-                type="search"
-                id="projectSearchInput"
-                placeholder="Search projects, technologies or phases..."
-                autocomplete="off"
-            >
+            <div class="project-filter-controls">
+                <select id="projectStatusFilter" aria-label="Filter by status">
+                    <option value="all">All statuses</option>
+                    <option value="planning">Planning</option>
+                    <option value="in progress">In Progress</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                </select>
+
+                <select id="projectPriorityFilter" aria-label="Filter by priority">
+                    <option value="all">All priorities</option>
+                    <option value="low">Low Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="high">High Priority</option>
+                    <option value="critical">Critical Priority</option>
+                </select>
+
+                <button
+                    type="button"
+                    class="clear-project-filters"
+                    id="clearProjectFilters"
+                >
+                    Clear
+                </button>
+            </div>
+        </section>
+
+
+        <div class="project-results-header project-studio-results-heading">
+            <div>
+                <span class="workspace-eyebrow">Your workspaces</span>
+                <h2>Projects</h2>
+                <p>
+                    <span id="visibleProjectCount">{{ project_cards|length }}</span>
+                    visible
+                </p>
+            </div>
         </div>
 
-        <div class="project-filter-controls">
-
-            <select id="projectStatusFilter">
-                <option value="all">All statuses</option>
-                <option value="planning">Planning</option>
-                <option value="in progress">In Progress</option>
-                <option value="paused">Paused</option>
-                <option value="completed">Completed</option>
-            </select>
-
-            <select id="projectPriorityFilter">
-                <option value="all">All priorities</option>
-                <option value="low">Low Priority</option>
-                <option value="medium">Medium Priority</option>
-                <option value="high">High Priority</option>
-                <option value="critical">Critical Priority</option>
-            </select>
-
-            <button
-                type="button"
-                class="clear-project-filters"
-                id="clearProjectFilters"
-            >
-                Clear
-            </button>
-
-        </div>
-
-    </section>
-
-
-    <!-- Status Tabs -->
-    <section class="project-status-tabs">
-
-        <button
-            type="button"
-            class="project-status-tab active"
-            data-project-tab="all"
-        >
-            All
-            <span>{{ projects|length }}</span>
-        </button>
-
-        <button
-            type="button"
-            class="project-status-tab"
-            data-project-tab="in progress"
-        >
-            Active
-            <span>
-                {{
-                    projects
-                    | selectattr("status", "equalto", "In Progress")
-                    | list
-                    | length
-                }}
-            </span>
-        </button>
-
-        <button
-            type="button"
-            class="project-status-tab"
-            data-project-tab="planning"
-        >
-            Planning
-            <span>
-                {{
-                    projects
-                    | selectattr("status", "equalto", "Planning")
-                    | list
-                    | length
-                }}
-            </span>
-        </button>
-
-        <button
-            type="button"
-            class="project-status-tab"
-            data-project-tab="completed"
-        >
-            Completed
-            <span>
-                {{
-                    projects
-                    | selectattr("status", "equalto", "Completed")
-                    | list
-                    | length
-                }}
-            </span>
-        </button>
-
-    </section>
-
-
-    <!-- Results Header -->
-    <div class="project-results-header">
-        <div>
-            <h2>Your Project Workspaces</h2>
-
-            <p>
-                <span id="visibleProjectCount">
-                    {{ projects|length }}
-                </span>
-                projects displayed
-            </p>
-        </div>
-
-        <button
-            type="button"
-            class="workspace-secondary-button"
-            data-open-project-modal
-        >
-            + Create Project
-        </button>
-    </div>
-
-
-    <!-- Project Grid -->
-    {% if projects %}
 
         <section
-            class="professional-project-grid"
+            class="project-studio-grid"
             id="projectsGrid"
         >
-
-            {% for project in projects %}
+            {% for card in project_cards %}
+                {% set project = card.project %}
 
                 <article
-                    class="professional-project-card"
+                    class="project-studio-card"
                     data-project-card
                     data-title="{{ project.title|lower }}"
-                    data-description="{{ (project.description or '')|lower }}"
+                    data-description="{{ (project.description or project.goal or '')|lower }}"
                     data-type="{{ (project.project_type or '')|lower }}"
                     data-stack="{{ (project.tech_stack or '')|lower }}"
                     data-phase="{{ (project.current_phase or '')|lower }}"
-                    data-status="{{ project.status|lower }}"
-                    data-priority="{{ project.priority|lower }}"
+                    data-status="{{ (project.status or 'in progress')|lower }}"
+                    data-priority="{{ (project.priority or 'medium')|lower }}"
                 >
-
-                    <!-- Card Top -->
-                    <div class="project-card-header">
-
-                        <div class="project-identity">
-
-                            <div class="project-card-icon">
+                    <div class="project-studio-card-topline">
+                        <div class="project-studio-card-identity">
+                            <span class="project-studio-avatar">
                                 {{ project.title[0]|upper }}
-                            </div>
+                            </span>
 
                             <div>
-                                <span class="project-type-label">
-                                    {{
-                                        project.project_type
-                                        or "General Project"
-                                    }}
+                                <span class="workspace-eyebrow">
+                                    {{ project.project_type or "Project" }}
                                 </span>
-
                                 <h3>{{ project.title }}</h3>
                             </div>
-
                         </div>
 
-                        <div class="project-card-badges">
-
-                            <span
-                                class="project-status-badge
-                                project-status-{{
-                                    project.status
-                                    | lower
-                                    | replace(' ', '-')
-                                }}"
-                            >
-                                {{ project.status }}
-                            </span>
-
-                            <span
-                                class="project-priority-badge
-                                project-priority-{{
-                                    project.priority|lower
-                                }}"
-                            >
-                                {{ project.priority }}
-                            </span>
-
-                        </div>
-
+                        <span class="project-health-pill project-health-{{ card.health.tone }}">
+                            {{ card.health.label }}
+                        </span>
                     </div>
 
-
-                    <!-- Description -->
-                    <p class="professional-project-description">
+                    <p class="project-studio-card-summary">
                         {{
-                            project.description
-                            or "No project description has been added yet."
+                            (project.goal or project.description or "No project goal has been added yet.")
+                            | truncate(170)
                         }}
                     </p>
 
-
-                    <!-- Progress -->
-                    <div class="professional-project-progress">
-
-                        <div class="progress-information">
-                            <span>Overall progress</span>
-                            <strong>{{ project.progress or 0 }}%</strong>
+                    <div class="project-studio-progress-row">
+                        <div>
+                            <span>Execution progress</span>
+                            <strong>{{ card.progress }}%</strong>
                         </div>
 
                         <div class="professional-progress-track">
                             <div
                                 class="professional-progress-fill"
-                                data-progress="{{ project.progress or 0 }}"
+                                data-progress="{{ card.progress }}"
                             ></div>
                         </div>
-
                     </div>
 
+                    <div class="project-studio-signal-row">
+                        <span>
+                            <strong>{{ card.open_tasks }}</strong>
+                            open tasks
+                        </span>
+                        <span>
+                            <strong>{{ card.note_count }}</strong>
+                            notes
+                        </span>
+                        {% if project.deadline %}
+                            <span>
+                                Due {{ project.deadline.strftime("%d %b %Y") }}
+                            </span>
+                        {% else %}
+                            <span>No project deadline</span>
+                        {% endif %}
+                    </div>
 
-                    <!-- Meta Information -->
-                    <div class="professional-project-meta">
+                    <div class="project-studio-health-copy">
+                        <span>Current signal</span>
+                        <p>{{ card.health.message }}</p>
+                    </div>
 
-                        <div>
-                            <span>Current phase</span>
+                    <div class="project-studio-next-action">
+                        <span>Next action</span>
+
+                        {% if card.next_task %}
+                            <strong>{{ card.next_task.title }}</strong>
+                            <small>
+                                {{ card.next_task.status }}
+                                · {{ card.next_task.importance or "Medium" }} priority
+                                {% if card.next_task.deadline %}
+                                    · Due {{ card.next_task.deadline.strftime("%d %b") }}
+                                {% endif %}
+                            </small>
+                        {% else %}
                             <strong>
-                                {{
-                                    project.current_phase
-                                    or "Not specified"
-                                }}
-                            </strong>
-                        </div>
-
-                        <div>
-                            <span>Deadline</span>
-
-                            <strong>
-                                {% if project.deadline %}
-                                    {{
-                                        project.deadline.strftime(
-                                            "%d %b %Y"
-                                        )
-                                    }}
+                                {% if project.status == "Completed" %}
+                                    Project complete
                                 {% else %}
-                                    No deadline
+                                    Add the first actionable task
                                 {% endif %}
                             </strong>
-                        </div>
-
-                        <div>
-                            <span>Tasks</span>
-                            <strong>{{ project.tasks|length }}</strong>
-                        </div>
-
-                        <div>
-                            <span>Documents</span>
-                            <strong>{{ project.documents|length }}</strong>
-                        </div>
-
+                            <small>
+                                {% if project.status == "Completed" %}
+                                    No unfinished tasks remain.
+                                {% else %}
+                                    Turn the project goal into a clear next step.
+                                {% endif %}
+                            </small>
+                        {% endif %}
                     </div>
 
-
-                    <!-- Technology Stack -->
-                    {% if project.tech_stack %}
-
-                        <div class="project-stack-preview">
-                            <span>Technology</span>
-                            <p>{{ project.tech_stack }}</p>
+                    <div class="project-studio-card-footer">
+                        <div class="project-studio-badges">
+                            <span class="project-status-badge project-status-{{ project.status|lower|replace(' ', '-') }}">
+                                {{ project.status }}
+                            </span>
+                            <span class="project-priority-badge project-priority-{{ project.priority|lower }}">
+                                {{ project.priority }}
+                            </span>
                         </div>
-
-                    {% endif %}
-
-
-                    <!-- Resources -->
-                    <div class="project-resource-row">
-
-                        {% if project.github_link %}
-                            <a
-                                href="{{ project.github_link }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="project-resource-link"
-                            >
-                                GitHub
-                            </a>
-                        {% endif %}
-
-                        {% if project.demo_link %}
-                            <a
-                                href="{{ project.demo_link }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="project-resource-link"
-                            >
-                                Live Demo
-                            </a>
-                        {% endif %}
-
-                        {% if project.project_folder %}
-                            <span class="project-folder-connected">
-                                Folder connected
-                            </span>
-                        {% endif %}
-
-                        {% if (
-                            not project.github_link
-                            and not project.demo_link
-                            and not project.project_folder
-                        ) %}
-                            <span class="no-project-resources">
-                                No external resources
-                            </span>
-                        {% endif %}
-
-                    </div>
-
-
-                    <!-- Actions -->
-                    <div class="professional-project-actions">
 
                         <a
-                            href="{{ url_for(
-                                'project_bp.project_details',
-                                project_id=project.id
-                            ) }}"
-                            class="open-project-button"
-                    data-page-loading
-                    data-loading-title="Opening project workspace"
-                    data-loading-message="Loading project details and tasks..."
+                            href="{{ url_for('project_bp.project_details', project_id=project.id) }}"
+                            class="workspace-primary-button project-studio-open-button"
+                            data-page-loading
+                            data-loading-title="Opening project"
+                            data-loading-message="Loading the project workspace..."
                         >
-                            Open Workspace
-                            <span>→</span>
+                            Open Project
                         </a>
-
-                        <a
-                            href="{{ url_for(
-                                'project_bp.edit_project',
-                                project_id=project.id
-                            ) }}"
-                            class="project-icon-button"
-                            title="Edit project"
-                    data-page-loading
-                    data-loading-title="Opening project editor"
-                    data-loading-message="Preparing the project form..."
-                        >
-                            Edit
-                        </a>
-
-                        <form
-                            method="POST"
-                            action="{{ url_for(
-                                'project_bp.delete_project',
-                                project_id=project.id
-                            ) }}"
-                            data-confirm
-                            data-confirm-title="Delete this project?"
-                            data-confirm-message="This project will be permanently removed from your workspace. This action cannot be undone."
-                            data-confirm-text="Delete project"
-                            data-confirm-cancel="Cancel"
-                            data-confirm-variant="danger"
-                            data-confirm-icon="!"
-                            data-loading-title="Deleting project"
-                            data-loading-message="Removing this project from your workspace..."
-                        >
-                            <button type="submit" class="danger-button">
-                                Delete Project
-                            </button>
-                        </form>
-
                     </div>
-
                 </article>
-
             {% endfor %}
-
         </section>
 
 
-        <!-- No Search Results -->
         <section
-            class="project-no-results"
+            class="task-no-results project-studio-no-results"
             id="projectNoResults"
             hidden
         >
-            <div class="empty-state-symbol">⌕</div>
-
+            <div>⌕</div>
             <h3>No matching projects</h3>
-
-            <p>
-                Try changing the search text or clearing the filters.
-            </p>
-
+            <p>Try a different search, status, or priority.</p>
             <button
                 type="button"
                 class="workspace-secondary-button"
@@ -525,23 +257,13 @@
 
     {% else %}
 
-        <section class="professional-empty-state">
-
-            <div class="empty-state-visual">
-                <div></div>
-                <div></div>
-                <div></div>
-            </div>
-
-            <span>Your workspace is ready</span>
-
-            <h2>Create your first project</h2>
-
+        <section class="professional-task-empty-state project-studio-empty-state">
+            <div class="empty-task-symbol">P</div>
+            <span>Start with one meaningful goal</span>
+            <h2>Create your first project workspace</h2>
             <p>
-                Build a connected workspace for your goals, tasks,
-                notes, documents and intelligent execution plans.
+                Connect goals, tasks, notes, and progress in one place.
             </p>
-
             <button
                 type="button"
                 class="workspace-primary-button"
@@ -549,13 +271,11 @@
             >
                 + Create First Project
             </button>
-
         </section>
 
     {% endif %}
 
 </div>
-
 
 <!-- Create Project Modal -->
 <div
@@ -606,6 +326,7 @@
             data-loading-title="Creating project"
             data-loading-message="LifeOS is setting up your new workspace project..."
                         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="project-form-grid">
 

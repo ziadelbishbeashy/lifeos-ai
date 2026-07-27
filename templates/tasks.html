@@ -218,6 +218,7 @@
                             data-loading-message="Saving the task status change..."
                             data-loading-delay="250"
                         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="next" value="tasks">
                         <button
                             type="submit"
@@ -480,6 +481,7 @@
             data-loading-title="Creating task"
             data-loading-message="Adding the task to your workspace..."
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="task-form-section-heading compact-section-heading">
                 <span>01</span>
 

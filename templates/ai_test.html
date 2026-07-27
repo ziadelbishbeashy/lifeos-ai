@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-container">
+    <div class="page-header">
+        <div>
+            <p class="eyebrow">Phase 6.0 · AI Foundation</p>
+            <h1>AI Service Test</h1>
+            <p>
+                Test the shared LifeOS AI service before connecting it
+                to Notes, Documents, Smart Brain, and Smart Plan.
+            </p>
+        </div>
+    </div>
+
+    <div class="card" style="max-width: 850px;">
+        {% if provider_info %}
+            <div style="margin-bottom: 20px;">
+                <strong>Active provider:</strong>
+                {{ provider_info.provider|title }}
+
+                <span style="margin-left: 16px;">
+                    <strong>Model:</strong>
+                    {{ provider_info.model }}
+                </span>
+            </div>
+        {% endif %}
+
+        {% if error_message %}
+            <div class="alert alert-danger" style="margin-bottom: 20px;">
+                {{ error_message }}
+            </div>
+        {% endif %}
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="input_text">Text to summarize</label>
+
+                <textarea
+                    id="input_text"
+                    name="input_text"
+                    rows="10"
+                    required
+                    placeholder="Paste a project note, meeting note, or idea..."
+                >{{ input_text }}</textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                Analyze with AI
+            </button>
+        </form>
+    </div>
+
+    {% if result %}
+        <div class="card" style="max-width: 850px; margin-top: 24px;">
+            <p class="eyebrow">Validated result</p>
+            <h2>Summary</h2>
+
+            <p>{{ result.summary }}</p>
+
+            <hr>
+
+            <small>
+                Provider: {{ result.provider|title }} ·
+                Model: {{ result.model }} ·
+                Input: {{ result.input_characters }} characters
+            </small>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

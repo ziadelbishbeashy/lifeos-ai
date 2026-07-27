@@ -44,6 +44,7 @@
             data-loading-title="Creating account"
             data-loading-message="Setting up your private LifeOS workspace..."
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="authentication-field">
                 <label for="name">Full name</label>
 

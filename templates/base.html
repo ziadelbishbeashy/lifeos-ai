@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <meta
         name="viewport"
@@ -43,12 +44,28 @@
         href="{{ url_for(
             'static',
             filename='css/style.css'
-        ) }}?v=phase5-focus-balanced-1"
+        ) }}?v=phase6-project-aware-1"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/theme-v2.css'
+        ) }}?v=focus-studio-e3-action-center"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for(
+            'static',
+            filename='css/project-studio.css'
+        ) }}?v=project-studio-e5"
     >
 </head>
 
 <body
-    class="app-body{% if request.endpoint and request.endpoint.startswith('focus_bp.') %} focus-page-shell{% endif %}{% if request.endpoint == 'focus_bp.focus_mode' and active_session is defined and active_session %} focus-immersive-active{% endif %}"
+    class="app-body studio-theme{% if request.endpoint and request.endpoint.startswith('focus_bp.') %} focus-page-shell{% endif %}{% if request.endpoint == 'focus_bp.focus_mode' and active_session is defined and active_session %} focus-immersive-active{% endif %}"
     data-notification-user="{{ current_user.id }}"
 >
 
@@ -88,7 +105,7 @@
 
                     <span class="app-brand-copy">
                         <strong>LifeOS AI</strong>
-                        <small>Execution Intelligence</small>
+                        <small>Focus Studio</small>
                     </span>
                 </a>
 
@@ -295,21 +312,31 @@
 
                 <!-- Future AI Notes -->
 
-                <span
-                    class="navigation-link
-                    navigation-link-disabled"
-                >
-                    <svg
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
+                <span>
+                    <a
+                        href="{{ url_for('note_bp.notes') }}"
+                        class="
+                            navigation-link
+                            {% if request.endpoint
+                                and request.endpoint.startswith('note_bp.')
+                            %}
+                                active
+                            {% endif %}
+                        "
+                        data-loading-title="Opening AI Notes"
                     >
-                        <path
-                            d="M4 4h16v12H7l-3 3V4Zm4 4v2h8V8H8Zm0 4v2h5v-2H8Z"
-                        />
-                    </svg>
+                        <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M4 4h16v12H7l-3 3V4Zm4 4v2h8V8H8Zm0 4v2h5v-2H8Z"
+                            />
+                        </svg>
 
-                    <span>AI Notes</span>
-                    <em>Soon</em>
+                        <span>AI Notes</span>
+                        <small>Phase 6.1</small>
+                    </a>
                 </span>
 
 
@@ -720,6 +747,7 @@
                                 data-loading-title="Logging out"
                                 data-loading-message="Ending your LifeOS session safely..."
                             >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button
                                     type="submit"
                                     class="profile-logout-button"
@@ -883,8 +911,22 @@
     <script
         src="{{ url_for(
             'static',
+            filename='js/security.js'
+        ) }}?v=architecture-step2"
+    ></script>
+
+    <script
+        src="{{ url_for(
+            'static',
             filename='js/main.js'
         ) }}?v=phase5-focus-1"
+    ></script>
+
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/project-studio.js'
+        ) }}?v=project-studio-e5"
     ></script>
 
     {% block scripts %}{% endblock %}

@@ -470,6 +470,7 @@
             method="POST"
             class="quick-action-card email-action-card"
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <span class="quick-action-icon">!</span>
             <div>
                 <strong>Run Smart Check</strong>
@@ -483,6 +484,7 @@
             method="POST"
             class="quick-action-card email-action-card"
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <span class="quick-action-icon">D</span>
             <div>
                 <strong>Daily Checkup</strong>
@@ -496,6 +498,7 @@
             method="POST"
             class="quick-action-card email-action-card"
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <span class="quick-action-icon">M</span>
             <div>
                 <strong>Monthly Analytics</strong>

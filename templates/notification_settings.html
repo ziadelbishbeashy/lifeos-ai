@@ -33,6 +33,7 @@
             data-loading-title="Saving notification preferences"
             data-loading-message="Updating your LifeOS email controls..."
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="task-form-section-heading compact-section-heading">
                 <span>01</span>
                 <div>
@@ -224,22 +225,27 @@
                 <p>Use these buttons while developing before turning on the background scheduler.</p>
 
                 <form method="POST" action="{{ url_for('notification_bp.send_test_notification_email') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="workspace-primary-button full-width">Send Test Email</button>
                 </form>
 
                 <form method="POST" action="{{ url_for('notification_bp.run_my_email_notification_check') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="workspace-secondary-button full-width">Run Smart Check</button>
                 </form>
 
                 <form method="POST" action="{{ url_for('notification_bp.send_my_daily_summary') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="workspace-secondary-button full-width">Send Daily Checkup</button>
                 </form>
 
                 <form method="POST" action="{{ url_for('notification_bp.send_my_weekly_summary') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="workspace-secondary-button full-width">Send Weekly Summary</button>
                 </form>
 
                 <form method="POST" action="{{ url_for('notification_bp.send_my_monthly_analytics') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="workspace-secondary-button full-width">Send Monthly Analytics</button>
                 </form>
             </section>
