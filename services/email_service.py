@@ -1,5 +1,6 @@
 import os
 import smtplib
+import ssl
 from email.message import EmailMessage
 
 
@@ -13,7 +14,21 @@ def _env_bool(name, default=False):
         return default
 
     return value.strip().lower() in TRUE_VALUES
+def _safe_timeout(
+    value,
+    default=20.0,
+):
+    """Return a safe positive SMTP timeout value."""
 
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError):
+        return default
+
+    if timeout <= 0:
+        return default
+
+    return timeout
 
 def get_email_settings():
     """Return SMTP settings from environment variables."""
@@ -28,6 +43,7 @@ def get_email_settings():
         "username": username,
         "password": os.getenv("MAIL_PASSWORD"),
         "default_sender": default_sender,
+        "timeout": _safe_timeout(os.getenv("MAIL_TIMEOUT_SECONDS", "20")),
     }
 
 
@@ -69,9 +85,13 @@ def send_email(to_email, subject, body, html_body=None):
     if html_body:
         message.add_alternative(html_body, subtype="html")
 
-    with smtplib.SMTP(settings["server"], settings["port"]) as smtp:
+    with smtplib.SMTP(
+        settings["server"],
+        settings["port"],
+        timeout=settings["timeout"],
+    ) as smtp:
         if settings["use_tls"]:
-            smtp.starttls()
+            smtp.starttls(context=ssl.create_default_context())
 
         smtp.login(settings["username"], settings["password"])
         smtp.send_message(message)

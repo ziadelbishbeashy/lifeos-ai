@@ -1,5 +1,3 @@
-import csv
-import io
 from datetime import datetime
 
 from flask import Blueprint, Response, render_template, request
@@ -10,6 +8,7 @@ from services.analytics_service import (
     get_analytics_dashboard,
     task_export_rows,
 )
+from services.export_service import build_csv
 
 
 analytics_bp = Blueprint("analytics_bp", __name__, url_prefix="/analytics")
@@ -50,12 +49,10 @@ def analytics_dashboard():
 
 
 def _csv_response(rows, fieldnames, filename):
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    writer.writerows(rows)
-
-    response = Response(output.getvalue(), mimetype="text/csv; charset=utf-8")
+    response = Response(
+        build_csv(rows, fieldnames),
+        mimetype="text/csv; charset=utf-8",
+    )
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 

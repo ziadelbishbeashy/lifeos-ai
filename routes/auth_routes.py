@@ -1,21 +1,39 @@
+"""Public authentication routes for LifeOS."""
+
+from __future__ import annotations
+
 from urllib.parse import urljoin, urlsplit
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 
-from database import db
-from models import Project, User
+from services.auth_service import (
+    AccountCreationError,
+    DuplicateEmailError,
+    authenticate_user,
+    build_registration_input,
+    claim_legacy_projects,
+    create_user,
+    normalize_email,
+    validate_registration,
+)
 
 
 auth_bp = Blueprint("auth_bp", __name__)
 
 
-def normalize_email(email):
-    return (email or "").strip().lower()
+def is_safe_redirect_url(target: str | None) -> bool:
+    """Allow redirects only to pages on the current LifeOS host."""
 
-
-def is_safe_redirect_url(target):
     if not target:
         return False
 
@@ -28,64 +46,49 @@ def is_safe_redirect_url(target):
     )
 
 
-def claim_legacy_projects(user):
-    """Assign old ownerless development projects when only one user exists."""
-    if User.query.count() != 1:
-        return
-
-    changed = (
-        Project.query.filter(Project.user_id.is_(None))
-        .update({Project.user_id: user.id}, synchronize_session=False)
-    )
-
-    if changed:
-        db.session.commit()
-
-
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        email = normalize_email(request.form.get("email"))
-        password = request.form.get("password", "")
-        confirm_password = request.form.get("confirm_password", "")
+        entered_name = (request.form.get("name") or "").strip()
+        entered_email = (request.form.get("email") or "").strip()
 
-        if len(name) < 2:
-            flash("Please enter your full name.", "error")
-        elif "@" not in email or "." not in email.rsplit("@", 1)[-1]:
-            flash("Please enter a valid email address.", "error")
-        elif len(password) < 8:
-            flash("Password must contain at least 8 characters.", "error")
-        elif password != confirm_password:
-            flash("The passwords do not match.", "error")
-        elif User.query.filter_by(email=email).first():
-            flash("An account with this email already exists.", "error")
+        registration = build_registration_input(
+            name=entered_name,
+            email=entered_email,
+            password=request.form.get("password"),
+            confirm_password=request.form.get("confirm_password"),
+        )
+
+        validation_message = validate_registration(registration)
+        if validation_message:
+            flash(validation_message, "error")
         else:
-            user = User(name=name, email=email)
-            user.set_password(password)
-
             try:
-                db.session.add(user)
-                db.session.commit()
-                claim_legacy_projects(user)
+                user = create_user(registration)
                 login_user(user)
-                flash("Your LifeOS account was created successfully.", "success")
+                flash(
+                    "Your LifeOS account was created successfully.",
+                    "success",
+                )
                 return redirect(url_for("dashboard"))
-            except IntegrityError:
-                db.session.rollback()
-                flash("An account with this email already exists.", "error")
-            except Exception as error:
-                db.session.rollback()
-                print("Registration error:", error)
+            except DuplicateEmailError:
+                flash(
+                    "An account with this email already exists.",
+                    "error",
+                )
+            except AccountCreationError:
+                current_app.logger.exception(
+                    "LifeOS could not create a user account."
+                )
                 flash("The account could not be created.", "error")
 
         return render_template(
             "register.html",
-            entered_name=name,
-            entered_email=email,
+            entered_name=entered_name,
+            entered_email=entered_email,
         )
 
     return render_template("register.html")
@@ -100,13 +103,19 @@ def login():
         email = normalize_email(request.form.get("email"))
         password = request.form.get("password", "")
         remember = request.form.get("remember") == "on"
-        user = User.query.filter_by(email=email).first()
+        user = authenticate_user(email, password)
 
-        if not user or not user.check_password(password):
+        if user is None:
             flash("Incorrect email or password.", "error")
             return render_template("login.html", entered_email=email)
 
-        claim_legacy_projects(user)
+        try:
+            claim_legacy_projects(user)
+        except SQLAlchemyError:
+            current_app.logger.exception(
+                "LifeOS could not claim legacy projects during login."
+            )
+
         login_user(user, remember=remember)
         flash(f"Welcome back, {user.name}.", "success")
 

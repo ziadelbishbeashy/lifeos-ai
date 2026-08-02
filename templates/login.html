@@ -45,6 +45,7 @@
             data-loading-title="Logging in"
             data-loading-message="Opening your LifeOS workspace..."
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="authentication-field">
                 <label for="email">Email address</label>
 

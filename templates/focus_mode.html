@@ -65,6 +65,7 @@
             </button>
             <button type="button" class="focus-action-button quiet" id="extendFocusButton">+5 minutes</button>
             <form method="POST" action="{{ url_for('focus_bp.begin_review', session_id=active_session.id) }}" class="focus-inline-action-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="focus-action-button primary">End session</button>
             </form>
         </div>
@@ -96,6 +97,7 @@
         data-confirm-text="Leave session"
         data-confirm-cancel="Keep focusing"
     >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit">Exit without completing</button>
     </form>
 </section>
@@ -215,6 +217,7 @@
             <button type="button" class="focus-action-button secondary" id="completeTakeBreak">Take a break</button>
             <button type="button" class="focus-action-button quiet" id="continueOvertime">Continue working</button>
             <form method="POST" action="{{ url_for('focus_bp.begin_review', session_id=active_session.id) }}" class="focus-inline-action-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="focus-action-button primary">Review session</button>
             </form>
         </div>
@@ -228,6 +231,7 @@
         <p class="review-kicker">Session complete</p>
         <h2 id="focusReviewTitle">Close the loop</h2>
         <form method="POST" action="{{ url_for('focus_bp.finish_focus', session_id=active_session.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if active_session.goal %}
             <fieldset class="review-choice-group">
                 <legend>Did you achieve the outcome?</legend>
@@ -288,6 +292,7 @@
     </header>
 
     <form class="focus-setup-layout" id="focusSetupForm" method="POST" action="{{ url_for('focus_bp.start_focus') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <main class="focus-setup-main-card">
             <section class="focus-setup-section">
                 <div class="focus-section-heading">

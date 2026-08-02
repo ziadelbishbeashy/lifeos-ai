@@ -1,0 +1,24 @@
+LifeOS database migrations
+==========================
+
+This repository starts with an empty baseline revision because the current
+SQL Server database already contains the existing LifeOS schema.
+
+For the EXISTING development database, run once:
+
+    python -m flask --app app db stamp 20260726_0001
+
+This records the current schema without creating, dropping, or changing any
+existing tables.
+
+Verify the recorded revision with:
+
+    python -m flask --app app db current
+
+Future schema changes must be created through reviewed migration revisions:
+
+    python -m flask --app app db migrate -m "describe the change"
+    python -m flask --app app db upgrade
+
+Never run `db stamp` on a new empty production database as a replacement for
+actual schema creation.
