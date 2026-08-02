@@ -7,13 +7,22 @@ from typing import Any
 from ai.provider_router import AIProviderRouterError, generate_text as route_ai_text
 
 from dotenv import load_dotenv
+from services.document_analysis_service import (
+    DocumentAnalysisValidationError,
+    normalise_document_analysis,
+)
 
+from services.document_question_service import (
+    DocumentQuestionValidationError,
+    normalise_document_answer,
+)
 
 load_dotenv()
 
 
 MAX_NOTE_CHARACTERS = 20_000
 MAX_QUESTION_CHARACTERS = 2_000
+MAX_DOCUMENT_ANALYSIS_CHARACTERS = 80_000
 ALLOWED_PRIORITIES = {"Low", "Medium", "High"}
 ALLOWED_ALIGNMENT_LEVELS = {"Strong", "Partial", "Weak", "Unclear"}
 ALLOWED_TASK_ACTIONS = {
@@ -135,7 +144,148 @@ TEXT:
         "summary": summary,
         "input_characters": len(cleaned_text),
     }
+def analyze_document(
+    filename: str,
+    extracted_text: str,
+) -> dict[str, Any]:
+    """Analyse readable PDF text into structured Document Brain insights.
 
+    This function calls the configured AI provider but does not write
+    anything to the database.
+    """
+
+    cleaned_filename = str(filename or "").strip()
+    cleaned_text = str(extracted_text or "").strip()
+
+    if not cleaned_filename:
+        raise AIServiceError(
+            "The document must have a filename before analysis."
+        )
+
+    if not cleaned_text:
+        raise AIServiceError(
+            "This document does not contain readable text. "
+            "It may require OCR before LifeOS can analyse it."
+        )
+
+    if len(cleaned_text) > MAX_DOCUMENT_ANALYSIS_CHARACTERS:
+        raise AIServiceError(
+            "This document is too large for single-request analysis. "
+            "Document chunking must be used for documents longer than "
+            f"{MAX_DOCUMENT_ANALYSIS_CHARACTERS:,} characters."
+        )
+
+    config = get_ai_configuration()
+
+    prompt = _build_document_analysis_prompt(
+        filename=cleaned_filename,
+        extracted_text=cleaned_text,
+    )
+
+    raw_response = _generate_text(
+        provider=config["provider"],
+        api_key=config["api_key"],
+        model=config["model"],
+        prompt=prompt,
+        empty_message=(
+            "The AI provider returned an empty document analysis."
+        ),
+    )
+
+    analysis = _parse_document_analysis_response(
+        raw_response
+    )
+
+    return {
+        "success": True,
+        "provider": config["provider"],
+        "model": config["model"],
+        "analysis": analysis,
+        "input_characters": len(cleaned_text),
+    }
+
+def ask_document_question(
+    *,
+    filename: str,
+    extracted_text: str,
+    question: str,
+) -> dict[str, Any]:
+    """Answer one question using only the supplied document."""
+
+    cleaned_filename = str(
+        filename or ""
+    ).strip()
+
+    cleaned_text = str(
+        extracted_text or ""
+    ).strip()
+
+    cleaned_question = str(
+        question or ""
+    ).strip()
+
+    if not cleaned_filename:
+        raise AIServiceError(
+            "The document must have a filename."
+        )
+
+    if not cleaned_text:
+        raise AIServiceError(
+            "This document has no readable text. "
+            "It may require OCR."
+        )
+
+    if not cleaned_question:
+        raise AIServiceError(
+            "Enter a question about the document."
+        )
+
+    if len(cleaned_question) > MAX_QUESTION_CHARACTERS:
+        raise AIServiceError(
+            "The question is too long. "
+            f"Use at most {MAX_QUESTION_CHARACTERS:,} characters."
+        )
+
+    if len(cleaned_text) > MAX_DOCUMENT_ANALYSIS_CHARACTERS:
+        raise AIServiceError(
+            "This document is too large for single-request "
+            "question answering. Document chunking is required."
+        )
+
+    config = get_ai_configuration()
+
+    prompt = _build_document_question_prompt(
+        filename=cleaned_filename,
+        extracted_text=cleaned_text,
+        question=cleaned_question,
+    )
+
+    raw_response = _generate_text(
+        provider=config["provider"],
+        api_key=config["api_key"],
+        model=config["model"],
+        prompt=prompt,
+        empty_message=(
+            "The AI provider returned an empty document answer."
+        ),
+    )
+
+    answer_data = _parse_document_question_response(
+        raw_response
+    )
+
+    return {
+        "success": True,
+        "provider": config["provider"],
+        "model": config["model"],
+        "question": cleaned_question,
+        "answer": answer_data["answer"],
+        "found_in_document": answer_data[
+            "found_in_document"
+        ],
+        "sources": answer_data["sources"],
+        "input_characters": len(cleaned_text),
+    }
 
 def analyze_note(
     title: str,
@@ -286,6 +436,146 @@ def ask_about_note(
         ),
     }
 
+
+def _build_document_analysis_prompt(
+    *,
+    filename: str,
+    extracted_text: str,
+) -> str:
+    """Build the grounded structured-analysis prompt."""
+
+    return f"""
+You are the Document Brain inside LifeOS.
+
+Analyse the supplied document carefully and return one JSON object.
+
+GROUNDING RULES:
+1. Use only information present in the supplied document.
+2. Never invent requirements, decisions, dates, risks or actions.
+3. When information is unclear, place it in missing_information.
+4. Every extracted fact must include its source page when available.
+5. Page markers appear as: --- Page NUMBER ---
+6. Keep evidence short and directly related to the extracted fact.
+7. Do not create tasks or modify LifeOS data.
+8. Return valid JSON only.
+9. Do not wrap the JSON in Markdown fences.
+10. Use null when an exact date or page is unavailable.
+
+SUPPORTED DOCUMENT TYPES:
+- Requirements Document
+- Research Paper
+- Meeting Notes
+- Project Plan
+- Technical Documentation
+- Lecture Material
+- Policy or Contract
+- General Reference
+
+PRIORITY VALUES:
+- Low
+- Medium
+- High
+
+DATE FORMAT:
+- YYYY-MM-DD
+- Use null when the document does not provide an exact date.
+
+RETURN EXACTLY THIS STRUCTURE:
+
+{{
+  "document_type": "General Reference",
+  "title": "Document title",
+  "summary": "Clear executive summary",
+  "purpose": "Why this document exists",
+  "key_points": [
+    {{
+      "title": "Key point",
+      "detail": "Explanation",
+      "source": {{
+        "page": 1,
+        "section": "Section name",
+        "evidence": "Short supporting evidence"
+      }}
+    }}
+  ],
+  "requirements": [
+    {{
+      "requirement": "Requirement",
+      "details": "Requirement explanation",
+      "source": {{
+        "page": 1,
+        "section": "Section name",
+        "evidence": "Short supporting evidence"
+      }}
+    }}
+  ],
+  "decisions": [
+    {{
+      "decision": "Decision",
+      "reason": "Reason or context",
+      "source": {{
+        "page": 1,
+        "section": "Section name",
+        "evidence": "Short supporting evidence"
+      }}
+    }}
+  ],
+  "risks": [
+    {{
+      "risk": "Risk or blocker",
+      "impact": "Possible impact",
+      "source": {{
+        "page": 1,
+        "section": "Section name",
+        "evidence": "Short supporting evidence"
+      }}
+    }}
+  ],
+  "deadlines": [
+    {{
+      "date": "2026-08-15",
+      "description": "Deadline meaning",
+      "source": {{
+        "page": 1,
+        "section": "Section name",
+        "evidence": "Short supporting evidence"
+      }}
+    }}
+  ],
+  "action_items": [
+    {{
+      "title": "Possible action",
+      "description": "What appears to be required",
+      "priority": "Medium",
+      "deadline": null,
+      "source": {{
+        "page": 1,
+        "section": "Section name",
+        "evidence": "Short supporting evidence"
+      }}
+    }}
+  ],
+  "missing_information": [
+    {{
+      "question": "Unanswered question",
+      "why_it_matters": "Why clarification is useful",
+      "source": {{
+        "page": 1,
+        "section": "Section name",
+        "evidence": "Relevant wording or empty string"
+      }}
+    }}
+  ]
+}}
+
+Use empty arrays when a category has no supported information.
+
+DOCUMENT FILENAME:
+{filename}
+
+DOCUMENT CONTENT:
+{extracted_text}
+"""
 
 def _build_note_analysis_prompt(
     title: str,
@@ -528,7 +818,54 @@ CURRENT NOTE TITLE:
 CURRENT NOTE CONTENT:
 {content}
 """
+def _build_document_question_prompt(
+    *,
+    filename: str,
+    extracted_text: str,
+    question: str,
+) -> str:
+    """Build a grounded question-answering prompt."""
 
+    return f"""
+You are the Document Brain inside LifeOS.
+
+Answer the user's question using only the supplied document.
+
+STRICT RULES:
+1. Do not use outside knowledge.
+2. Do not invent facts, dates, decisions or requirements.
+3. Page markers appear as: --- Page NUMBER ---
+4. When the answer exists, include supporting page references.
+5. Keep evidence short and directly related to the answer.
+6. When the answer is absent, clearly say it was not found.
+7. When the answer is absent, set found_in_document to false.
+8. When found_in_document is false, return an empty sources array.
+9. Return valid JSON only.
+10. Do not use Markdown code fences.
+
+RETURN EXACTLY THIS STRUCTURE:
+
+{{
+  "answer": "Answer based only on the document",
+  "found_in_document": true,
+  "sources": [
+    {{
+      "page": 1,
+      "section": "Relevant section",
+      "evidence": "Short supporting wording"
+    }}
+  ]
+}}
+
+DOCUMENT FILENAME:
+{filename}
+
+USER QUESTION:
+{question}
+
+DOCUMENT CONTENT:
+{extracted_text}
+"""
 
 def _build_note_question_prompt(
     title: str,
@@ -625,7 +962,120 @@ def _generate_text(
         )
     except AIProviderRouterError as error:
         raise AIServiceError(str(error)) from error
+def _parse_document_analysis_response(
+    raw_response: str,
+) -> dict[str, Any]:
+    """Parse and validate AI output for Document Brain."""
 
+    cleaned_response = str(
+        raw_response or ""
+    ).strip()
+
+    # Remove optional Markdown code fences.
+    cleaned_response = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        cleaned_response,
+        flags=re.IGNORECASE,
+    )
+
+    cleaned_response = re.sub(
+        r"\s*```$",
+        "",
+        cleaned_response,
+    )
+
+    # Extract the JSON object if the provider added extra text.
+    first_brace = cleaned_response.find("{")
+    last_brace = cleaned_response.rfind("}")
+
+    if first_brace == -1 or last_brace == -1:
+        raise AIServiceError(
+            "The AI response did not contain valid "
+            "document-analysis data."
+        )
+
+    cleaned_response = cleaned_response[
+        first_brace:last_brace + 1
+    ]
+
+    try:
+        parsed_data = json.loads(
+            cleaned_response
+        )
+
+    except json.JSONDecodeError as error:
+        raise AIServiceError(
+            "The AI returned invalid document-analysis JSON. "
+            "Please analyse the document again."
+        ) from error
+
+    try:
+        return normalise_document_analysis(
+            parsed_data
+        )
+
+    except DocumentAnalysisValidationError as error:
+        raise AIServiceError(
+            f"The document analysis was incomplete: {error}"
+        ) from error
+
+def _parse_document_question_response(
+    raw_response: str,
+) -> dict[str, Any]:
+    """Parse and validate a grounded document answer."""
+
+    cleaned_response = str(
+        raw_response or ""
+    ).strip()
+
+    cleaned_response = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        cleaned_response,
+        flags=re.IGNORECASE,
+    )
+
+    cleaned_response = re.sub(
+        r"\s*```$",
+        "",
+        cleaned_response,
+    )
+
+    first_brace = cleaned_response.find("{")
+    last_brace = cleaned_response.rfind("}")
+
+    if first_brace == -1 or last_brace == -1:
+        raise AIServiceError(
+            "The AI response did not contain valid "
+            "document-answer data."
+        )
+
+    cleaned_response = cleaned_response[
+        first_brace:last_brace + 1
+    ]
+
+    try:
+        parsed_data = json.loads(
+            cleaned_response
+        )
+
+    except json.JSONDecodeError as error:
+        raise AIServiceError(
+            "The AI returned invalid document-answer JSON."
+        ) from error
+
+    try:
+        return normalise_document_answer(
+            parsed_data
+        )
+
+    except DocumentQuestionValidationError as error:
+        raise AIServiceError(
+            f"The document answer was incomplete: {error}"
+        ) from error
+
+    
 
 def _parse_analysis_response(raw_response: str) -> dict[str, Any]:
     """Convert provider JSON text into a normalized LifeOS analysis."""

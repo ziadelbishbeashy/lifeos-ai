@@ -14,7 +14,21 @@ def _env_bool(name, default=False):
         return default
 
     return value.strip().lower() in TRUE_VALUES
+def _safe_timeout(
+    value,
+    default=20.0,
+):
+    """Return a safe positive SMTP timeout value."""
 
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError):
+        return default
+
+    if timeout <= 0:
+        return default
+
+    return timeout
 
 def get_email_settings():
     """Return SMTP settings from environment variables."""

@@ -45,6 +45,28 @@ class User(UserMixin, db.Model):
         back_populates="user",
         lazy=True,
     )
+    document_ai_analyses = db.relationship(
+    "DocumentAIAnalysis",
+    back_populates="user",
+    lazy=True,
+    )
+
+    document_questions = db.relationship(
+    "DocumentQuestion",
+    back_populates="user",
+    lazy=True,
+    )
+    document_task_suggestions = db.relationship(
+    "DocumentTaskSuggestion",
+    back_populates="user",
+    lazy=True,
+    )
+
+    document_chunks = db.relationship(
+    "DocumentChunk",
+    back_populates="user",
+    lazy=True,
+    )
 
     email_notifications = db.relationship(
         "EmailNotificationLog",
@@ -1095,6 +1117,497 @@ class Document(db.Model):
         db.DateTime,
         default=datetime.utcnow,
     )
+    analyses = db.relationship(
+    "DocumentAIAnalysis",
+    back_populates="document",
+    lazy=True,
+    cascade="all, delete-orphan",
+    )
+
+    task_suggestions = db.relationship(
+    "DocumentTaskSuggestion",
+    back_populates="document",
+    lazy=True,
+    cascade="all, delete-orphan",
+    )
+
+    questions = db.relationship(
+    "DocumentQuestion",
+    back_populates="document",
+    lazy=True,
+    cascade="all, delete-orphan",
+    )
+    chunks = db.relationship(
+    "DocumentChunk",
+    back_populates="document",
+    lazy=True,
+    cascade="all, delete-orphan",
+    order_by="DocumentChunk.chunk_index",
+    )
 
     def __repr__(self):
         return f"<Document {self.filename}>"
+
+class DocumentAIAnalysis(db.Model):
+    """Stored structured understanding of a project document."""
+
+    __tablename__ = "document_ai_analyses"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("documents.id"),
+        nullable=False,
+        index=True,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    provider = db.Column(
+        db.Unicode(30),
+        nullable=False,
+    )
+
+    model = db.Column(
+        db.Unicode(100),
+        nullable=False,
+    )
+
+    status = db.Column(
+        db.Unicode(20),
+        nullable=False,
+        default="Completed",
+    )
+
+    document_type = db.Column(
+        db.Unicode(80),
+        nullable=True,
+    )
+
+    summary = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    insights_json = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    source_fingerprint = db.Column(
+        db.Unicode(64),
+        nullable=True,
+    )
+
+    error_message = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    document = db.relationship(
+        "Document",
+        back_populates="analyses",
+    )
+    user = db.relationship(
+        "User",
+       back_populates="document_ai_analyses",
+    )
+
+    task_suggestions = db.relationship(
+    "DocumentTaskSuggestion",
+    back_populates="analysis",
+    lazy=True,
+    cascade="all, delete-orphan",
+    )
+
+
+    @property
+    def insights(self) -> dict:
+        """Return the saved structured document insights."""
+
+        if not self.insights_json:
+            return {}
+
+        try:
+            parsed = json.loads(
+                self.insights_json
+            )
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            return {}
+
+        return parsed if isinstance(parsed, dict) else {}
+
+
+    def __repr__(self):
+        return (
+            f"<DocumentAIAnalysis "
+            f"document_id={self.document_id} "
+            f"status={self.status}>"
+        )
+
+class DocumentTaskSuggestion(db.Model):
+    """An action detected from a document awaiting user approval."""
+
+    __tablename__ = "document_task_suggestions"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    analysis_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document_ai_analyses.id"),
+        nullable=False,
+        index=True,
+    )
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("documents.id"),
+        nullable=False,
+        index=True,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    title = db.Column(
+        db.Unicode(255),
+        nullable=False,
+    )
+
+    description = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    priority = db.Column(
+        db.Unicode(20),
+        nullable=False,
+        default="Medium",
+    )
+
+    deadline = db.Column(
+        db.Date,
+        nullable=True,
+    )
+
+    source_json = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    status = db.Column(
+        db.Unicode(20),
+        nullable=False,
+        default="Pending",
+        index=True,
+    )
+
+    matched_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+    )
+
+    match_score = db.Column(
+        db.Float,
+        nullable=False,
+        default=0.0,
+    )
+
+    created_task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    analysis = db.relationship(
+        "DocumentAIAnalysis",
+        back_populates="task_suggestions",
+    )
+
+    document = db.relationship(
+        "Document",
+        back_populates="task_suggestions",
+    )
+
+    user = db.relationship(
+        "User",
+        back_populates="document_task_suggestions",
+    )
+
+    matched_task = db.relationship(
+        "Task",
+        foreign_keys=[matched_task_id],
+    )
+
+    created_task = db.relationship(
+        "Task",
+        foreign_keys=[created_task_id],
+    )
+
+    @property
+    def source(self) -> dict:
+        """Return the saved page and evidence information."""
+
+        if not self.source_json:
+            return {}
+
+        try:
+            parsed = json.loads(
+                self.source_json
+            )
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            return {}
+
+        return parsed if isinstance(parsed, dict) else {}
+
+    def __repr__(self):
+        return (
+            f"<DocumentTaskSuggestion "
+            f"id={self.id} status={self.status}>"
+        )
+
+
+class DocumentQuestion(db.Model):
+    """A grounded question and answer about one document."""
+
+    __tablename__ = "document_questions"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("documents.id"),
+        nullable=False,
+        index=True,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    question = db.Column(
+        db.Unicode(2000),
+        nullable=False,
+    )
+
+    answer = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    sources_json = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    provider = db.Column(
+        db.Unicode(30),
+        nullable=False,
+    )
+
+    model = db.Column(
+        db.Unicode(100),
+        nullable=False,
+    )
+
+    status = db.Column(
+        db.Unicode(20),
+        nullable=False,
+        default="Completed",
+        index=True,
+    )
+
+    source_fingerprint = db.Column(
+        db.Unicode(64),
+        nullable=True,
+    )
+
+    error_message = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    document = db.relationship(
+        "Document",
+        back_populates="questions",
+    )
+
+    user = db.relationship(
+        "User",
+        back_populates="document_questions",
+    )
+
+    @property
+    def sources(self) -> list:
+        """Return saved page references for the answer."""
+
+        if not self.sources_json:
+            return []
+
+        try:
+            parsed = json.loads(
+                self.sources_json
+            )
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            return []
+
+        return parsed if isinstance(parsed, list) else []
+
+    def __repr__(self):
+        return (
+            f"<DocumentQuestion "
+            f"id={self.id} status={self.status}>"
+        )
+
+
+class DocumentChunk(db.Model):
+    """A searchable page-based section of an extracted document."""
+
+    __tablename__ = "document_chunks"
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "document_id",
+            "chunk_index",
+            name="uq_document_chunk_index",
+        ),
+    )
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("documents.id"),
+        nullable=False,
+        index=True,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    chunk_index = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+
+    page_start = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    page_end = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    section_title = db.Column(
+        db.Unicode(255),
+        nullable=True,
+    )
+
+    text = db.Column(
+        db.UnicodeText,
+        nullable=False,
+    )
+
+    character_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+
+    source_fingerprint = db.Column(
+        db.Unicode(64),
+        nullable=False,
+        index=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    document = db.relationship(
+        "Document",
+        back_populates="chunks",
+    )
+
+    user = db.relationship(
+        "User",
+        back_populates="document_chunks",
+    )
+
+    def __repr__(self):
+        return (
+            f"<DocumentChunk "
+            f"document_id={self.document_id} "
+            f"index={self.chunk_index} "
+            f"page={self.page_start}>"
+        )

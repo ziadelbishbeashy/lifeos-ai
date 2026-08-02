@@ -1,0 +1,1376 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {{ document.filename }} | Document Brain
+{% endblock %}
+
+{% block page_kicker %}
+    Document Brain
+{% endblock %}
+
+{% block page_title %}
+    {{ document.filename }}
+{% endblock %}
+
+
+{% macro source_reference(source) %}
+
+    {% if source %}
+
+        {% set page = source.get("page") %}
+        {% set section = source.get("section") %}
+        {% set evidence = source.get("evidence") %}
+
+        {% if page or section or evidence %}
+
+            <div class="brain-source">
+
+                <div class="brain-source-heading">
+
+                    {% if page %}
+                        Page {{ page }}
+                    {% endif %}
+
+                    {% if page and section %}
+                        ·
+                    {% endif %}
+
+                    {% if section %}
+                        {{ section }}
+                    {% endif %}
+
+                </div>
+
+                {% if evidence %}
+                    <p>{{ evidence }}</p>
+                {% endif %}
+
+            </div>
+
+        {% endif %}
+
+    {% endif %}
+
+{% endmacro %}
+
+
+{% block content %}
+
+{% set insights = analysis.insights if analysis else {} %}
+{% set suggestions = suggestions | default([], true) %}
+{% set question_history = question_history | default([], true) %}
+
+
+<div class="brain-toolbar">
+
+    <a
+        href="{{ url_for('document_bp.documents') }}"
+        class="workspace-secondary-button"
+    >
+        ← Back to documents
+    </a>
+
+    {% if document.project %}
+
+        <a
+            href="{{ url_for(
+                'project_bp.project_details',
+                project_id=document.project.id
+            ) }}"
+            class="workspace-secondary-button"
+        >
+            Open Project
+        </a>
+
+    {% endif %}
+
+</div>
+
+
+<section class="brain-status-grid">
+
+    <article class="brain-status-card">
+
+        <span>Project</span>
+
+        <strong>
+            {{
+                document.project.title
+                if document.project
+                else "No project"
+            }}
+        </strong>
+
+    </article>
+
+
+    <article class="brain-status-card">
+
+        <span>Text status</span>
+
+        {% if document.extracted_text %}
+
+            <strong>
+                Readable text available
+            </strong>
+
+        {% else %}
+
+            <strong>
+                Needs extraction or OCR
+            </strong>
+
+        {% endif %}
+
+    </article>
+
+
+    <article class="brain-status-card">
+
+        <span>Analysis status</span>
+
+        {% if analysis %}
+
+            <strong>
+                Ready
+            </strong>
+
+        {% elif latest_attempt
+              and latest_attempt.status == "Failed"
+        %}
+
+            <strong>
+                Last attempt failed
+            </strong>
+
+        {% else %}
+
+            <strong>
+                Not analysed
+            </strong>
+
+        {% endif %}
+
+    </article>
+
+
+    <article class="brain-status-card">
+
+        <span>Uploaded</span>
+
+        <strong>
+            {{
+                document.uploaded_at.strftime("%d %b %Y")
+                if document.uploaded_at
+                else "Unknown"
+            }}
+        </strong>
+
+    </article>
+
+</section>
+
+
+<section class="brain-analysis-control">
+
+    <div>
+
+        <h2>
+
+            {% if analysis %}
+                Document intelligence
+            {% else %}
+                Analyse this document
+            {% endif %}
+
+        </h2>
+
+        <p>
+            LifeOS identifies important requirements, decisions,
+            risks, deadlines and possible project actions.
+        </p>
+
+    </div>
+
+
+    {% if document.extracted_text %}
+
+        <form
+            method="POST"
+            action="{{ url_for(
+                'document_bp.analyse_document_route',
+                document_id=document.id
+            ) }}"
+            data-loading-title="Analysing document"
+            data-loading-message="LifeOS is understanding the document and detecting useful actions..."
+        >
+
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+
+            {% if analysis %}
+
+                <input
+                    type="hidden"
+                    name="force"
+                    value="1"
+                >
+
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    Analyse Again
+                </button>
+
+            {% else %}
+
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    Analyse Document
+                </button>
+
+            {% endif %}
+
+        </form>
+
+    {% else %}
+
+        <button
+            type="button"
+            class="workspace-secondary-button"
+            disabled
+        >
+            Readable Text Required
+        </button>
+
+    {% endif %}
+
+</section>
+
+
+{% if latest_attempt
+      and latest_attempt.status == "Failed"
+      and (
+          not analysis
+          or latest_attempt.id != analysis.id
+      )
+%}
+
+    <section class="brain-error-panel">
+
+        <strong>
+            Latest analysis attempt failed
+        </strong>
+
+        <p>
+            {{
+                latest_attempt.error_message
+                or "The document could not be analysed."
+            }}
+        </p>
+
+    </section>
+
+{% endif %}
+
+
+{% if analysis %}
+
+    <section class="brain-panel brain-summary-panel">
+
+        <div class="brain-panel-heading">
+
+            <div>
+
+                <span class="brain-label">
+                    {{
+                        analysis.document_type
+                        or "General Reference"
+                    }}
+                </span>
+
+                <h2>
+                    Executive Summary
+                </h2>
+
+            </div>
+
+
+            <div class="brain-analysis-meta">
+
+                <span>
+                    {{ analysis.provider }}
+                    ·
+                    {{ analysis.model }}
+                </span>
+
+                {% if analysis.created_at %}
+
+                    <span>
+                        {{
+                            analysis.created_at.strftime(
+                                "%d %b %Y · %H:%M"
+                            )
+                        }}
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <p class="brain-summary">
+            {{ analysis.summary }}
+        </p>
+
+
+        {% if insights.get("purpose") %}
+
+            <div class="brain-purpose">
+
+                <strong>
+                    Document Purpose
+                </strong>
+
+                <p>
+                    {{ insights.get("purpose") }}
+                </p>
+
+            </div>
+
+        {% endif %}
+
+    </section>
+
+
+    <section class="brain-count-grid">
+
+        <article>
+
+            <strong>
+                {{
+                    insights.get(
+                        "requirements",
+                        []
+                    ) | length
+                }}
+            </strong>
+
+            <span>
+                Requirements
+            </span>
+
+        </article>
+
+
+        <article>
+
+            <strong>
+                {{
+                    insights.get(
+                        "decisions",
+                        []
+                    ) | length
+                }}
+            </strong>
+
+            <span>
+                Decisions
+            </span>
+
+        </article>
+
+
+        <article>
+
+            <strong>
+                {{
+                    insights.get(
+                        "risks",
+                        []
+                    ) | length
+                }}
+            </strong>
+
+            <span>
+                Risks
+            </span>
+
+        </article>
+
+
+        <article>
+
+            <strong>
+                {% if suggestions %}
+                    {{ suggestions | length }}
+                {% else %}
+                    {{
+                        insights.get(
+                            "action_items",
+                            []
+                        ) | length
+                    }}
+                {% endif %}
+            </strong>
+
+            <span>
+                Suggested Actions
+            </span>
+
+        </article>
+
+    </section>
+
+
+    {% if insights.get("key_points") %}
+
+        <section class="brain-panel">
+
+            <h2>
+                Key Points
+            </h2>
+
+            <div class="brain-list">
+
+                {% for item in insights.get("key_points", []) %}
+
+                    <article class="brain-item">
+
+                        <h3>
+                            {{ item.get("title") }}
+                        </h3>
+
+                        {% if item.get("detail") %}
+
+                            <p>
+                                {{ item.get("detail") }}
+                            </p>
+
+                        {% endif %}
+
+                        {{
+                            source_reference(
+                                item.get("source")
+                            )
+                        }}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    {% if insights.get("requirements") %}
+
+        <section class="brain-panel">
+
+            <h2>
+                Requirements
+            </h2>
+
+            <div class="brain-list">
+
+                {% for item in insights.get("requirements", []) %}
+
+                    <article class="brain-item">
+
+                        <h3>
+                            {{ item.get("requirement") }}
+                        </h3>
+
+                        {% if item.get("details") %}
+
+                            <p>
+                                {{ item.get("details") }}
+                            </p>
+
+                        {% endif %}
+
+                        {{
+                            source_reference(
+                                item.get("source")
+                            )
+                        }}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    {% if insights.get("decisions") %}
+
+        <section class="brain-panel">
+
+            <h2>
+                Decisions
+            </h2>
+
+            <div class="brain-list">
+
+                {% for item in insights.get("decisions", []) %}
+
+                    <article class="brain-item">
+
+                        <h3>
+                            {{ item.get("decision") }}
+                        </h3>
+
+                        {% if item.get("reason") %}
+
+                            <p>
+                                {{ item.get("reason") }}
+                            </p>
+
+                        {% endif %}
+
+                        {{
+                            source_reference(
+                                item.get("source")
+                            )
+                        }}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    {% if insights.get("deadlines") %}
+
+        <section class="brain-panel">
+
+            <h2>
+                Deadlines
+            </h2>
+
+            <div class="brain-list">
+
+                {% for item in insights.get("deadlines", []) %}
+
+                    <article class="brain-item">
+
+                        <div class="brain-item-heading">
+
+                            <h3>
+                                {{ item.get("description") }}
+                            </h3>
+
+                            <span class="brain-deadline">
+                                {{
+                                    item.get("date")
+                                    or "Date unclear"
+                                }}
+                            </span>
+
+                        </div>
+
+                        {{
+                            source_reference(
+                                item.get("source")
+                            )
+                        }}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    {% if insights.get("risks") %}
+
+        <section class="brain-panel">
+
+            <h2>
+                Risks and Blockers
+            </h2>
+
+            <div class="brain-list">
+
+                {% for item in insights.get("risks", []) %}
+
+                    <article class="brain-item">
+
+                        <h3>
+                            {{ item.get("risk") }}
+                        </h3>
+
+                        {% if item.get("impact") %}
+
+                            <p>
+                                {{ item.get("impact") }}
+                            </p>
+
+                        {% endif %}
+
+                        {{
+                            source_reference(
+                                item.get("source")
+                            )
+                        }}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    {% if suggestions or insights.get("action_items") %}
+
+        <section class="brain-panel">
+
+            <div class="brain-panel-heading">
+
+                <div>
+
+                    <h2>
+                        Suggested Actions
+                    </h2>
+
+                    <p>
+                        Review each action before LifeOS creates
+                        or connects a project task.
+                    </p>
+
+                </div>
+
+
+                {% if suggestions %}
+
+                    <span class="brain-suggestion-count">
+                        {{ suggestions | length }}
+                        suggestions
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+
+            {% if suggestions %}
+
+                <div class="brain-list">
+
+                    {% for suggestion in suggestions %}
+
+                        <article
+                            class="brain-item brain-suggestion-card"
+                        >
+
+                            <div class="brain-item-heading">
+
+                                <div>
+
+                                    <span
+                                        class="
+                                            brain-suggestion-status
+                                            brain-suggestion-status-{{
+                                                suggestion.status
+                                                | lower
+                                            }}
+                                        "
+                                    >
+                                        {{ suggestion.status }}
+                                    </span>
+
+                                    <h3>
+                                        {{ suggestion.title }}
+                                    </h3>
+
+                                </div>
+
+
+                                <span class="brain-priority">
+                                    {{ suggestion.priority }}
+                                </span>
+
+                            </div>
+
+
+                            {% if suggestion.description %}
+
+                                <p>
+                                    {{ suggestion.description }}
+                                </p>
+
+                            {% endif %}
+
+
+                            {% if suggestion.deadline %}
+
+                                <p class="brain-suggestion-deadline">
+
+                                    <strong>
+                                        Deadline:
+                                    </strong>
+
+                                    {{
+                                        suggestion.deadline.strftime(
+                                            "%d %b %Y"
+                                        )
+                                    }}
+
+                                </p>
+
+                            {% endif %}
+
+
+                            {% if suggestion.matched_task %}
+
+                                <div class="brain-match-warning">
+
+                                    <div>
+
+                                        <strong>
+                                            Possible Existing Task
+                                        </strong>
+
+                                        <p>
+                                            {{
+                                                suggestion
+                                                .matched_task
+                                                .title
+                                            }}
+                                        </p>
+
+                                        {% if
+                                            suggestion
+                                            .matched_task
+                                            .status
+                                        %}
+
+                                            <small>
+                                                Current status:
+                                                {{
+                                                    suggestion
+                                                    .matched_task
+                                                    .status
+                                                }}
+                                            </small>
+
+                                        {% endif %}
+
+                                    </div>
+
+
+                                    <span>
+                                        {{
+                                            (
+                                                suggestion.match_score
+                                                * 100
+                                            )
+                                            | round
+                                            | int
+                                        }}%
+                                        similarity
+                                    </span>
+
+                                </div>
+
+                            {% endif %}
+
+
+                            {{
+                                source_reference(
+                                    suggestion.source
+                                )
+                            }}
+
+
+                            {% if suggestion.status == "Pending" %}
+
+                                <div class="brain-suggestion-actions">
+
+
+                                    {% if suggestion.matched_task %}
+
+                                        <form
+                                            method="POST"
+                                            action="{{ url_for(
+                                                'document_bp.link_suggestion_route',
+                                                document_id=document.id,
+                                                suggestion_id=suggestion.id
+                                            ) }}"
+                                        >
+
+                                            <input
+                                                type="hidden"
+                                                name="csrf_token"
+                                                value="{{ csrf_token() }}"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="workspace-primary-button"
+                                            >
+                                                Use Existing Task
+                                            </button>
+
+                                        </form>
+
+
+                                        <form
+                                            method="POST"
+                                            action="{{ url_for(
+                                                'document_bp.approve_suggestion_route',
+                                                document_id=document.id,
+                                                suggestion_id=suggestion.id
+                                            ) }}"
+                                        >
+
+                                            <input
+                                                type="hidden"
+                                                name="csrf_token"
+                                                value="{{ csrf_token() }}"
+                                            >
+
+                                            <input
+                                                type="hidden"
+                                                name="allow_possible_duplicate"
+                                                value="1"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="workspace-secondary-button"
+                                            >
+                                                Create Anyway
+                                            </button>
+
+                                        </form>
+
+                                    {% else %}
+
+                                        <form
+                                            method="POST"
+                                            action="{{ url_for(
+                                                'document_bp.approve_suggestion_route',
+                                                document_id=document.id,
+                                                suggestion_id=suggestion.id
+                                            ) }}"
+                                        >
+
+                                            <input
+                                                type="hidden"
+                                                name="csrf_token"
+                                                value="{{ csrf_token() }}"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="workspace-primary-button"
+                                            >
+                                                Create Task
+                                            </button>
+
+                                        </form>
+
+                                    {% endif %}
+
+
+                                    <form
+                                        method="POST"
+                                        action="{{ url_for(
+                                            'document_bp.reject_suggestion_route',
+                                            document_id=document.id,
+                                            suggestion_id=suggestion.id
+                                        ) }}"
+                                    >
+
+                                        <input
+                                            type="hidden"
+                                            name="csrf_token"
+                                            value="{{ csrf_token() }}"
+                                        >
+
+                                        <button
+                                            type="submit"
+                                            class="brain-reject-button"
+                                        >
+                                            Reject
+                                        </button>
+
+                                    </form>
+
+                                </div>
+
+
+                            {% elif suggestion.status == "Approved" %}
+
+                                <div class="brain-suggestion-result">
+
+                                    <strong>
+                                        Task created
+                                    </strong>
+
+                                    {% if suggestion.created_task %}
+
+                                        <span>
+                                            {{
+                                                suggestion
+                                                .created_task
+                                                .title
+                                            }}
+                                        </span>
+
+                                    {% endif %}
+
+                                </div>
+
+
+                            {% elif suggestion.status == "Linked" %}
+
+                                <div class="brain-suggestion-result">
+
+                                    <strong>
+                                        Linked to existing task
+                                    </strong>
+
+                                    {% if suggestion.created_task %}
+
+                                        <span>
+                                            {{
+                                                suggestion
+                                                .created_task
+                                                .title
+                                            }}
+                                        </span>
+
+                                    {% endif %}
+
+                                </div>
+
+
+                            {% elif suggestion.status == "Rejected" %}
+
+                                <div class="brain-suggestion-result">
+
+                                    <span>
+                                        This suggestion was rejected.
+                                    </span>
+
+                                </div>
+
+                            {% endif %}
+
+                        </article>
+
+                    {% endfor %}
+
+                </div>
+
+
+            {% else %}
+
+                <div class="brain-empty-suggestions">
+
+                    <p>
+                        This analysis contains action items, but
+                        it was created before the suggestion workflow
+                        was enabled.
+                    </p>
+
+                    <p>
+                        Press
+                        <strong>Analyse Again</strong>
+                        to convert them into reviewable task suggestions.
+                    </p>
+
+                </div>
+
+            {% endif %}
+
+        </section>
+
+    {% endif %}
+
+
+    {% if insights.get("missing_information") %}
+
+        <section class="brain-panel">
+
+            <h2>
+                Missing or Unclear Information
+            </h2>
+
+            <div class="brain-list">
+
+                {% for item in insights.get(
+                    "missing_information",
+                    []
+                ) %}
+
+                    <article class="brain-item">
+
+                        <h3>
+                            {{ item.get("question") }}
+                        </h3>
+
+                        {% if item.get("why_it_matters") %}
+
+                            <p>
+                                {{ item.get("why_it_matters") }}
+                            </p>
+
+                        {% endif %}
+
+                        {{
+                            source_reference(
+                                item.get("source")
+                            )
+                        }}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+{% else %}
+
+    <section class="brain-empty">
+
+        <h2>
+            No Analysis Yet
+        </h2>
+
+        {% if document.extracted_text %}
+
+            <p>
+                The document has readable text and is ready
+                for intelligent analysis.
+            </p>
+
+        {% else %}
+
+            <p>
+                No readable embedded text was found.
+                Scanned PDFs require OCR support before analysis.
+            </p>
+
+        {% endif %}
+
+    </section>
+
+{% endif %}
+
+
+<section
+    id="ask-document"
+    class="brain-panel document-question-panel"
+>
+
+    <div class="brain-panel-heading">
+
+        <div>
+
+            <span class="brain-label">
+                Grounded Document Questions
+            </span>
+
+            <h2>
+                Ask This Document
+            </h2>
+
+            <p>
+                LifeOS answers using only this PDF and displays
+                the supporting pages and evidence.
+            </p>
+
+        </div>
+
+
+        {% if question_history %}
+
+            <span class="brain-suggestion-count">
+                {{ question_history | length }}
+                saved
+            </span>
+
+        {% endif %}
+
+    </div>
+
+
+    {% if document.extracted_text %}
+
+        <form
+            method="POST"
+            action="{{ url_for(
+                'document_bp.ask_document_question_route',
+                document_id=document.id
+            ) }}"
+            class="document-question-form"
+            data-loading-title="Reading document"
+            data-loading-message="LifeOS is searching the PDF for a grounded answer..."
+        >
+
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+
+            <div class="form-group">
+
+                <label for="documentQuestion">
+                    Your Question
+                </label>
+
+                <textarea
+                    id="documentQuestion"
+                    name="question"
+                    rows="4"
+                    maxlength="2000"
+                    placeholder="For example: What are the main requirements mentioned in this document?"
+                    required
+                ></textarea>
+
+                <small class="document-question-help">
+                    The answer uses only this document.
+                    Maximum 2,000 characters.
+                </small>
+
+            </div>
+
+
+            <div class="document-question-submit">
+
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    Ask Document
+                </button>
+
+            </div>
+
+        </form>
+
+    {% else %}
+
+        <div class="brain-empty-suggestions">
+
+            <p>
+                This PDF has no readable extracted text.
+                Questions cannot be answered until text extraction
+                or OCR is available.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+
+    {% if question_history %}
+
+        <div class="document-question-history">
+
+            <div class="document-question-history-heading">
+
+                <h3>
+                    Question History
+                </h3>
+
+                <p>
+                    Recent grounded questions about this document.
+                </p>
+
+            </div>
+
+
+            <div class="brain-list">
+
+                {% for saved_question in question_history %}
+
+                    <article
+                        class="
+                            brain-item
+                            document-question-card
+                            document-question-{{
+                                saved_question.status | lower
+                            }}
+                        "
+                    >
+
+                        <div class="document-question-heading">
+
+                            <div>
+
+                                <span
+                                    class="
+                                        brain-suggestion-status
+                                        brain-suggestion-status-{{
+                                            saved_question.status
+                                            | lower
+                                        }}
+                                    "
+                                >
+                                    {{ saved_question.status }}
+                                </span>
+
+                                <h3>
+                                    {{ saved_question.question }}
+                                </h3>
+
+                            </div>
+
+
+                            {% if saved_question.created_at %}
+
+                                <span class="document-question-date">
+                                    {{
+                                        saved_question.created_at.strftime(
+                                            "%d %b %Y · %H:%M"
+                                        )
+                                    }}
+                                </span>
+
+                            {% endif %}
+
+                        </div>
+
+
+                        {% if saved_question.status == "Completed" %}
+
+                            <div class="document-answer">
+
+                                <strong>
+                                    Answer
+                                </strong>
+
+                                <p>
+                                    {{ saved_question.answer }}
+                                </p>
+
+                            </div>
+
+
+                            {% if saved_question.sources %}
+
+                                <div class="document-answer-sources">
+
+                                    <strong>
+                                        Supporting Sources
+                                    </strong>
+
+                                    {% for source in saved_question.sources %}
+
+                                        {{
+                                            source_reference(
+                                                source
+                                            )
+                                        }}
+
+                                    {% endfor %}
+
+                                </div>
+
+                            {% else %}
+
+                                <div class="document-answer-not-found">
+
+                                    <span>
+                                        LifeOS did not find a supporting
+                                        passage for this answer in the PDF.
+                                    </span>
+
+                                </div>
+
+                            {% endif %}
+
+
+                            <div class="document-answer-meta">
+
+                                <span>
+                                    {{ saved_question.provider }}
+                                    ·
+                                    {{ saved_question.model }}
+                                </span>
+
+                            </div>
+
+
+                        {% elif saved_question.status == "Failed" %}
+
+                            <div class="brain-error-panel">
+
+                                <strong>
+                                    LifeOS could not answer this question
+                                </strong>
+
+                                <p>
+                                    {{
+                                        saved_question.error_message
+                                        or "The AI request failed."
+                                    }}
+                                </p>
+
+                            </div>
+
+                        {% endif %}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    {% else %}
+
+        <div class="document-question-empty">
+
+            <p>
+                No questions have been asked about this document yet.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</section>
+
+{% endblock %}

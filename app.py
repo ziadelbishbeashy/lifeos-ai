@@ -29,6 +29,7 @@ from routes.note_routes import note_bp
 from routes.notification_routes import notification_bp
 from routes.project_routes import project_bp
 from routes.task_routes import task_bp
+from routes.document_routes import document_bp
 from services.scheduler_service import (
     run_notification_check_once,
     start_notification_scheduler,
@@ -57,7 +58,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(analytics_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(note_bp)
-
+    app.register_blueprint(document_bp)
 
 def register_commands(app: Flask) -> None:
     """Register small maintenance commands for local development."""

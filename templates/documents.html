@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Document Brain | LifeOS AI
+{% endblock %}
+
+{% block page_kicker %}
+    Knowledge workspace
+{% endblock %}
+
+{% block page_title %}
+    Document Brain
+{% endblock %}
+
+{% block content %}
+
+{% set processed_documents =
+    documents
+    | selectattr("extracted_text")
+    | list
+    | length
+%}
+
+<div class="projects-page document-brain-page">
+
+    <header class="workspace-page-header document-brain-header">
+
+        <div>
+            <span class="workspace-eyebrow">
+                Upload · Understand · Connect
+            </span>
+
+            <h1>Turn project documents into useful knowledge.</h1>
+
+            <p>
+                Upload project PDFs, extract their readable content,
+                analyse requirements, risks, deadlines and actions,
+                and connect that knowledge to the rest of LifeOS.
+            </p>
+        </div>
+
+        {% if projects %}
+            <a
+                href="#upload-document"
+                class="workspace-primary-button"
+            >
+                + Upload PDF
+            </a>
+        {% endif %}
+
+    </header>
+
+
+    <section class="project-summary-grid">
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-purple">
+                D
+            </div>
+
+            <div>
+                <span>Total documents</span>
+                <strong>{{ documents|length }}</strong>
+            </div>
+        </article>
+
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-green">
+                R
+            </div>
+
+            <div>
+                <span>Text ready</span>
+                <strong>{{ processed_documents }}</strong>
+            </div>
+        </article>
+
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-orange">
+                W
+            </div>
+
+            <div>
+                <span>Awaiting processing</span>
+
+                <strong>
+                    {{ documents|length - processed_documents }}
+                </strong>
+            </div>
+        </article>
+
+
+        <article class="project-summary-item">
+            <div class="summary-icon summary-icon-blue">
+                P
+            </div>
+
+            <div>
+                <span>Available projects</span>
+                <strong>{{ projects|length }}</strong>
+            </div>
+        </article>
+
+    </section>
+
+
+    {% if projects %}
+
+        <details
+            id="upload-document"
+            class="studio-capture-panel document-upload-panel"
+            {% if not documents %}open{% endif %}
+        >
+
+            <summary>
+                <span class="studio-capture-title">
+                    <strong>Upload a project PDF</strong>
+
+                    <small>
+                        The document will be stored privately,
+                        linked to the selected project and prepared
+                        for intelligent analysis.
+                    </small>
+                </span>
+            </summary>
+
+
+            <form
+                method="POST"
+                action="{{ url_for('document_bp.documents') }}"
+                enctype="multipart/form-data"
+                class="studio-capture-form"
+                data-loading-title="Uploading document"
+                data-loading-message="Validating, storing and reading your PDF..."
+            >
+
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+
+                <div class="studio-capture-form-inner">
+
+                    <div class="form-row">
+
+                        <div class="form-group">
+                            <label for="documentProject">
+                                Related project
+                            </label>
+
+                            <select
+                                id="documentProject"
+                                name="project_id"
+                                required
+                            >
+                                <option value="">
+                                    Select a project
+                                </option>
+
+                                {% for project in projects %}
+                                    <option value="{{ project.id }}">
+                                        {{ project.title }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+
+                        <div class="form-group">
+                            <label for="documentFile">
+                                PDF document
+                            </label>
+
+                            <input
+                                type="file"
+                                id="documentFile"
+                                name="document"
+                                accept=".pdf,application/pdf"
+                                required
+                            >
+                        </div>
+
+                    </div>
+
+
+                    <div class="document-upload-guidance">
+
+                        <span>
+                            PDF files only
+                        </span>
+
+                        <span>
+                            Stored with a unique private filename
+                        </span>
+
+                        <span>
+                            Readable text extracted automatically
+                        </span>
+
+                    </div>
+
+
+                    <div class="workspace-header-actions">
+
+                        <button
+                            type="submit"
+                            class="workspace-primary-button"
+                        >
+                            Upload Document
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </form>
+
+        </details>
+
+    {% else %}
+
+        <section class="project-filter-panel studio-empty-state">
+
+            <div>
+                <h2>Create a project first</h2>
+
+                <p>
+                    Documents must currently be connected to a project.
+                    Create your first project before uploading a PDF.
+                </p>
+
+                <a
+                    href="{{ url_for('project_bp.projects') }}"
+                    class="workspace-primary-button"
+                >
+                    Create Project
+                </a>
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    {% if documents %}
+
+        <section class="document-results-section">
+
+            <div class="project-results-header">
+
+                <div>
+                    <span class="workspace-eyebrow">
+                        Project knowledge
+                    </span>
+
+                    <h2>Your documents</h2>
+
+                    <p>
+                        Open a document to analyse its summary,
+                        requirements, decisions, risks, deadlines
+                        and suggested actions.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="document-card-grid">
+
+                {% for document in documents %}
+
+                    <article class="document-brain-card">
+
+                        <div class="document-card-heading">
+
+                            <div class="document-file-icon">
+                                PDF
+                            </div>
+
+                            <div class="document-card-title">
+
+                                <span class="document-project-name">
+                                    {{
+                                        document.project.title
+                                        if document.project
+                                        else "No project"
+                                    }}
+                                </span>
+
+                                <h3 title="{{ document.filename }}">
+                                    {{ document.filename }}
+                                </h3>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="document-status-row">
+
+                            {% if document.extracted_text %}
+
+                                <span
+                                    class="document-status
+                                           document-status-ready"
+                                >
+                                    Text ready
+                                </span>
+
+                            {% else %}
+
+                                <span
+                                    class="document-status
+                                           document-status-pending"
+                                >
+                                    Needs extraction or OCR
+                                </span>
+
+                            {% endif %}
+
+
+                            <span class="document-upload-date">
+                                {% if document.uploaded_at %}
+                                    {{
+                                        document.uploaded_at.strftime(
+                                            "%d %b %Y"
+                                        )
+                                    }}
+                                {% else %}
+                                    Date unavailable
+                                {% endif %}
+                            </span>
+
+                        </div>
+
+
+                        <div class="document-card-body">
+
+                            {% if document.summary %}
+
+                                <p>
+                                    {{ document.summary }}
+                                </p>
+
+                            {% elif document.extracted_text %}
+
+                                <p>
+                                    {{
+                                        document.extracted_text[:220]
+                                    }}
+
+                                    {% if document.extracted_text|length > 220 %}
+                                        …
+                                    {% endif %}
+                                </p>
+
+                            {% else %}
+
+                                <p>
+                                    The PDF is stored safely, but no
+                                    readable embedded text was found.
+                                    It may require OCR before analysis.
+                                </p>
+
+                            {% endif %}
+
+                        </div>
+
+
+                        <div class="document-card-footer">
+
+                            <span>
+                                Document #{{ document.id }}
+                            </span>
+
+
+                            <div class="document-card-actions">
+
+                                <a
+                                    href="{{ url_for(
+                                        'document_bp.document_details',
+                                        document_id=document.id
+                                    ) }}"
+                                    class="workspace-primary-button"
+                                    data-page-loading
+                                    data-loading-title="Opening Document Brain"
+                                    data-loading-message="Loading document intelligence..."
+                                >
+                                    Open Document Brain
+                                </a>
+
+
+                                {% if document.project %}
+
+                                    <a
+                                        href="{{ url_for(
+                                            'project_bp.project_details',
+                                            project_id=document.project_id
+                                        ) }}"
+                                        class="workspace-secondary-button"
+                                        data-page-loading
+                                        data-loading-title="Opening project"
+                                        data-loading-message="Loading the connected project..."
+                                    >
+                                        View Project
+                                    </a>
+
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% else %}
+
+        {% if projects %}
+
+            <section class="project-filter-panel studio-empty-state">
+
+                <div>
+                    <h2>No documents uploaded yet</h2>
+
+                    <p>
+                        Upload your first PDF to begin building
+                        a connected project knowledge base.
+                    </p>
+
+                    <a
+                        href="#upload-document"
+                        class="workspace-primary-button"
+                    >
+                        Upload First PDF
+                    </a>
+                </div>
+
+            </section>
+
+        {% endif %}
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

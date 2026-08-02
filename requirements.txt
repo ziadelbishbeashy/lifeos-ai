@@ -10,3 +10,4 @@ google-genai
 openai
 pytest
 gunicorn
+pypdf>=6,<7

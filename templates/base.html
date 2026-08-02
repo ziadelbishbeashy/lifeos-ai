@@ -340,11 +340,21 @@
                 </span>
 
 
-                <!-- Future Document Brain -->
+                 <!-- Document Brain -->
 
-                <span
-                    class="navigation-link
-                    navigation-link-disabled"
+                <a
+                    href="{{ url_for('document_bp.documents') }}"
+                    class="
+                        navigation-link
+                        {% if request.endpoint
+                            and request.endpoint.startswith('document_bp.')
+                        %}
+                            active
+                        {% endif %}
+                    "
+                    data-page-loading
+                    data-loading-title="Opening Document Brain"
+                    data-loading-message="Loading your project documents..."
                 >
                     <svg
                         viewBox="0 0 24 24"
@@ -356,9 +366,10 @@
                     </svg>
 
                     <span>Document Brain</span>
-                    <em>Soon</em>
-                </span>
+                    <small>Phase 6.2</small>
+                </a>
 
+            
 
                 <!-- Future Smart Plan -->
 
