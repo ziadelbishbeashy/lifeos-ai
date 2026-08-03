@@ -577,3 +577,77 @@ def _page_label(
         )
 
     return "Unknown"
+
+def generate_question_embedding(
+    *,
+    question: str,
+    configuration: EmbeddingConfiguration | None = None,
+) -> tuple[
+    list[float],
+    EmbeddingConfiguration,
+]:
+    """
+    Generate one normalized embedding for a user question.
+
+    The same provider, model and dimensions used for document
+    chunks must also be used for the question.
+    """
+
+    active_configuration = (
+        configuration
+        or get_embedding_configuration()
+    )
+
+    prepared_question = (
+        prepare_question_for_embedding(
+            question
+        )
+    )
+
+    client = genai.Client(
+        api_key=active_configuration.api_key
+    )
+
+    try:
+        vectors = _generate_embeddings(
+            client=client,
+            model=active_configuration.model,
+            dimensions=(
+                active_configuration.dimensions
+            ),
+            texts=[
+                prepared_question,
+            ],
+        )
+
+    except DocumentEmbeddingError:
+        raise
+
+    except Exception as error:
+        raise DocumentEmbeddingError(
+            "The embedding provider could not process "
+            "the document question."
+        ) from error
+
+    if len(vectors) != 1:
+        raise DocumentEmbeddingError(
+            "The embedding provider returned an unexpected "
+            "number of question vectors."
+        )
+
+    question_vector = normalize_vector(
+        vectors[0]
+    )
+
+    if (
+        len(question_vector)
+        != active_configuration.dimensions
+    ):
+        raise DocumentEmbeddingError(
+            "The question embedding has unexpected dimensions."
+        )
+
+    return (
+        question_vector,
+        active_configuration,
+    )
