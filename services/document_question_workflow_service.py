@@ -21,17 +21,17 @@ from services.ai_service import (
     ask_document_question,
     get_ai_configuration,
 )
-from services.document_retrieval_service import (
-    DocumentRetrievalError,
-    DocumentRetrievalNotFoundError,
-    DocumentRetrievalNotReadyError,
-    DocumentRetrievalValidationError,
-    build_retrieval_context,
-    retrieve_owned_document_chunks,
+
+from services.document_hybrid_retrieval_service import (
+    DocumentHybridRetrievalError,
+    DocumentHybridRetrievalNotFoundError,
+    DocumentHybridRetrievalNotReadyError,
+    DocumentHybridRetrievalValidationError,
+    build_hybrid_retrieval_context,
+    retrieve_owned_document_chunks_hybrid,
 )
 
-
-QUESTION_WORKFLOW_VERSION = "document-question-bm25-rag-v1"
+QUESTION_WORKFLOW_VERSION = "document-question-hybrid-rag-v2"
 
 RETRIEVAL_RESULT_LIMIT = 5
 RETRIEVAL_CONTEXT_CHARACTERS = 14_000
@@ -136,29 +136,31 @@ def ask_owned_document(
             )
 
     try:
-        retrieval_result = retrieve_owned_document_chunks(
-            document_id=document.id,
-            user_id=user_id,
-            query=cleaned_question,
-            limit=RETRIEVAL_RESULT_LIMIT,
+        retrieval_result = (
+            retrieve_owned_document_chunks_hybrid(
+                document_id=document.id,
+                user_id=user_id,
+                query=cleaned_question,
+                limit=RETRIEVAL_RESULT_LIMIT,
+            )
         )
 
-    except DocumentRetrievalNotFoundError as error:
+    except DocumentHybridRetrievalNotFoundError as error:
         raise DocumentQuestionNotFoundError(
             str(error)
         ) from error
 
-    except DocumentRetrievalNotReadyError as error:
+    except DocumentHybridRetrievalNotReadyError as error:
         raise DocumentQuestionNotReadyError(
             str(error)
         ) from error
 
-    except DocumentRetrievalValidationError as error:
+    except DocumentHybridRetrievalValidationError as error:
         raise DocumentQuestionWorkflowError(
             str(error)
         ) from error
 
-    except DocumentRetrievalError as error:
+    except DocumentHybridRetrievalError as error:
         _save_failed_question(
             document=document,
             user_id=user_id,
@@ -171,7 +173,7 @@ def ask_owned_document(
             str(error)
         ) from error
 
-    retrieval_context = build_retrieval_context(
+    retrieval_context = build_hybrid_retrieval_context(
         retrieval_result,
         max_characters=RETRIEVAL_CONTEXT_CHARACTERS,
     )

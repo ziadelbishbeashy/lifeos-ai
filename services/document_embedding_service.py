@@ -481,11 +481,31 @@ def _generate_embeddings(
     dimensions: int,
     texts: list[str],
 ) -> list[list[float]]:
-    """Generate one vector for each supplied text."""
+    """
+    Generate one separate vector for every supplied text.
+
+    Gemini Embedding 2 aggregates a plain list of strings into
+    one embedding. Each text must therefore be wrapped in its
+    own Content object.
+    """
+
+    if not texts:
+        return []
+
+    separate_contents = [
+        types.Content(
+            parts=[
+                types.Part.from_text(
+                    text=text
+                )
+            ]
+        )
+        for text in texts
+    ]
 
     response = client.models.embed_content(
         model=model,
-        contents=texts,
+        contents=separate_contents,
         config=types.EmbedContentConfig(
             output_dimensionality=dimensions,
         ),
