@@ -1520,7 +1520,12 @@ class DocumentQuestion(db.Model):
 
 
 class DocumentChunk(db.Model):
-    """A searchable page-based section of an extracted document."""
+    """
+    A searchable page-based section of an extracted document.
+
+    Keyword retrieval uses the text directly. Semantic retrieval
+    uses the optional stored embedding.
+    """
 
     __tablename__ = "document_chunks"
 
@@ -1588,6 +1593,40 @@ class DocumentChunk(db.Model):
         index=True,
     )
 
+    # Semantic retrieval fields.
+    #
+    # The embedding is stored as JSON during the first implementation,
+    # allowing LifeOS to keep using the current SQL Server database.
+    embedding_json = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    embedding_provider = db.Column(
+        db.Unicode(30),
+        nullable=True,
+    )
+
+    embedding_model = db.Column(
+        db.Unicode(100),
+        nullable=True,
+    )
+
+    embedding_dimensions = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    embedding_fingerprint = db.Column(
+        db.Unicode(64),
+        nullable=True,
+    )
+
+    embedded_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+
     created_at = db.Column(
         db.DateTime,
         nullable=False,
@@ -1603,6 +1642,73 @@ class DocumentChunk(db.Model):
         "User",
         back_populates="document_chunks",
     )
+
+    @property
+    def embedding(self) -> list[float]:
+        """Return the saved embedding as a validated list of floats."""
+
+        if not self.embedding_json:
+            return []
+
+        try:
+            parsed_embedding = json.loads(
+                self.embedding_json
+            )
+
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            return []
+
+        if not isinstance(
+            parsed_embedding,
+            list,
+        ):
+            return []
+
+        try:
+            values = [
+                float(value)
+                for value in parsed_embedding
+            ]
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return []
+
+        if (
+            self.embedding_dimensions is not None
+            and len(values) != self.embedding_dimensions
+        ):
+            return []
+
+        return values
+
+    @property
+    def has_embedding(self) -> bool:
+        """Return whether this chunk has complete embedding metadata."""
+
+        return bool(
+            self.embedding
+            and self.embedding_provider
+            and self.embedding_model
+            and self.embedding_dimensions
+            and self.embedding_fingerprint
+            and self.embedded_at
+        )
+
+    def clear_embedding(self) -> None:
+        """Remove a stale or invalid embedding from this chunk."""
+
+        self.embedding_json = None
+        self.embedding_provider = None
+        self.embedding_model = None
+        self.embedding_dimensions = None
+        self.embedding_fingerprint = None
+        self.embedded_at = None
 
     def __repr__(self):
         return (
