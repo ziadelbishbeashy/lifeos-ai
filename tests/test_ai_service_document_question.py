@@ -140,16 +140,18 @@ def test_missing_question_is_rejected():
             question=" ",
         )
 
-
-def test_document_without_text_is_rejected():
+def test_document_without_context_is_rejected():
     with pytest.raises(
         AIServiceError,
-        match="no readable text",
+        match="No relevant document context",
     ):
         ask_document_question(
-            filename="scan.pdf",
+            filename="requirements.pdf",
             extracted_text="",
-            question="What is mentioned?",
+            question=(
+                "What authentication requirements "
+                "are mentioned?"
+            ),
         )
 
 

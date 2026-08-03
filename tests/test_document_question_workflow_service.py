@@ -120,7 +120,6 @@ def test_owned_document_question_is_saved(
             "The system must support"
         )
 
-
 def test_identical_question_is_reused(
     app,
     user,
@@ -129,13 +128,21 @@ def test_identical_question_is_reused(
     with app.app_context():
         document = create_document(
             user_id=user,
-            extracted_text="Stable readable content.",
+            extracted_text=(
+                "--- Page 1 ---\n"
+                "System Requirements\n"
+                "The system must support secure document "
+                "search and project ownership validation."
+            ),
         )
 
-        call_count = {"value": 0}
+        call_count = {
+            "value": 0,
+        }
 
         def fake_ask(**kwargs):
             call_count["value"] += 1
+
             return fake_answer_result()
 
         monkeypatch.setattr(
@@ -147,13 +154,17 @@ def test_identical_question_is_reused(
         first = ask_owned_document(
             document_id=document.id,
             user_id=user,
-            question_text="What must the system support?",
+            question_text=(
+                "What must the system support?"
+            ),
         )
 
         second = ask_owned_document(
             document_id=document.id,
             user_id=user,
-            question_text="What must the system support?",
+            question_text=(
+                "What must the system support?"
+            ),
         )
 
         assert first.reused_existing is False
@@ -258,7 +269,6 @@ def test_empty_question_is_rejected(
                 question_text="   ",
             )
 
-
 def test_ai_failure_is_saved(
     app,
     user,
@@ -267,7 +277,12 @@ def test_ai_failure_is_saved(
     with app.app_context():
         document = create_document(
             user_id=user,
-            extracted_text="Readable content.",
+            extracted_text=(
+                "--- Page 1 ---\n"
+                "System Requirements\n"
+                "The system must support secure document "
+                "search and project ownership validation."
+            ),
         )
 
         def fail_question(**kwargs):
@@ -297,25 +312,29 @@ def test_ai_failure_is_saved(
             ask_owned_document(
                 document_id=document.id,
                 user_id=user,
-                question_text="What is mentioned?",
+                question_text=(
+                    "What must the system support?"
+                ),
             )
 
-        failed = (
+        failed_question = (
             DocumentQuestion.query
             .filter_by(
                 document_id=document.id,
+                user_id=user,
                 status="Failed",
             )
-            .first()
+            .one()
         )
 
-        assert failed is not None
-        assert failed.provider == "gemini"
-        assert failed.model == "test-model"
-        assert "provider is unavailable" in (
-            failed.error_message
-        )
+        assert failed_question.answer is None
+        assert failed_question.provider == "gemini"
+        assert failed_question.model == "test-model"
 
+        assert (
+            "provider is unavailable"
+            in failed_question.error_message
+        )
 
 def test_question_history_is_returned(
     app,

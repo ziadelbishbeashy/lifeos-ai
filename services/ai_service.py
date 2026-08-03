@@ -19,7 +19,7 @@ from services.document_question_service import (
 
 load_dotenv()
 
-
+MAX_DOCUMENT_QUESTION_CONTEXT_CHARACTERS = 20_000
 MAX_NOTE_CHARACTERS = 20_000
 MAX_QUESTION_CHARACTERS = 2_000
 MAX_DOCUMENT_ANALYSIS_CHARACTERS = 80_000
@@ -203,25 +203,29 @@ def analyze_document(
         "analysis": analysis,
         "input_characters": len(cleaned_text),
     }
-
 def ask_document_question(
     *,
     filename: str,
     extracted_text: str,
     question: str,
 ) -> dict[str, Any]:
-    """Answer one question using only the supplied document."""
+    """
+    Answer one question using retrieved document context.
+
+    The extracted_text parameter is retained for compatibility,
+    but now contains only chunks selected by retrieval.
+    """
 
     cleaned_filename = str(
         filename or ""
     ).strip()
 
-    cleaned_text = str(
+    retrieved_context = str(
         extracted_text or ""
     ).strip()
 
-    cleaned_question = str(
-        question or ""
+    cleaned_question = " ".join(
+        str(question or "").split()
     ).strip()
 
     if not cleaned_filename:
@@ -229,10 +233,9 @@ def ask_document_question(
             "The document must have a filename."
         )
 
-    if not cleaned_text:
+    if not retrieved_context:
         raise AIServiceError(
-            "This document has no readable text. "
-            "It may require OCR."
+            "No relevant document context was supplied."
         )
 
     if not cleaned_question:
@@ -246,17 +249,20 @@ def ask_document_question(
             f"Use at most {MAX_QUESTION_CHARACTERS:,} characters."
         )
 
-    if len(cleaned_text) > MAX_DOCUMENT_ANALYSIS_CHARACTERS:
+    if (
+        len(retrieved_context)
+        > MAX_DOCUMENT_QUESTION_CONTEXT_CHARACTERS
+    ):
         raise AIServiceError(
-            "This document is too large for single-request "
-            "question answering. Document chunking is required."
+            "The retrieved document context is too large. "
+            "LifeOS must use fewer or smaller chunks."
         )
 
     config = get_ai_configuration()
 
     prompt = _build_document_question_prompt(
         filename=cleaned_filename,
-        extracted_text=cleaned_text,
+        retrieved_context=retrieved_context,
         question=cleaned_question,
     )
 
@@ -284,7 +290,9 @@ def ask_document_question(
             "found_in_document"
         ],
         "sources": answer_data["sources"],
-        "input_characters": len(cleaned_text),
+        "input_characters": len(
+            retrieved_context
+        ),
     }
 
 def analyze_note(
@@ -821,32 +829,40 @@ CURRENT NOTE CONTENT:
 def _build_document_question_prompt(
     *,
     filename: str,
-    extracted_text: str,
+    retrieved_context: str,
     question: str,
 ) -> str:
-    """Build a grounded question-answering prompt."""
+    """Build a grounded RAG question-answering prompt."""
 
     return f"""
 You are the Document Brain inside LifeOS.
 
-Answer the user's question using only the supplied document.
+Answer the user's question using only the retrieved document
+sources supplied below.
+
+The context contains blocks formatted like:
+
+[Source 1 | Page 4 | Authentication Requirements]
+Supporting document text
 
 STRICT RULES:
-1. Do not use outside knowledge.
-2. Do not invent facts, dates, decisions or requirements.
-3. Page markers appear as: --- Page NUMBER ---
-4. When the answer exists, include supporting page references.
-5. Keep evidence short and directly related to the answer.
-6. When the answer is absent, clearly say it was not found.
-7. When the answer is absent, set found_in_document to false.
-8. When found_in_document is false, return an empty sources array.
-9. Return valid JSON only.
-10. Do not use Markdown code fences.
+1. Use only the supplied retrieved sources.
+2. Do not use outside knowledge.
+3. Do not invent facts, dates, decisions or requirements.
+4. Do not claim that information exists outside the supplied sources.
+5. When an answer exists, cite only pages present in the supplied sources.
+6. Copy page numbers and section names from the supplied source labels.
+7. Keep evidence short and directly supported by the source text.
+8. When the supplied sources do not answer the question, clearly say so.
+9. When the answer is absent, set found_in_document to false.
+10. When found_in_document is false, return an empty sources array.
+11. Return valid JSON only.
+12. Do not use Markdown code fences.
 
 RETURN EXACTLY THIS STRUCTURE:
 
 {{
-  "answer": "Answer based only on the document",
+  "answer": "Answer based only on the retrieved sources",
   "found_in_document": true,
   "sources": [
     {{
@@ -863,8 +879,8 @@ DOCUMENT FILENAME:
 USER QUESTION:
 {question}
 
-DOCUMENT CONTENT:
-{extracted_text}
+RETRIEVED DOCUMENT SOURCES:
+{retrieved_context}
 """
 
 def _build_note_question_prompt(
