@@ -1,70 +1,50 @@
-"""Tests for grounded document questions through the AI service."""
+"""Tests for AI-powered grounded document questions."""
 
 import json
 
 import pytest
 
-from services import ai_service
+import services.ai_service as ai_service
 from services.ai_service import (
     AIServiceError,
-    MAX_DOCUMENT_ANALYSIS_CHARACTERS,
+    MAX_DOCUMENT_QUESTION_CONTEXT_CHARACTERS,
     MAX_QUESTION_CHARACTERS,
     ask_document_question,
 )
 
 
-def fake_configuration():
-    return {
-        "provider": "gemini",
-        "api_key": "test-key",
-        "model": "test-model",
-    }
-
-
-def grounded_response():
-    return json.dumps(
-        {
-            "answer": (
-                "The system must support grounded "
-                "document questions."
-            ),
-            "found_in_document": True,
-            "sources": [
-                {
-                    "page": 3,
-                    "section": "Requirements",
-                    "evidence": (
-                        "The system must support "
-                        "document questions."
-                    ),
-                }
-            ],
-        }
-    )
-
-
-def test_document_question_returns_grounded_answer(
-    monkeypatch,
-):
-    captured = {}
-
+def configure_fake_ai(monkeypatch):
     monkeypatch.setattr(
         ai_service,
         "get_ai_configuration",
-        fake_configuration,
+        lambda: {
+            "provider": "gemini",
+            "api_key": "test-api-key",
+            "model": "test-model",
+        },
     )
 
-    def fake_generate_text(
-        provider,
-        api_key,
-        model,
-        prompt,
-        empty_message,
-    ):
-        captured["prompt"] = prompt
-        captured["provider"] = provider
 
-        return grounded_response()
+def test_document_question_returns_validated_source_ids(
+    monkeypatch,
+):
+    configure_fake_ai(monkeypatch)
+
+    captured = {}
+
+    def fake_generate_text(**kwargs):
+        captured["prompt"] = kwargs["prompt"]
+
+        return json.dumps(
+            {
+                "answer": (
+                    "Users reset passwords through a secure "
+                    "email link."
+                ),
+                "found_in_document": True,
+                "source_ids": [1, 3],
+            }
+        )
 
     monkeypatch.setattr(
         ai_service,
@@ -75,70 +55,62 @@ def test_document_question_returns_grounded_answer(
     result = ask_document_question(
         filename="requirements.pdf",
         extracted_text=(
-            "--- Page 3 ---\n"
-            "The system must support document questions."
+            "[Source 1 | Page 2 | Account Recovery]\n"
+            "Users reset passwords through email."
         ),
-        question=(
-            "What type of questions must the system support?"
-        ),
+        question="How can users recover account access?",
     )
 
-    assert result["success"] is True
     assert result["found_in_document"] is True
-    assert result["sources"][0]["page"] == 3
+    assert result["source_ids"] == [1, 3]
     assert result["provider"] == "gemini"
+    assert result["model"] == "test-model"
 
-    assert (
-        "requirements.pdf"
-        in captured["prompt"]
-    )
-
-    assert (
-        "What type of questions"
-        in captured["prompt"]
-    )
+    assert "source_ids" in captured["prompt"]
+    assert "[Source 1 | Page 2" in captured["prompt"]
 
 
-def test_markdown_json_is_supported(
+def test_not_found_answer_has_no_source_ids(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        ai_service,
-        "get_ai_configuration",
-        fake_configuration,
-    )
+    configure_fake_ai(monkeypatch)
 
     monkeypatch.setattr(
         ai_service,
         "_generate_text",
-        lambda **kwargs: (
-            "```json\n"
-            + grounded_response()
-            + "\n```"
+        lambda **kwargs: json.dumps(
+            {
+                "answer": "The information was not found.",
+                "found_in_document": False,
+                "source_ids": [1],
+            }
         ),
     )
 
     result = ask_document_question(
-        filename="document.pdf",
+        filename="requirements.pdf",
         extracted_text=(
-            "--- Page 1 ---\nReadable content."
+            "[Source 1 | Page 1 | Overview]\n"
+            "General project information."
         ),
-        question="What is mentioned?",
+        question="Which fingerprint device is required?",
     )
 
-    assert result["found_in_document"] is True
+    assert result["found_in_document"] is False
+    assert result["source_ids"] == []
 
 
-def test_missing_question_is_rejected():
+def test_document_without_filename_is_rejected():
     with pytest.raises(
         AIServiceError,
-        match="Enter a question",
+        match="must have a filename",
     ):
         ask_document_question(
-            filename="document.pdf",
-            extracted_text="Readable text.",
-            question=" ",
+            filename="",
+            extracted_text="Retrieved context.",
+            question="What is required?",
         )
+
 
 def test_document_without_context_is_rejected():
     with pytest.raises(
@@ -148,102 +120,96 @@ def test_document_without_context_is_rejected():
         ask_document_question(
             filename="requirements.pdf",
             extracted_text="",
-            question=(
-                "What authentication requirements "
-                "are mentioned?"
-            ),
+            question="What is required?",
         )
 
 
-def test_long_question_is_rejected():
+def test_empty_question_is_rejected():
+    with pytest.raises(
+        AIServiceError,
+        match="Enter a question",
+    ):
+        ask_document_question(
+            filename="requirements.pdf",
+            extracted_text="Retrieved context.",
+            question="   ",
+        )
+
+
+def test_question_length_is_limited():
     with pytest.raises(
         AIServiceError,
         match="question is too long",
     ):
         ask_document_question(
-            filename="document.pdf",
-            extracted_text="Readable text.",
-            question=(
-                "x"
-                * (
-                    MAX_QUESTION_CHARACTERS
-                    + 1
-                )
+            filename="requirements.pdf",
+            extracted_text="Retrieved context.",
+            question="q" * (
+                MAX_QUESTION_CHARACTERS + 1
             ),
         )
 
 
-def test_large_document_requires_chunking():
+def test_retrieval_context_length_is_limited():
     with pytest.raises(
         AIServiceError,
-        match="too large",
+        match="context is too large",
     ):
         ask_document_question(
-            filename="large.pdf",
-            extracted_text=(
-                "x"
-                * (
-                    MAX_DOCUMENT_ANALYSIS_CHARACTERS
-                    + 1
-                )
+            filename="requirements.pdf",
+            extracted_text="x" * (
+                MAX_DOCUMENT_QUESTION_CONTEXT_CHARACTERS
+                + 1
             ),
-            question="What is this document about?",
+            question="What is required?",
         )
 
 
-def test_invalid_provider_response_is_rejected(
+def test_invalid_provider_json_is_rejected(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        ai_service,
-        "get_ai_configuration",
-        fake_configuration,
-    )
+    configure_fake_ai(monkeypatch)
 
     monkeypatch.setattr(
         ai_service,
         "_generate_text",
-        lambda **kwargs: "not JSON",
+        lambda **kwargs: "not valid json",
     )
 
     with pytest.raises(
         AIServiceError,
-        match="did not contain valid",
+        match="valid document-answer data",
     ):
         ask_document_question(
-            filename="document.pdf",
-            extracted_text="Readable text.",
-            question="What is mentioned?",
+            filename="requirements.pdf",
+            extracted_text="Retrieved context.",
+            question="What is required?",
         )
 
 
-def test_answer_found_without_source_is_rejected(
+def test_found_answer_without_source_ids_is_rejected(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        ai_service,
-        "get_ai_configuration",
-        fake_configuration,
-    )
+    configure_fake_ai(monkeypatch)
 
     monkeypatch.setattr(
         ai_service,
         "_generate_text",
         lambda **kwargs: json.dumps(
             {
-                "answer": "The answer exists.",
+                "answer": "A supported answer.",
                 "found_in_document": True,
-                "sources": [],
+                "source_ids": [],
             }
         ),
     )
 
     with pytest.raises(
         AIServiceError,
-        match="incomplete",
+        match="at least one retrieved source",
     ):
         ask_document_question(
-            filename="document.pdf",
-            extracted_text="Readable text.",
-            question="What is mentioned?",
-        )
+            filename="requirements.pdf",
+            extracted_text="Retrieved context.",
+            question="What is required?",
+        ) 

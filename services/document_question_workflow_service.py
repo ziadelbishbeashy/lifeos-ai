@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any
+from unittest import result
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -31,8 +32,9 @@ from services.document_hybrid_retrieval_service import (
     retrieve_owned_document_chunks_hybrid,
 )
 
-QUESTION_WORKFLOW_VERSION = "document-question-hybrid-rag-v2"
-
+QUESTION_WORKFLOW_VERSION = (
+    "document-question-validated-citations-v3"
+)
 RETRIEVAL_RESULT_LIMIT = 5
 RETRIEVAL_CONTEXT_CHARACTERS = 14_000
 
@@ -188,7 +190,7 @@ def ask_owned_document(
             "question": cleaned_question,
             "answer": NO_MATCH_ANSWER,
             "found_in_document": False,
-            "sources": [],
+            "sources_ids": [],
             "input_characters": 0,
         }
 
@@ -216,9 +218,25 @@ def ask_owned_document(
     grounded_sources = []
 
     if result.get("found_in_document"):
-        grounded_sources = _sources_from_retrieval(
-            retrieval_result
-        )
+        try:
+            grounded_sources = _sources_from_citations(
+                retrieval_result=retrieval_result,
+                source_ids=result.get(
+                    "source_ids",
+                    [],
+                ),
+            )
+
+        except DocumentQuestionWorkflowError as error:
+            _save_failed_question(
+            document=document,
+            user_id=user_id,
+            question_text=cleaned_question,
+            fingerprint=source_fingerprint,
+            error=error,
+            )
+
+            raise
 
     saved_question = DocumentQuestion(
         document_id=document.id,
@@ -386,54 +404,91 @@ def _create_source_fingerprint(
     ).hexdigest()
 
 
-def _sources_from_retrieval(
+def _sources_from_citations(
+    *,
     retrieval_result: Any,
+    source_ids: list[int],
 ) -> list[dict[str, Any]]:
     """
-    Build saved sources from actual retrieved chunks.
+    Convert validated model citations into trusted chunk sources.
 
-    We do not trust model-generated page references as the final
-    database source. Sources are generated from the chunks that
-    LifeOS actually supplied to the model.
+    Source numbers correspond to the ordered source blocks that
+    LifeOS supplied to the AI.
     """
 
+    retrieved_chunks = list(
+        retrieval_result.chunks
+    )
+
+    if not source_ids:
+        raise DocumentQuestionWorkflowError(
+            "The answer did not cite any retrieved sources."
+        )
+
     sources: list[dict[str, Any]] = []
-    seen_sources: set[tuple[str, str, str]] = set()
+    seen_source_ids: set[int] = set()
 
-    for retrieved_chunk in retrieval_result.chunks:
-        source = retrieved_chunk.source()
+    for raw_source_id in source_ids:
+        try:
+            source_id = int(
+                raw_source_id
+            )
 
-        page = source.get(
-            "page"
-        )
+        except (
+            TypeError,
+            ValueError,
+        ) as error:
+            raise DocumentQuestionWorkflowError(
+                "The AI returned an invalid source citation."
+            ) from error
 
-        section = str(
-            source.get("section") or ""
-        ).strip()
-
-        evidence = str(
-            source.get("evidence") or ""
-        ).strip()
-
-        source_key = (
-            str(page or ""),
-            section,
-            evidence,
-        )
-
-        if source_key in seen_sources:
+        if source_id in seen_source_ids:
             continue
 
-        seen_sources.add(
-            source_key
+        if (
+            source_id < 1
+            or source_id > len(retrieved_chunks)
+        ):
+            raise DocumentQuestionWorkflowError(
+                "The AI cited a source that was not supplied "
+                "by document retrieval."
+            )
+
+        seen_source_ids.add(
+            source_id
+        )
+
+        retrieved_chunk = retrieved_chunks[
+            source_id - 1
+        ]
+
+        trusted_source = (
+            retrieved_chunk.source()
         )
 
         sources.append(
             {
-                "page": page,
-                "section": section,
-                "evidence": evidence,
+                "page": trusted_source.get(
+                    "page"
+                ),
+                "section": str(
+                    trusted_source.get(
+                        "section"
+                    )
+                    or ""
+                ).strip(),
+                "evidence": str(
+                    trusted_source.get(
+                        "evidence"
+                    )
+                    or ""
+                ).strip(),
             }
+        )
+
+    if not sources:
+        raise DocumentQuestionWorkflowError(
+            "The answer did not contain a valid source citation."
         )
 
     return sources

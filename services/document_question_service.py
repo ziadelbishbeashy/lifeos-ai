@@ -56,7 +56,64 @@ def clean_boolean(
         }
 
     return bool(value)
+def clean_source_id(
+    value: Any,
+) -> int | None:
+    """Return a valid positive retrieved-source number."""
 
+    try:
+        source_id = int(value)
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return None
+
+    return (
+        source_id
+        if source_id > 0
+        else None
+    )
+
+
+def normalise_source_ids(
+    value: Any,
+) -> list[int]:
+    """Return unique positive retrieved-source numbers."""
+
+    if not isinstance(
+        value,
+        list,
+    ):
+        return []
+
+    source_ids: list[int] = []
+    seen: set[int] = set()
+
+    for raw_source_id in value:
+        source_id = clean_source_id(
+            raw_source_id
+        )
+
+        if (
+            source_id is None
+            or source_id in seen
+        ):
+            continue
+
+        seen.add(
+            source_id
+        )
+
+        source_ids.append(
+            source_id
+        )
+
+        if len(source_ids) >= MAX_SOURCES:
+            break
+
+    return source_ids
 
 def normalise_answer_source(
     value: Any,
@@ -151,21 +208,21 @@ def normalise_document_answer(
         value.get("found_in_document")
     )
 
-    sources = normalise_answer_sources(
-        value.get("sources")
+    source_ids = normalise_source_ids(
+        value.get("source_ids")
     )
 
-    if found_in_document and not sources:
+    if found_in_document and not source_ids:
         raise DocumentQuestionValidationError(
-            "An answer found in the document must include "
-            "at least one source."
+            "An answer found in the document must cite "
+            "at least one retrieved source."
         )
 
     if not found_in_document:
-        sources = []
+        source_ids = []
 
     return {
         "answer": answer,
         "found_in_document": found_in_document,
-        "sources": sources,
+        "source_ids": source_ids,
     }

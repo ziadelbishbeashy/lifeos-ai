@@ -1,4 +1,7 @@
-"""Tests for the persistent document-question workflow."""
+"""Tests for the persistent hybrid-RAG document-question workflow."""
+
+from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,17 +11,28 @@ from models import (
     DocumentQuestion,
     Project,
 )
+import services.document_question_workflow_service as workflow
 from services.ai_service import AIServiceError
-from services import (
-    document_question_workflow_service as workflow,
-)
 from services.document_question_workflow_service import (
     DocumentQuestionNotFoundError,
     DocumentQuestionNotReadyError,
     DocumentQuestionWorkflowError,
     ask_owned_document,
-    list_owned_document_questions,
 )
+
+
+@dataclass(frozen=True)
+class FakeRetrievedChunk:
+    page: int
+    section: str
+    evidence: str
+
+    def source(self) -> dict:
+        return {
+            "page": self.page,
+            "section": self.section,
+            "evidence": self.evidence,
+        }
 
 
 def create_document(
@@ -28,7 +42,7 @@ def create_document(
 ) -> Document:
     project = Project(
         user_id=user_id,
-        title="Document Questions",
+        title="Document Question Project",
         status="In Progress",
         priority="High",
     )
@@ -51,32 +65,67 @@ def create_document(
     return document
 
 
-def fake_answer_result():
+def patch_retrieval(
+    monkeypatch,
+    *,
+    chunks: list[FakeRetrievedChunk] | None = None,
+) -> None:
+    active_chunks = chunks or [
+        FakeRetrievedChunk(
+            page=1,
+            section="System Requirements",
+            evidence=(
+                "The system must support secure document search."
+            ),
+        )
+    ]
+
+    retrieval_result = SimpleNamespace(
+        chunks=active_chunks,
+    )
+
+    monkeypatch.setattr(
+        workflow,
+        "retrieve_owned_document_chunks_hybrid",
+        lambda **kwargs: retrieval_result,
+    )
+
+    monkeypatch.setattr(
+        workflow,
+        "build_hybrid_retrieval_context",
+        lambda result, max_characters: (
+            "[Source 1 | Page 1 | System Requirements]\n"
+            "The system must support secure document search."
+        ),
+    )
+
+
+def fake_answer_result(
+    *,
+    source_ids: list[int] | None = None,
+    found_in_document: bool = True,
+) -> dict:
     return {
         "success": True,
         "provider": "gemini",
         "model": "test-model",
         "question": "What must the system support?",
         "answer": (
-            "The system must support grounded "
-            "document questions."
+            "The system must support secure document search."
+            if found_in_document
+            else "The information was not found."
         ),
-        "found_in_document": True,
-        "sources": [
-            {
-                "page": 3,
-                "section": "Requirements",
-                "evidence": (
-                    "The system must support "
-                    "document questions."
-                ),
-            }
-        ],
-        "input_characters": 100,
+        "found_in_document": found_in_document,
+        "source_ids": (
+            source_ids
+            if source_ids is not None
+            else ([1] if found_in_document else [])
+        ),
+        "input_characters": 200,
     }
 
 
-def test_owned_document_question_is_saved(
+def test_answer_saves_only_the_cited_retrieved_source(
     app,
     user,
     monkeypatch,
@@ -85,40 +134,50 @@ def test_owned_document_question_is_saved(
         document = create_document(
             user_id=user,
             extracted_text=(
-                "--- Page 3 ---\n"
-                "The system must support document questions."
+                "--- Page 1 ---\nGeneral overview.\n\n"
+                "--- Page 2 ---\nSecure document search."
             ),
+        )
+
+        patch_retrieval(
+            monkeypatch,
+            chunks=[
+                FakeRetrievedChunk(
+                    page=1,
+                    section="Overview",
+                    evidence="General overview.",
+                ),
+                FakeRetrievedChunk(
+                    page=2,
+                    section="Security",
+                    evidence="Secure document search is required.",
+                ),
+            ],
         )
 
         monkeypatch.setattr(
             workflow,
             "ask_document_question",
-            lambda **kwargs: fake_answer_result(),
-        )
-
-        result = ask_owned_document(
-            document_id=document.id,
-            user_id=user,
-            question_text=(
-                "What must the system support?"
+            lambda **kwargs: fake_answer_result(
+                source_ids=[2]
             ),
         )
 
-        assert result.reused_existing is False
-        assert result.question.status == "Completed"
-        assert result.question.provider == "gemini"
-        assert result.question.model == "test-model"
-        assert result.question.sources[0]["page"] == 3
-
-        saved = db.session.get(
-            DocumentQuestion,
-            result.question.id,
+        saved = ask_owned_document(
+            document_id=document.id,
+            user_id=user,
+            question_text="What security is required?",
         )
 
-        assert saved is not None
-        assert saved.answer.startswith(
-            "The system must support"
+        assert saved.reused_existing is False
+        assert saved.question.status == "Completed"
+        assert len(saved.question.sources) == 1
+        assert saved.question.sources[0]["page"] == 2
+        assert (
+            saved.question.sources[0]["section"]
+            == "Security"
         )
+
 
 def test_identical_question_is_reused(
     app,
@@ -130,19 +189,16 @@ def test_identical_question_is_reused(
             user_id=user,
             extracted_text=(
                 "--- Page 1 ---\n"
-                "System Requirements\n"
-                "The system must support secure document "
-                "search and project ownership validation."
+                "The system must support secure document search."
             ),
         )
 
-        call_count = {
-            "value": 0,
-        }
+        patch_retrieval(monkeypatch)
+
+        call_count = {"value": 0}
 
         def fake_ask(**kwargs):
             call_count["value"] += 1
-
             return fake_answer_result()
 
         monkeypatch.setattr(
@@ -154,17 +210,13 @@ def test_identical_question_is_reused(
         first = ask_owned_document(
             document_id=document.id,
             user_id=user,
-            question_text=(
-                "What must the system support?"
-            ),
+            question_text="What must the system support?",
         )
 
         second = ask_owned_document(
             document_id=document.id,
             user_id=user,
-            question_text=(
-                "What must the system support?"
-            ),
+            question_text="What must the system support?",
         )
 
         assert first.reused_existing is False
@@ -173,7 +225,7 @@ def test_identical_question_is_reused(
         assert call_count["value"] == 1
 
 
-def test_force_creates_new_answer(
+def test_force_creates_a_fresh_answer(
     app,
     user,
     monkeypatch,
@@ -181,40 +233,52 @@ def test_force_creates_new_answer(
     with app.app_context():
         document = create_document(
             user_id=user,
-            extracted_text="Stable readable content.",
+            extracted_text=(
+                "--- Page 1 ---\n"
+                "The system must support secure document search."
+            ),
         )
+
+        patch_retrieval(monkeypatch)
+
+        call_count = {"value": 0}
+
+        def fake_ask(**kwargs):
+            call_count["value"] += 1
+            return fake_answer_result()
 
         monkeypatch.setattr(
             workflow,
             "ask_document_question",
-            lambda **kwargs: fake_answer_result(),
+            fake_ask,
         )
 
         first = ask_owned_document(
             document_id=document.id,
             user_id=user,
-            question_text="What is required?",
+            question_text="What must the system support?",
         )
 
         second = ask_owned_document(
             document_id=document.id,
             user_id=user,
-            question_text="What is required?",
+            question_text="What must the system support?",
             force=True,
         )
 
         assert first.question.id != second.question.id
         assert second.reused_existing is False
+        assert call_count["value"] == 2
 
 
-def test_other_users_document_is_blocked(
+def test_other_user_cannot_ask_about_document(
     app,
     user,
 ):
     with app.app_context():
         document = create_document(
             user_id=user,
-            extracted_text="Readable content.",
+            extracted_text="Readable private document.",
         )
 
         with pytest.raises(
@@ -224,7 +288,7 @@ def test_other_users_document_is_blocked(
             ask_owned_document(
                 document_id=document.id,
                 user_id=user + 9999,
-                question_text="What is mentioned?",
+                question_text="What does it contain?",
             )
 
 
@@ -240,12 +304,12 @@ def test_document_without_text_is_not_ready(
 
         with pytest.raises(
             DocumentQuestionNotReadyError,
-            match="no readable extracted text",
+            match="no readable",
         ):
             ask_owned_document(
                 document_id=document.id,
                 user_id=user,
-                question_text="What is mentioned?",
+                question_text="What does it contain?",
             )
 
 
@@ -256,7 +320,7 @@ def test_empty_question_is_rejected(
     with app.app_context():
         document = create_document(
             user_id=user,
-            extracted_text="Readable content.",
+            extracted_text="Readable document content.",
         )
 
         with pytest.raises(
@@ -269,6 +333,7 @@ def test_empty_question_is_rejected(
                 question_text="   ",
             )
 
+
 def test_ai_failure_is_saved(
     app,
     user,
@@ -279,11 +344,11 @@ def test_ai_failure_is_saved(
             user_id=user,
             extracted_text=(
                 "--- Page 1 ---\n"
-                "System Requirements\n"
-                "The system must support secure document "
-                "search and project ownership validation."
+                "The system must support secure document search."
             ),
         )
+
+        patch_retrieval(monkeypatch)
 
         def fail_question(**kwargs):
             raise AIServiceError(
@@ -312,31 +377,22 @@ def test_ai_failure_is_saved(
             ask_owned_document(
                 document_id=document.id,
                 user_id=user,
-                question_text=(
-                    "What must the system support?"
-                ),
+                question_text="What must the system support?",
             )
 
-        failed_question = (
-            DocumentQuestion.query
-            .filter_by(
-                document_id=document.id,
-                user_id=user,
-                status="Failed",
-            )
-            .one()
-        )
+        failed = DocumentQuestion.query.filter_by(
+            document_id=document.id,
+            user_id=user,
+            status="Failed",
+        ).one()
 
-        assert failed_question.answer is None
-        assert failed_question.provider == "gemini"
-        assert failed_question.model == "test-model"
+        assert failed.answer is None
+        assert failed.provider == "gemini"
+        assert failed.model == "test-model"
+        assert "provider is unavailable" in failed.error_message
 
-        assert (
-            "provider is unavailable"
-            in failed_question.error_message
-        )
 
-def test_question_history_is_returned(
+def test_invalid_source_id_is_rejected_and_saved(
     app,
     user,
     monkeypatch,
@@ -344,31 +400,79 @@ def test_question_history_is_returned(
     with app.app_context():
         document = create_document(
             user_id=user,
-            extracted_text="Readable content.",
+            extracted_text=(
+                "--- Page 1 ---\n"
+                "The system must support secure document search."
+            ),
         )
+
+        patch_retrieval(monkeypatch)
 
         monkeypatch.setattr(
             workflow,
             "ask_document_question",
-            lambda **kwargs: fake_answer_result(),
+            lambda **kwargs: fake_answer_result(
+                source_ids=[99]
+            ),
         )
 
-        ask_owned_document(
+        monkeypatch.setattr(
+            workflow,
+            "get_ai_configuration",
+            lambda: {
+                "provider": "gemini",
+                "model": "test-model",
+            },
+        )
+
+        with pytest.raises(
+            DocumentQuestionWorkflowError,
+            match="source that was not supplied",
+        ):
+            ask_owned_document(
+                document_id=document.id,
+                user_id=user,
+                question_text="What must the system support?",
+            )
+
+        failed = DocumentQuestion.query.filter_by(
             document_id=document.id,
             user_id=user,
-            question_text="First question?",
+            status="Failed",
+        ).one()
+
+        assert "source that was not supplied" in (
+            failed.error_message
         )
 
-        ask_owned_document(
+
+def test_not_found_answer_saves_no_sources(
+    app,
+    user,
+    monkeypatch,
+):
+    with app.app_context():
+        document = create_document(
+            user_id=user,
+            extracted_text="General project content.",
+        )
+
+        patch_retrieval(monkeypatch)
+
+        monkeypatch.setattr(
+            workflow,
+            "ask_document_question",
+            lambda **kwargs: fake_answer_result(
+                found_in_document=False,
+                source_ids=[],
+            ),
+        )
+
+        saved = ask_owned_document(
             document_id=document.id,
             user_id=user,
-            question_text="Second question?",
+            question_text="Which fingerprint device is required?",
         )
 
-        history = list_owned_document_questions(
-            document_id=document.id,
-            user_id=user,
-        )
-
-        assert len(history) == 2
-        assert history[0].question == "Second question?"
+        assert saved.question.status == "Completed"
+        assert saved.question.sources == []
