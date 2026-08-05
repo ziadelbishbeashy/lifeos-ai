@@ -13,7 +13,7 @@
 {% endblock %}
 
 
-{% macro source_reference(source) %}
+{% macro source_reference(source, compact=false) %}
 
     {% if source %}
 
@@ -25,34 +25,33 @@
 
         {% if page or section or evidence %}
 
-            <div class="brain-source">
+            <article
+                class="
+                    db-source-card
+                    {% if compact %}db-source-card-compact{% endif %}
+                "
+            >
 
-                <div class="brain-source-heading">
+                <div class="db-source-card-heading">
 
-                    <div class="brain-source-location">
+                    <div class="db-source-location">
 
                         {% if source_id %}
-
-                            <span class="brain-source-id">
+                            <span class="db-source-number">
                                 Source {{ source_id }}
                             </span>
-
                         {% endif %}
 
                         {% if page %}
-
-                            <span>
+                            <span class="db-source-page">
                                 Page {{ page }}
                             </span>
-
                         {% endif %}
 
                         {% if section %}
-
-                            <span class="brain-source-section">
+                            <span class="db-source-section">
                                 {{ section }}
                             </span>
-
                         {% endif %}
 
                     </div>
@@ -60,7 +59,7 @@
 
                     {% if preview_type == "focused" %}
 
-                        <span class="brain-source-preview-label">
+                        <span class="db-source-focus">
                             Focused excerpt
                         </span>
 
@@ -68,19 +67,43 @@
 
                 </div>
 
+
                 {% if evidence %}
 
-                    <blockquote class="brain-source-evidence">
+                    <blockquote class="db-source-evidence">
                         {{ evidence }}
                     </blockquote>
 
                 {% endif %}
 
-            </div>
+            </article>
 
         {% endif %}
 
     {% endif %}
+
+{% endmacro %}
+
+
+{% macro insight_item(title, detail, source, kind="neutral") %}
+
+    <article class="db-insight-card db-insight-{{ kind }}">
+
+        <div class="db-insight-card-copy">
+
+            {% if title %}
+                <h3>{{ title }}</h3>
+            {% endif %}
+
+            {% if detail %}
+                <p>{{ detail }}</p>
+            {% endif %}
+
+        </div>
+
+        {{ source_reference(source, true) }}
+
+    </article>
 
 {% endmacro %}
 
@@ -91,414 +114,364 @@
 {% set suggestions = suggestions | default([], true) %}
 {% set question_history = question_history | default([], true) %}
 
+{% set action_stats = namespace(
+    pending=0,
+    approved=0,
+    linked=0,
+    rejected=0
+) %}
 
-<div class="brain-toolbar">
+{% for suggestion in suggestions %}
+    {% if suggestion.status == "Pending" %}
+        {% set action_stats.pending = action_stats.pending + 1 %}
+    {% elif suggestion.status == "Approved" %}
+        {% set action_stats.approved = action_stats.approved + 1 %}
+    {% elif suggestion.status == "Linked" %}
+        {% set action_stats.linked = action_stats.linked + 1 %}
+    {% elif suggestion.status == "Rejected" %}
+        {% set action_stats.rejected = action_stats.rejected + 1 %}
+    {% endif %}
+{% endfor %}
 
-    <a
-        href="{{ url_for('document_bp.documents') }}"
-        class="workspace-secondary-button"
+{% set question_stats = namespace(
+    completed=0,
+    failed=0,
+    sourced=0
+) %}
+
+{% for saved_question in question_history %}
+    {% if saved_question.status == "Completed" %}
+        {% set question_stats.completed =
+            question_stats.completed + 1
+        %}
+    {% elif saved_question.status == "Failed" %}
+        {% set question_stats.failed =
+            question_stats.failed + 1
+        %}
+    {% endif %}
+
+    {% if saved_question.sources %}
+        {% set question_stats.sourced =
+            question_stats.sourced + 1
+        %}
+    {% endif %}
+{% endfor %}
+
+
+<div
+    class="db-detail"
+    data-db-detail
+>
+
+    <nav
+        class="db-detail-breadcrumbs"
+        aria-label="Document navigation"
     >
-        ← Back to documents
-    </a>
 
-    {% if document.project %}
-
-        <a
-            href="{{ url_for(
-                'project_bp.project_details',
-                project_id=document.project.id
-            ) }}"
-            class="workspace-secondary-button"
-        >
-            Open Project
+        <a href="{{ url_for('document_bp.documents') }}">
+            Document Brain
         </a>
 
-    {% endif %}
+        <span>/</span>
 
-</div>
+        {% if document.project %}
 
-
-<section class="brain-status-grid">
-
-    <article class="brain-status-card">
-
-        <span>Project</span>
-
-        <strong>
-            {{
-                document.project.title
-                if document.project
-                else "No project"
-            }}
-        </strong>
-
-    </article>
-
-
-    <article class="brain-status-card">
-
-        <span>Text status</span>
-
-        {% if document.extracted_text %}
-
-            <strong>
-                Readable text available
-            </strong>
-
-        {% else %}
-
-            <strong>
-                Needs extraction or OCR
-            </strong>
-
-        {% endif %}
-
-    </article>
-
-
-    <article class="brain-status-card">
-
-        <span>Analysis status</span>
-
-        {% if analysis %}
-
-            <strong>
-                Ready
-            </strong>
-
-        {% elif latest_attempt
-              and latest_attempt.status == "Failed"
-        %}
-
-            <strong>
-                Last attempt failed
-            </strong>
-
-        {% else %}
-
-            <strong>
-                Not analysed
-            </strong>
-
-        {% endif %}
-
-    </article>
-
-
-    <article class="brain-status-card">
-
-        <span>Uploaded</span>
-
-        <strong>
-            {{
-                document.uploaded_at.strftime("%d %b %Y")
-                if document.uploaded_at
-                else "Unknown"
-            }}
-        </strong>
-
-    </article>
-
-</section>
-
-
-<section class="brain-analysis-control">
-
-    <div>
-
-        <h2>
-
-            {% if analysis %}
-                Document intelligence
-            {% else %}
-                Analyse this document
-            {% endif %}
-
-        </h2>
-
-        <p>
-            LifeOS identifies important requirements, decisions,
-            risks, deadlines and possible project actions.
-        </p>
-
-    </div>
-
-
-    {% if document.extracted_text %}
-
-        <form
-            method="POST"
-            action="{{ url_for(
-                'document_bp.analyse_document_route',
-                document_id=document.id
-            ) }}"
-            data-loading-title="Analysing document"
-            data-loading-message="LifeOS is understanding the document and detecting useful actions..."
-        >
-
-            <input
-                type="hidden"
-                name="csrf_token"
-                value="{{ csrf_token() }}"
+            <a
+                href="{{ url_for(
+                    'project_bp.project_details',
+                    project_id=document.project.id
+                ) }}"
             >
+                {{ document.project.title }}
+            </a>
+
+            <span>/</span>
+
+        {% endif %}
+
+        <span aria-current="page">
+            {{ document.filename }}
+        </span>
+
+    </nav>
 
 
-            {% if analysis %}
+    <header class="db-document-hero">
 
-                <input
-                    type="hidden"
-                    name="force"
-                    value="1"
-                >
+        <div class="db-document-identity">
 
-                <button
-                    type="submit"
-                    class="workspace-primary-button"
-                >
-                    Analyse Again
-                </button>
-
-            {% else %}
-
-                <button
-                    type="submit"
-                    class="workspace-primary-button"
-                >
-                    Analyse Document
-                </button>
-
-            {% endif %}
-
-        </form>
-
-    {% else %}
-
-        <button
-            type="button"
-            class="workspace-secondary-button"
-            disabled
-        >
-            Readable Text Required
-        </button>
-
-    {% endif %}
-
-</section>
-
-
-{% if latest_attempt
-      and latest_attempt.status == "Failed"
-      and (
-          not analysis
-          or latest_attempt.id != analysis.id
-      )
-%}
-
-    <section class="brain-error-panel">
-
-        <strong>
-            Latest analysis attempt failed
-        </strong>
-
-        <p>
-            {{
-                latest_attempt.error_message
-                or "The document could not be analysed."
-            }}
-        </p>
-
-    </section>
-
-{% endif %}
-
-
-{% if analysis %}
-
-    <section class="brain-panel brain-summary-panel">
-
-        <div class="brain-panel-heading">
-
-            <div>
-
-                <span class="brain-label">
-                    {{
-                        analysis.document_type
-                        or "General Reference"
-                    }}
-                </span>
-
-                <h2>
-                    Executive Summary
-                </h2>
-
+            <div class="db-document-icon">
+                PDF
             </div>
 
 
-            <div class="brain-analysis-meta">
+            <div class="db-document-title-block">
 
-                <span>
-                    {{ analysis.provider }}
-                    ·
-                    {{ analysis.model }}
-                </span>
+                <div class="db-document-title-meta">
 
-                {% if analysis.created_at %}
-
-                    <span>
+                    <span class="db-project-pill">
                         {{
-                            analysis.created_at.strftime(
-                                "%d %b %Y · %H:%M"
-                            )
+                            document.project.title
+                            if document.project
+                            else "No project"
                         }}
                     </span>
 
-                {% endif %}
+                    {% if analysis %}
+
+                        <span class="db-status-badge db-status-analysed">
+                            Analysis ready
+                        </span>
+
+                    {% elif document.extracted_text %}
+
+                        <span class="db-status-badge db-status-ready">
+                            Ready to analyse
+                        </span>
+
+                    {% else %}
+
+                        <span class="db-status-badge db-status-needs-text">
+                            Needs OCR
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+                <h1>{{ document.filename }}</h1>
+
+                <p>
+                    {% if analysis %}
+                        {{
+                            analysis.document_type
+                            or "General Reference"
+                        }}
+                        · Analysed with {{ analysis.provider }}
+                    {% elif document.extracted_text %}
+                        Text extraction and searchable chunking are ready.
+                    {% else %}
+                        The PDF is stored, but no readable embedded text
+                        was detected.
+                    {% endif %}
+                </p>
 
             </div>
 
         </div>
 
 
-        <p class="brain-summary">
-            {{ analysis.summary }}
-        </p>
+        <div class="db-document-hero-actions">
+
+            {% if document.project %}
+
+                <a
+                    href="{{ url_for(
+                        'project_bp.project_details',
+                        project_id=document.project.id
+                    ) }}"
+                    class="workspace-secondary-button"
+                >
+                    Open project
+                </a>
+
+            {% endif %}
 
 
-        {% if insights.get("purpose") %}
+            {% if document.extracted_text %}
 
-            <div class="brain-purpose">
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'document_bp.analyse_document_route',
+                        document_id=document.id
+                    ) }}"
+                    data-loading-title="Analysing document"
+                    data-loading-message="LifeOS is reading the document, extracting insights and preparing actions..."
+                    data-db-inline-loading
+                    {% if analysis %}
+                        data-confirm
+                        data-confirm-title="Analyse again"
+                        data-confirm-message="Analyse this document again? A new analysis and a new set of suggestions will be created."
+                        data-confirm-text="Analyse"
+                        data-confirm-variant="warning"
+                    {% endif %}
+                >
 
-                <strong>
-                    Document Purpose
-                </strong>
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
 
-                <p>
-                    {{ insights.get("purpose") }}
-                </p>
+                    {% if analysis %}
+                        <input
+                            type="hidden"
+                            name="force"
+                            value="1"
+                        >
+                    {% endif %}
 
-            </div>
+                    <button
+                        type="submit"
+                        class="workspace-primary-button"
+                        data-db-submit-label
+                    >
+                        {% if analysis %}
+                            Analyse again
+                        {% else %}
+                            Analyse document
+                        {% endif %}
+                    </button>
 
-        {% endif %}
+                </form>
 
-    </section>
+            {% else %}
+
+                <button
+                    type="button"
+                    class="workspace-secondary-button"
+                    disabled
+                >
+                    Readable text required
+                </button>
+
+            {% endif %}
+
+        </div>
+
+    </header>
 
 
-    <section class="brain-count-grid">
+    <section
+        class="db-document-snapshot"
+        aria-label="Document status"
+    >
 
         <article>
 
+            <span class="db-snapshot-label">
+                Uploaded
+            </span>
+
             <strong>
                 {{
-                    insights.get(
-                        "requirements",
-                        []
-                    ) | length
+                    document.uploaded_at.strftime(
+                        "%d %b %Y"
+                    )
+                    if document.uploaded_at
+                    else "Unknown"
                 }}
             </strong>
 
-            <span>
-                Requirements
-            </span>
+            <small>
+                Document #{{ document.id }}
+            </small>
 
         </article>
 
 
         <article>
 
-            <strong>
-                {{
-                    insights.get(
-                        "decisions",
-                        []
-                    ) | length
-                }}
-            </strong>
-
-            <span>
-                Decisions
+            <span class="db-snapshot-label">
+                Search index
             </span>
 
-        </article>
-
-
-        <article>
-
             <strong>
-                {{
-                    insights.get(
-                        "risks",
-                        []
-                    ) | length
-                }}
+                {{ document.chunks | length }}
+                chunks
             </strong>
 
-            <span>
-                Risks
-            </span>
-
-        </article>
-
-
-        <article>
-
-            <strong>
-                {% if suggestions %}
-                    {{ suggestions | length }}
+            <small>
+                {% if document.extracted_text %}
+                    Hybrid retrieval ready
                 {% else %}
-                    {{
-                        insights.get(
-                            "action_items",
-                            []
-                        ) | length
-                    }}
+                    Waiting for readable text
+                {% endif %}
+            </small>
+
+        </article>
+
+
+        <article>
+
+            <span class="db-snapshot-label">
+                Analysis
+            </span>
+
+            <strong>
+                {% if analysis %}
+                    Ready
+                {% elif latest_attempt
+                      and latest_attempt.status == "Failed"
+                %}
+                    Last attempt failed
+                {% else %}
+                    Not started
                 {% endif %}
             </strong>
 
-            <span>
-                Suggested Actions
+            <small>
+                {% if analysis and analysis.created_at %}
+                    {{
+                        analysis.created_at.strftime(
+                            "%d %b %Y · %H:%M"
+                        )
+                    }}
+                {% else %}
+                    Requirements, risks and actions
+                {% endif %}
+            </small>
+
+        </article>
+
+
+        <article>
+
+            <span class="db-snapshot-label">
+                Grounded Q&amp;A
             </span>
+
+            <strong>
+                {{ question_history | length }}
+                saved
+            </strong>
+
+            <small>
+                {{ question_stats.sourced }}
+                with supporting sources
+            </small>
 
         </article>
 
     </section>
 
 
-    {% if insights.get("key_points") %}
+    {% if latest_attempt
+          and latest_attempt.status == "Failed"
+          and (
+              not analysis
+              or latest_attempt.id != analysis.id
+          )
+    %}
 
-        <section class="brain-panel">
+        <section class="db-alert db-alert-error">
 
-            <h2>
-                Key Points
-            </h2>
+            <div class="db-alert-icon">
+                !
+            </div>
 
-            <div class="brain-list">
+            <div>
+                <strong>
+                    The latest analysis attempt failed
+                </strong>
 
-                {% for item in insights.get("key_points", []) %}
-
-                    <article class="brain-item">
-
-                        <h3>
-                            {{ item.get("title") }}
-                        </h3>
-
-                        {% if item.get("detail") %}
-
-                            <p>
-                                {{ item.get("detail") }}
-                            </p>
-
-                        {% endif %}
-
-                        {{
-                            source_reference(
-                                item.get("source")
-                            )
-                        }}
-
-                    </article>
-
-                {% endfor %}
-
+                <p>
+                    {{
+                        latest_attempt.error_message
+                        or "The document could not be analysed."
+                    }}
+                </p>
             </div>
 
         </section>
@@ -506,902 +479,2302 @@
     {% endif %}
 
 
-    {% if insights.get("requirements") %}
+    <div class="db-workspace">
 
-        <section class="brain-panel">
+        <nav
+            class="db-workspace-tabs"
+            aria-label="Document Brain sections"
+            role="tablist"
+        >
 
-            <h2>
-                Requirements
-            </h2>
+            <button
+                type="button"
+                class="is-active"
+                role="tab"
+                aria-selected="true"
+                aria-controls="db-overview-panel"
+                data-db-tab="overview"
+                data-db-hash="overview"
+            >
+                <span>Overview</span>
 
-            <div class="brain-list">
+                {% if analysis %}
+                    <b>Ready</b>
+                {% endif %}
+            </button>
 
-                {% for item in insights.get("requirements", []) %}
 
-                    <article class="brain-item">
+            <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="db-insights-panel"
+                data-db-tab="insights"
+                data-db-hash="insights"
+            >
+                <span>Insights</span>
 
-                        <h3>
-                            {{ item.get("requirement") }}
-                        </h3>
-
-                        {% if item.get("details") %}
-
-                            <p>
-                                {{ item.get("details") }}
-                            </p>
-
-                        {% endif %}
-
+                {% if analysis %}
+                    <b>
                         {{
-                            source_reference(
-                                item.get("source")
+                            (
+                                insights.get("key_points", []) | length
+                            )
+                            +
+                            (
+                                insights.get("requirements", []) | length
+                            )
+                            +
+                            (
+                                insights.get("decisions", []) | length
+                            )
+                            +
+                            (
+                                insights.get("risks", []) | length
+                            )
+                            +
+                            (
+                                insights.get("deadlines", []) | length
                             )
                         }}
-
-                    </article>
-
-                {% endfor %}
-
-            </div>
-
-        </section>
-
-    {% endif %}
+                    </b>
+                {% endif %}
+            </button>
 
 
-    {% if insights.get("decisions") %}
+            <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="db-actions-panel"
+                data-db-tab="actions"
+                data-db-hash="actions"
+            >
+                <span>Actions</span>
 
-        <section class="brain-panel">
-
-            <h2>
-                Decisions
-            </h2>
-
-            <div class="brain-list">
-
-                {% for item in insights.get("decisions", []) %}
-
-                    <article class="brain-item">
-
-                        <h3>
-                            {{ item.get("decision") }}
-                        </h3>
-
-                        {% if item.get("reason") %}
-
-                            <p>
-                                {{ item.get("reason") }}
-                            </p>
-
-                        {% endif %}
-
-                        {{
-                            source_reference(
-                                item.get("source")
-                            )
-                        }}
-
-                    </article>
-
-                {% endfor %}
-
-            </div>
-
-        </section>
-
-    {% endif %}
+                {% if suggestions %}
+                    <b>{{ suggestions | length }}</b>
+                {% endif %}
+            </button>
 
 
-    {% if insights.get("deadlines") %}
+            <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="db-ask-panel"
+                data-db-tab="ask"
+                data-db-hash="ask-document"
+            >
+                <span>Ask document</span>
 
-        <section class="brain-panel">
+                {% if question_history %}
+                    <b>{{ question_history | length }}</b>
+                {% endif %}
+            </button>
 
-            <h2>
-                Deadlines
-            </h2>
+        </nav>
 
-            <div class="brain-list">
 
-                {% for item in insights.get("deadlines", []) %}
+        <div class="db-workspace-content">
 
-                    <article class="brain-item">
+            <section
+                id="db-overview-panel"
+                class="db-tab-panel is-active"
+                role="tabpanel"
+                data-db-panel="overview"
+            >
 
-                        <div class="brain-item-heading">
+                {% if analysis %}
 
-                            <h3>
-                                {{ item.get("description") }}
-                            </h3>
+                    <article class="db-summary-card">
 
-                            <span class="brain-deadline">
-                                {{
-                                    item.get("date")
-                                    or "Date unclear"
-                                }}
+                        <div class="db-summary-heading">
+
+                            <div>
+                                <span class="db-kicker">
+                                    {{
+                                        analysis.document_type
+                                        or "General Reference"
+                                    }}
+                                </span>
+
+                                <h2>Executive summary</h2>
+                            </div>
+
+
+                            <span class="db-ai-meta">
+                                {{ analysis.provider }}
+                                ·
+                                {{ analysis.model }}
                             </span>
 
                         </div>
 
-                        {{
-                            source_reference(
-                                item.get("source")
-                            )
-                        }}
 
-                    </article>
-
-                {% endfor %}
-
-            </div>
-
-        </section>
-
-    {% endif %}
+                        <p class="db-summary-text">
+                            {{ analysis.summary }}
+                        </p>
 
 
-    {% if insights.get("risks") %}
+                        {% if insights.get("purpose") %}
 
-        <section class="brain-panel">
+                            <div class="db-purpose-block">
 
-            <h2>
-                Risks and Blockers
-            </h2>
+                                <span>Document purpose</span>
 
-            <div class="brain-list">
-
-                {% for item in insights.get("risks", []) %}
-
-                    <article class="brain-item">
-
-                        <h3>
-                            {{ item.get("risk") }}
-                        </h3>
-
-                        {% if item.get("impact") %}
-
-                            <p>
-                                {{ item.get("impact") }}
-                            </p>
-
-                        {% endif %}
-
-                        {{
-                            source_reference(
-                                item.get("source")
-                            )
-                        }}
-
-                    </article>
-
-                {% endfor %}
-
-            </div>
-
-        </section>
-
-    {% endif %}
-
-
-    {% if suggestions or insights.get("action_items") %}
-
-        <section class="brain-panel">
-
-            <div class="brain-panel-heading">
-
-                <div>
-
-                    <h2>
-                        Suggested Actions
-                    </h2>
-
-                    <p>
-                        Review each action before LifeOS creates
-                        or connects a project task.
-                    </p>
-
-                </div>
-
-
-                {% if suggestions %}
-
-                    <span class="brain-suggestion-count">
-                        {{ suggestions | length }}
-                        suggestions
-                    </span>
-
-                {% endif %}
-
-            </div>
-
-
-            {% if suggestions %}
-
-                <div class="brain-list">
-
-                    {% for suggestion in suggestions %}
-
-                        <article
-                            class="brain-item brain-suggestion-card"
-                        >
-
-                            <div class="brain-item-heading">
-
-                                <div>
-
-                                    <span
-                                        class="
-                                            brain-suggestion-status
-                                            brain-suggestion-status-{{
-                                                suggestion.status
-                                                | lower
-                                            }}
-                                        "
-                                    >
-                                        {{ suggestion.status }}
-                                    </span>
-
-                                    <h3>
-                                        {{ suggestion.title }}
-                                    </h3>
-
-                                </div>
-
-
-                                <span class="brain-priority">
-                                    {{ suggestion.priority }}
-                                </span>
+                                <p>
+                                    {{ insights.get("purpose") }}
+                                </p>
 
                             </div>
 
+                        {% endif %}
 
-                            {% if suggestion.description %}
-
-                                <p>
-                                    {{ suggestion.description }}
-                                </p>
-
-                            {% endif %}
+                    </article>
 
 
-                            {% if suggestion.deadline %}
+                    <div class="db-analysis-counts">
 
-                                <p class="brain-suggestion-deadline">
+                        <button
+                            type="button"
+                            data-db-tab-jump="insights"
+                            data-db-scroll-target="requirements"
+                        >
+                            <strong>
+                                {{
+                                    insights.get(
+                                        "requirements",
+                                        []
+                                    ) | length
+                                }}
+                            </strong>
+                            <span>Requirements</span>
+                            <small>View extracted needs →</small>
+                        </button>
 
-                                    <strong>
-                                        Deadline:
-                                    </strong>
 
+                        <button
+                            type="button"
+                            data-db-tab-jump="insights"
+                            data-db-scroll-target="decisions"
+                        >
+                            <strong>
+                                {{
+                                    insights.get(
+                                        "decisions",
+                                        []
+                                    ) | length
+                                }}
+                            </strong>
+                            <span>Decisions</span>
+                            <small>Review commitments →</small>
+                        </button>
+
+
+                        <button
+                            type="button"
+                            data-db-tab-jump="insights"
+                            data-db-scroll-target="risks"
+                        >
+                            <strong>
+                                {{
+                                    insights.get(
+                                        "risks",
+                                        []
+                                    ) | length
+                                }}
+                            </strong>
+                            <span>Risks</span>
+                            <small>Inspect blockers →</small>
+                        </button>
+
+
+                        <button
+                            type="button"
+                            data-db-tab-jump="actions"
+                        >
+                            <strong>
+                                {% if suggestions %}
+                                    {{ suggestions | length }}
+                                {% else %}
                                     {{
-                                        suggestion.deadline.strftime(
-                                            "%d %b %Y"
-                                        )
+                                        insights.get(
+                                            "action_items",
+                                            []
+                                        ) | length
                                     }}
+                                {% endif %}
+                            </strong>
+                            <span>Suggested actions</span>
+                            <small>Review project work →</small>
+                        </button>
 
+                    </div>
+
+
+                    <div class="db-overview-grid">
+
+                        <article class="db-overview-card">
+
+                            <div class="db-overview-card-heading">
+                                <span class="db-overview-icon">
+                                    K
+                                </span>
+
+                                <div>
+                                    <h3>Key points</h3>
+                                    <p>
+                                        The most important ideas detected
+                                        across the document.
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            {% if insights.get("key_points") %}
+
+                                <ul class="db-overview-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "key_points",
+                                            []
+                                        )[:4]
+                                    %}
+
+                                        <li>
+                                            {{ item.get("title") }}
+                                        </li>
+
+                                    {% endfor %}
+
+                                </ul>
+
+                                <button
+                                    type="button"
+                                    class="db-text-button"
+                                    data-db-tab-jump="insights"
+                                    data-db-scroll-target="key-points"
+                                >
+                                    View all key points
+                                </button>
+
+                            {% else %}
+
+                                <p class="db-muted-copy">
+                                    No key points were returned in the
+                                    current analysis.
                                 </p>
-
-                            {% endif %}
-
-
-                            {% if suggestion.matched_task %}
-
-                                <div class="brain-match-warning">
-
-                                    <div>
-
-                                        <strong>
-                                            Possible Existing Task
-                                        </strong>
-
-                                        <p>
-                                            {{
-                                                suggestion
-                                                .matched_task
-                                                .title
-                                            }}
-                                        </p>
-
-                                        {% if
-                                            suggestion
-                                            .matched_task
-                                            .status
-                                        %}
-
-                                            <small>
-                                                Current status:
-                                                {{
-                                                    suggestion
-                                                    .matched_task
-                                                    .status
-                                                }}
-                                            </small>
-
-                                        {% endif %}
-
-                                    </div>
-
-
-                                    <span>
-                                        {{
-                                            (
-                                                suggestion.match_score
-                                                * 100
-                                            )
-                                            | round
-                                            | int
-                                        }}%
-                                        similarity
-                                    </span>
-
-                                </div>
-
-                            {% endif %}
-
-
-                            {{
-                                source_reference(
-                                    suggestion.source
-                                )
-                            }}
-
-
-                            {% if suggestion.status == "Pending" %}
-
-                                <div class="brain-suggestion-actions">
-
-
-                                    {% if suggestion.matched_task %}
-
-                                        <form
-                                            method="POST"
-                                            action="{{ url_for(
-                                                'document_bp.link_suggestion_route',
-                                                document_id=document.id,
-                                                suggestion_id=suggestion.id
-                                            ) }}"
-                                        >
-
-                                            <input
-                                                type="hidden"
-                                                name="csrf_token"
-                                                value="{{ csrf_token() }}"
-                                            >
-
-                                            <button
-                                                type="submit"
-                                                class="workspace-primary-button"
-                                            >
-                                                Use Existing Task
-                                            </button>
-
-                                        </form>
-
-
-                                        <form
-                                            method="POST"
-                                            action="{{ url_for(
-                                                'document_bp.approve_suggestion_route',
-                                                document_id=document.id,
-                                                suggestion_id=suggestion.id
-                                            ) }}"
-                                        >
-
-                                            <input
-                                                type="hidden"
-                                                name="csrf_token"
-                                                value="{{ csrf_token() }}"
-                                            >
-
-                                            <input
-                                                type="hidden"
-                                                name="allow_possible_duplicate"
-                                                value="1"
-                                            >
-
-                                            <button
-                                                type="submit"
-                                                class="workspace-secondary-button"
-                                            >
-                                                Create Anyway
-                                            </button>
-
-                                        </form>
-
-                                    {% else %}
-
-                                        <form
-                                            method="POST"
-                                            action="{{ url_for(
-                                                'document_bp.approve_suggestion_route',
-                                                document_id=document.id,
-                                                suggestion_id=suggestion.id
-                                            ) }}"
-                                        >
-
-                                            <input
-                                                type="hidden"
-                                                name="csrf_token"
-                                                value="{{ csrf_token() }}"
-                                            >
-
-                                            <button
-                                                type="submit"
-                                                class="workspace-primary-button"
-                                            >
-                                                Create Task
-                                            </button>
-
-                                        </form>
-
-                                    {% endif %}
-
-
-                                    <form
-                                        method="POST"
-                                        action="{{ url_for(
-                                            'document_bp.reject_suggestion_route',
-                                            document_id=document.id,
-                                            suggestion_id=suggestion.id
-                                        ) }}"
-                                    >
-
-                                        <input
-                                            type="hidden"
-                                            name="csrf_token"
-                                            value="{{ csrf_token() }}"
-                                        >
-
-                                        <button
-                                            type="submit"
-                                            class="brain-reject-button"
-                                        >
-                                            Reject
-                                        </button>
-
-                                    </form>
-
-                                </div>
-
-
-                            {% elif suggestion.status == "Approved" %}
-
-                                <div class="brain-suggestion-result">
-
-                                    <strong>
-                                        Task created
-                                    </strong>
-
-                                    {% if suggestion.created_task %}
-
-                                        <span>
-                                            {{
-                                                suggestion
-                                                .created_task
-                                                .title
-                                            }}
-                                        </span>
-
-                                    {% endif %}
-
-                                </div>
-
-
-                            {% elif suggestion.status == "Linked" %}
-
-                                <div class="brain-suggestion-result">
-
-                                    <strong>
-                                        Linked to existing task
-                                    </strong>
-
-                                    {% if suggestion.created_task %}
-
-                                        <span>
-                                            {{
-                                                suggestion
-                                                .created_task
-                                                .title
-                                            }}
-                                        </span>
-
-                                    {% endif %}
-
-                                </div>
-
-
-                            {% elif suggestion.status == "Rejected" %}
-
-                                <div class="brain-suggestion-result">
-
-                                    <span>
-                                        This suggestion was rejected.
-                                    </span>
-
-                                </div>
 
                             {% endif %}
 
                         </article>
 
-                    {% endfor %}
 
-                </div>
+                        <article class="db-overview-card">
 
-
-            {% else %}
-
-                <div class="brain-empty-suggestions">
-
-                    <p>
-                        This analysis contains action items, but
-                        it was created before the suggestion workflow
-                        was enabled.
-                    </p>
-
-                    <p>
-                        Press
-                        <strong>Analyse Again</strong>
-                        to convert them into reviewable task suggestions.
-                    </p>
-
-                </div>
-
-            {% endif %}
-
-        </section>
-
-    {% endif %}
-
-
-    {% if insights.get("missing_information") %}
-
-        <section class="brain-panel">
-
-            <h2>
-                Missing or Unclear Information
-            </h2>
-
-            <div class="brain-list">
-
-                {% for item in insights.get(
-                    "missing_information",
-                    []
-                ) %}
-
-                    <article class="brain-item">
-
-                        <h3>
-                            {{ item.get("question") }}
-                        </h3>
-
-                        {% if item.get("why_it_matters") %}
-
-                            <p>
-                                {{ item.get("why_it_matters") }}
-                            </p>
-
-                        {% endif %}
-
-                        {{
-                            source_reference(
-                                item.get("source")
-                            )
-                        }}
-
-                    </article>
-
-                {% endfor %}
-
-            </div>
-
-        </section>
-
-    {% endif %}
-
-
-{% else %}
-
-    <section class="brain-empty">
-
-        <h2>
-            No Analysis Yet
-        </h2>
-
-        {% if document.extracted_text %}
-
-            <p>
-                The document has readable text and is ready
-                for intelligent analysis.
-            </p>
-
-        {% else %}
-
-            <p>
-                No readable embedded text was found.
-                Scanned PDFs require OCR support before analysis.
-            </p>
-
-        {% endif %}
-
-    </section>
-
-{% endif %}
-
-
-<section
-    id="ask-document"
-    class="brain-panel document-question-panel"
->
-
-    <div class="brain-panel-heading">
-
-        <div>
-
-            <span class="brain-label">
-                Grounded Document Questions
-            </span>
-
-            <h2>
-                Ask This Document
-            </h2>
-
-            <p>
-                LifeOS answers using only this PDF and displays
-                the supporting pages and evidence.
-            </p>
-
-        </div>
-
-
-        {% if question_history %}
-
-            <span class="brain-suggestion-count">
-                {{ question_history | length }}
-                saved
-            </span>
-
-        {% endif %}
-
-    </div>
-
-
-    {% if document.extracted_text %}
-
-        <form
-            method="POST"
-            action="{{ url_for(
-                'document_bp.ask_document_question_route',
-                document_id=document.id
-            ) }}"
-            class="document-question-form"
-            data-loading-title="Reading document"
-            data-loading-message="LifeOS is searching the PDF for a grounded answer..."
-        >
-
-            <input
-                type="hidden"
-                name="csrf_token"
-                value="{{ csrf_token() }}"
-            >
-
-
-            <div class="form-group">
-
-                <label for="documentQuestion">
-                    Your Question
-                </label>
-
-                <textarea
-                    id="documentQuestion"
-                    name="question"
-                    rows="4"
-                    maxlength="2000"
-                    placeholder="For example: What are the main requirements mentioned in this document?"
-                    required
-                ></textarea>
-
-                <small class="document-question-help">
-                    The answer uses only this document.
-                    Maximum 2,000 characters.
-                </small>
-
-            </div>
-
-
-            <div class="document-question-submit">
-
-                <button
-                    type="submit"
-                    class="workspace-primary-button"
-                >
-                    Ask Document
-                </button>
-
-            </div>
-
-        </form>
-
-    {% else %}
-
-        <div class="brain-empty-suggestions">
-
-            <p>
-                This PDF has no readable extracted text.
-                Questions cannot be answered until text extraction
-                or OCR is available.
-            </p>
-
-        </div>
-
-    {% endif %}
-
-
-    {% if question_history %}
-
-        <div class="document-question-history">
-
-            <div class="document-question-history-heading">
-
-                <h3>
-                    Question History
-                </h3>
-
-                <p>
-                    Recent grounded questions about this document.
-                </p>
-
-            </div>
-
-
-            <div class="brain-list">
-
-                {% for saved_question in question_history %}
-
-                    <article
-                        class="
-                            brain-item
-                            document-question-card
-                            document-question-{{
-                                saved_question.status | lower
-                            }}
-                        "
-                    >
-
-                        <div class="document-question-heading">
-
-                            <div>
-
-                                <span
-                                    class="
-                                        brain-suggestion-status
-                                        brain-suggestion-status-{{
-                                            saved_question.status
-                                            | lower
-                                        }}
-                                    "
-                                >
-                                    {{ saved_question.status }}
+                            <div class="db-overview-card-heading">
+                                <span class="db-overview-icon">
+                                    ?
                                 </span>
 
-                                <h3>
-                                    {{ saved_question.question }}
-                                </h3>
-
+                                <div>
+                                    <h3>Missing information</h3>
+                                    <p>
+                                        Questions that may need clarification
+                                        before work continues.
+                                    </p>
+                                </div>
                             </div>
 
 
-                            {% if saved_question.created_at %}
+                            {% if insights.get("missing_information") %}
 
-                                <span class="document-question-date">
-                                    {{
-                                        saved_question.created_at.strftime(
-                                            "%d %b %Y · %H:%M"
-                                        )
-                                    }}
-                                </span>
+                                <ul class="db-overview-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "missing_information",
+                                            []
+                                        )[:4]
+                                    %}
+
+                                        <li>
+                                            {{ item.get("question") }}
+                                        </li>
+
+                                    {% endfor %}
+
+                                </ul>
+
+                                <button
+                                    type="button"
+                                    class="db-text-button"
+                                    data-db-tab-jump="insights"
+                                    data-db-scroll-target="missing-information"
+                                >
+                                    Review open questions
+                                </button>
+
+                            {% else %}
+
+                                <p class="db-muted-copy">
+                                    LifeOS did not identify major missing
+                                    information in this analysis.
+                                </p>
 
                             {% endif %}
 
+                        </article>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="db-empty-state db-analysis-empty">
+
+                        <span class="db-empty-icon">
+                            AI
+                        </span>
+
+                        <div>
+                            <h2>
+                                {% if document.extracted_text %}
+                                    This PDF is ready for analysis
+                                {% else %}
+                                    Readable text is required
+                                {% endif %}
+                            </h2>
+
+                            <p>
+                                {% if document.extracted_text %}
+                                    Run analysis to create an executive
+                                    summary, extract requirements, identify
+                                    risks and turn action items into
+                                    reviewable project tasks.
+                                {% else %}
+                                    LifeOS stored the document safely, but
+                                    could not extract readable embedded text.
+                                    A scanned PDF may require OCR.
+                                {% endif %}
+                            </p>
+
+                            {% if document.extracted_text %}
+
+                                <form
+                                    method="POST"
+                                    action="{{ url_for(
+                                        'document_bp.analyse_document_route',
+                                        document_id=document.id
+                                    ) }}"
+                                    data-loading-title="Analysing document"
+                                    data-loading-message="LifeOS is understanding the PDF and preparing structured insights..."
+                                >
+
+                                    <input
+                                        type="hidden"
+                                        name="csrf_token"
+                                        value="{{ csrf_token() }}"
+                                    >
+
+                                    <button
+                                        type="submit"
+                                        class="workspace-primary-button"
+                                    >
+                                        Analyse document
+                                    </button>
+
+                                </form>
+
+                            {% endif %}
                         </div>
 
+                    </div>
 
-                        {% if saved_question.status == "Completed" %}
+                {% endif %}
 
-                            <div class="document-answer">
-
-                                <strong>
-                                    Answer
-                                </strong>
-
-                                <p>
-                                    {{ saved_question.answer }}
-                                </p>
-
-                            </div>
+            </section>
 
 
-                            {% if saved_question.sources %}
+            <section
+                id="db-insights-panel"
+                class="db-tab-panel"
+                role="tabpanel"
+                data-db-panel="insights"
+            >
 
-                                <div class="document-answer-sources">
+                <div class="db-panel-heading">
 
-                                    <strong>
-                                        Supporting Sources
-                                    </strong>
+                    <div>
+                        <span class="db-kicker">
+                            Structured understanding
+                        </span>
 
-                                    {% for source in saved_question.sources %}
+                        <h2>Document insights</h2>
 
-                                        {{
-                                            source_reference(
-                                                source
-                                            )
-                                        }}
+                        <p>
+                            Each insight remains linked to the page and
+                            evidence supplied by the analysis.
+                        </p>
+                    </div>
+
+
+                    {% if analysis %}
+
+                        <label class="db-search-field db-insight-search">
+
+                            <span class="db-search-icon">
+                                ⌕
+                            </span>
+
+                            <input
+                                type="search"
+                                placeholder="Search insights"
+                                aria-label="Search document insights"
+                                data-db-insight-search
+                            >
+
+                        </label>
+
+                    {% endif %}
+
+                </div>
+
+
+                {% if analysis %}
+
+                    <div
+                        class="db-insight-groups"
+                        data-db-insight-container
+                    >
+
+                        {% if insights.get("key_points") %}
+
+                            <details
+                                id="key-points"
+                                class="db-insight-group"
+                                open
+                                data-db-insight-group
+                            >
+
+                                <summary>
+                                    <span>
+                                        <b>K</b>
+                                        <span>
+                                            <strong>Key points</strong>
+                                            <small>
+                                                {{
+                                                    insights.get(
+                                                        "key_points",
+                                                        []
+                                                    ) | length
+                                                }}
+                                                important ideas
+                                            </small>
+                                        </span>
+                                    </span>
+
+                                    <i>+</i>
+                                </summary>
+
+
+                                <div class="db-insight-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "key_points",
+                                            []
+                                        )
+                                    %}
+
+                                        <div
+                                            data-db-insight-item
+                                            data-search="{{
+                                                (
+                                                    (item.get('title') or '')
+                                                    ~ ' '
+                                                    ~ (item.get('detail') or '')
+                                                ) | lower
+                                            }}"
+                                        >
+
+                                            {{
+                                                insight_item(
+                                                    item.get("title"),
+                                                    item.get("detail"),
+                                                    item.get("source"),
+                                                    "key"
+                                                )
+                                            }}
+
+                                        </div>
 
                                     {% endfor %}
 
                                 </div>
 
-                            {% else %}
+                            </details>
 
-                                <div class="document-answer-not-found">
+                        {% endif %}
 
+
+                        {% if insights.get("requirements") %}
+
+                            <details
+                                id="requirements"
+                                class="db-insight-group"
+                                open
+                                data-db-insight-group
+                            >
+
+                                <summary>
                                     <span>
-                                        LifeOS did not find a supporting
-                                        passage for this answer in the PDF.
+                                        <b>R</b>
+                                        <span>
+                                            <strong>Requirements</strong>
+                                            <small>
+                                                {{
+                                                    insights.get(
+                                                        "requirements",
+                                                        []
+                                                    ) | length
+                                                }}
+                                                detected needs
+                                            </small>
+                                        </span>
                                     </span>
+
+                                    <i>+</i>
+                                </summary>
+
+
+                                <div class="db-insight-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "requirements",
+                                            []
+                                        )
+                                    %}
+
+                                        <div
+                                            data-db-insight-item
+                                            data-search="{{
+                                                (
+                                                    (item.get('requirement') or '')
+                                                    ~ ' '
+                                                    ~ (item.get('details') or '')
+                                                ) | lower
+                                            }}"
+                                        >
+
+                                            {{
+                                                insight_item(
+                                                    item.get("requirement"),
+                                                    item.get("details"),
+                                                    item.get("source"),
+                                                    "requirement"
+                                                )
+                                            }}
+
+                                        </div>
+
+                                    {% endfor %}
 
                                 </div>
 
+                            </details>
+
+                        {% endif %}
+
+
+                        {% if insights.get("decisions") %}
+
+                            <details
+                                id="decisions"
+                                class="db-insight-group"
+                                data-db-insight-group
+                            >
+
+                                <summary>
+                                    <span>
+                                        <b>D</b>
+                                        <span>
+                                            <strong>Decisions</strong>
+                                            <small>
+                                                {{
+                                                    insights.get(
+                                                        "decisions",
+                                                        []
+                                                    ) | length
+                                                }}
+                                                documented commitments
+                                            </small>
+                                        </span>
+                                    </span>
+
+                                    <i>+</i>
+                                </summary>
+
+
+                                <div class="db-insight-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "decisions",
+                                            []
+                                        )
+                                    %}
+
+                                        <div
+                                            data-db-insight-item
+                                            data-search="{{
+                                                (
+                                                    (item.get('decision') or '')
+                                                    ~ ' '
+                                                    ~ (item.get('reason') or '')
+                                                ) | lower
+                                            }}"
+                                        >
+
+                                            {{
+                                                insight_item(
+                                                    item.get("decision"),
+                                                    item.get("reason"),
+                                                    item.get("source"),
+                                                    "decision"
+                                                )
+                                            }}
+
+                                        </div>
+
+                                    {% endfor %}
+
+                                </div>
+
+                            </details>
+
+                        {% endif %}
+
+
+                        {% if insights.get("deadlines") %}
+
+                            <details
+                                id="deadlines"
+                                class="db-insight-group"
+                                data-db-insight-group
+                            >
+
+                                <summary>
+                                    <span>
+                                        <b>⌛</b>
+                                        <span>
+                                            <strong>Deadlines</strong>
+                                            <small>
+                                                {{
+                                                    insights.get(
+                                                        "deadlines",
+                                                        []
+                                                    ) | length
+                                                }}
+                                                time-sensitive items
+                                            </small>
+                                        </span>
+                                    </span>
+
+                                    <i>+</i>
+                                </summary>
+
+
+                                <div class="db-insight-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "deadlines",
+                                            []
+                                        )
+                                    %}
+
+                                        <article
+                                            class="
+                                                db-insight-card
+                                                db-insight-deadline
+                                            "
+                                            data-db-insight-item
+                                            data-search="{{
+                                                (
+                                                    (item.get('description') or '')
+                                                    ~ ' '
+                                                    ~ (item.get('date') or '')
+                                                ) | lower
+                                            }}"
+                                        >
+
+                                            <div class="db-insight-card-copy">
+
+                                                <span class="db-deadline-chip">
+                                                    {{
+                                                        item.get("date")
+                                                        or "Date unclear"
+                                                    }}
+                                                </span>
+
+                                                <h3>
+                                                    {{
+                                                        item.get(
+                                                            "description"
+                                                        )
+                                                    }}
+                                                </h3>
+
+                                            </div>
+
+                                            {{
+                                                source_reference(
+                                                    item.get("source"),
+                                                    true
+                                                )
+                                            }}
+
+                                        </article>
+
+                                    {% endfor %}
+
+                                </div>
+
+                            </details>
+
+                        {% endif %}
+
+
+                        {% if insights.get("risks") %}
+
+                            <details
+                                id="risks"
+                                class="db-insight-group"
+                                data-db-insight-group
+                            >
+
+                                <summary>
+                                    <span>
+                                        <b>!</b>
+                                        <span>
+                                            <strong>Risks and blockers</strong>
+                                            <small>
+                                                {{
+                                                    insights.get(
+                                                        "risks",
+                                                        []
+                                                    ) | length
+                                                }}
+                                                issues to monitor
+                                            </small>
+                                        </span>
+                                    </span>
+
+                                    <i>+</i>
+                                </summary>
+
+
+                                <div class="db-insight-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "risks",
+                                            []
+                                        )
+                                    %}
+
+                                        <div
+                                            data-db-insight-item
+                                            data-search="{{
+                                                (
+                                                    (item.get('risk') or '')
+                                                    ~ ' '
+                                                    ~ (item.get('impact') or '')
+                                                ) | lower
+                                            }}"
+                                        >
+
+                                            {{
+                                                insight_item(
+                                                    item.get("risk"),
+                                                    item.get("impact"),
+                                                    item.get("source"),
+                                                    "risk"
+                                                )
+                                            }}
+
+                                        </div>
+
+                                    {% endfor %}
+
+                                </div>
+
+                            </details>
+
+                        {% endif %}
+
+
+                        {% if insights.get("missing_information") %}
+
+                            <details
+                                id="missing-information"
+                                class="db-insight-group"
+                                data-db-insight-group
+                            >
+
+                                <summary>
+                                    <span>
+                                        <b>?</b>
+                                        <span>
+                                            <strong>
+                                                Missing or unclear information
+                                            </strong>
+                                            <small>
+                                                {{
+                                                    insights.get(
+                                                        "missing_information",
+                                                        []
+                                                    ) | length
+                                                }}
+                                                clarification questions
+                                            </small>
+                                        </span>
+                                    </span>
+
+                                    <i>+</i>
+                                </summary>
+
+
+                                <div class="db-insight-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "missing_information",
+                                            []
+                                        )
+                                    %}
+
+                                        <div
+                                            data-db-insight-item
+                                            data-search="{{
+                                                (
+                                                    (item.get('question') or '')
+                                                    ~ ' '
+                                                    ~ (
+                                                        item.get(
+                                                            'why_it_matters'
+                                                        )
+                                                        or ''
+                                                    )
+                                                ) | lower
+                                            }}"
+                                        >
+
+                                            {{
+                                                insight_item(
+                                                    item.get("question"),
+                                                    item.get(
+                                                        "why_it_matters"
+                                                    ),
+                                                    item.get("source"),
+                                                    "question"
+                                                )
+                                            }}
+
+                                        </div>
+
+                                    {% endfor %}
+
+                                </div>
+
+                            </details>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <div
+                        class="db-empty-state db-filter-empty"
+                        data-db-insight-empty
+                        hidden
+                    >
+
+                        <span class="db-empty-icon">
+                            ⌕
+                        </span>
+
+                        <div>
+                            <h3>No matching insights</h3>
+                            <p>Try another search term.</p>
+                        </div>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="db-empty-state">
+
+                        <span class="db-empty-icon">
+                            I
+                        </span>
+
+                        <div>
+                            <h2>No insights yet</h2>
+
+                            <p>
+                                Analyse the document first to extract
+                                requirements, decisions, deadlines,
+                                risks and missing information.
+                            </p>
+
+                            <button
+                                type="button"
+                                class="workspace-primary-button"
+                                data-db-tab-jump="overview"
+                            >
+                                Return to overview
+                            </button>
+                        </div>
+
+                    </div>
+
+                {% endif %}
+
+            </section>
+
+
+            <section
+                id="db-actions-panel"
+                class="db-tab-panel"
+                role="tabpanel"
+                data-db-panel="actions"
+            >
+
+                <div class="db-panel-heading">
+
+                    <div>
+                        <span class="db-kicker">
+                            Human-approved automation
+                        </span>
+
+                        <h2>Suggested project actions</h2>
+
+                        <p>
+                            LifeOS never creates work silently. Review,
+                            connect or reject every detected action.
+                        </p>
+                    </div>
+
+
+                    {% if suggestions %}
+
+                        <span class="db-visible-count">
+                            <strong data-db-action-count>
+                                {{ suggestions | length }}
+                            </strong>
+                            shown
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+
+                {% if suggestions %}
+
+                    <div class="db-action-summary">
+
+                        <article>
+                            <strong>{{ action_stats.pending }}</strong>
+                            <span>Pending review</span>
+                        </article>
+
+                        <article>
+                            <strong>
+                                {{
+                                    action_stats.approved
+                                    + action_stats.linked
+                                }}
+                            </strong>
+                            <span>Accepted</span>
+                        </article>
+
+                        <article>
+                            <strong>{{ action_stats.rejected }}</strong>
+                            <span>Rejected</span>
+                        </article>
+
+                    </div>
+
+
+                    <div
+                        class="db-filter-pills"
+                        role="group"
+                        aria-label="Filter action suggestions"
+                    >
+
+                        <button
+                            type="button"
+                            class="is-active"
+                            data-db-action-filter="all"
+                            aria-pressed="true"
+                        >
+                            All
+                            <span>{{ suggestions | length }}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            data-db-action-filter="pending"
+                            aria-pressed="false"
+                        >
+                            Pending
+                            <span>{{ action_stats.pending }}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            data-db-action-filter="accepted"
+                            aria-pressed="false"
+                        >
+                            Accepted
+                            <span>
+                                {{
+                                    action_stats.approved
+                                    + action_stats.linked
+                                }}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            data-db-action-filter="rejected"
+                            aria-pressed="false"
+                        >
+                            Rejected
+                            <span>{{ action_stats.rejected }}</span>
+                        </button>
+
+                    </div>
+
+
+                    <div
+                        class="db-action-list"
+                        data-db-action-list
+                    >
+
+                        {% for suggestion in suggestions %}
+
+                            {% if suggestion.status in [
+                                "Approved",
+                                "Linked"
+                            ] %}
+                                {% set action_group = "accepted" %}
+                            {% else %}
+                                {% set action_group =
+                                    suggestion.status | lower
+                                %}
                             {% endif %}
 
+                            <article
+                                class="db-action-card"
+                                data-db-action-card
+                                data-action-status="{{ action_group }}"
+                            >
 
-                            <div class="document-answer-meta">
+                                <div class="db-action-card-heading">
 
-                                <span>
-                                    {{ saved_question.provider }}
-                                    ·
-                                    {{ saved_question.model }}
+                                    <div>
+
+                                        <div class="db-action-labels">
+
+                                            <span
+                                                class="
+                                                    db-suggestion-status
+                                                    db-suggestion-status-{{
+                                                        suggestion.status
+                                                        | lower
+                                                    }}
+                                                "
+                                            >
+                                                {{ suggestion.status }}
+                                            </span>
+
+                                            <span
+                                                class="
+                                                    db-priority-chip
+                                                    db-priority-{{
+                                                        suggestion.priority
+                                                        | lower
+                                                    }}
+                                                "
+                                            >
+                                                {{ suggestion.priority }}
+                                            </span>
+
+                                        </div>
+
+                                        <h3>{{ suggestion.title }}</h3>
+
+                                    </div>
+
+
+                                    {% if suggestion.deadline %}
+
+                                        <span class="db-action-deadline">
+                                            Due
+                                            {{
+                                                suggestion.deadline.strftime(
+                                                    "%d %b %Y"
+                                                )
+                                            }}
+                                        </span>
+
+                                    {% endif %}
+
+                                </div>
+
+
+                                {% if suggestion.description %}
+
+                                    <p class="db-action-description">
+                                        {{ suggestion.description }}
+                                    </p>
+
+                                {% endif %}
+
+
+                                {% if suggestion.matched_task %}
+
+                                    <div class="db-duplicate-card">
+
+                                        <div>
+                                            <span>
+                                                Possible existing task
+                                            </span>
+
+                                            <strong>
+                                                {{
+                                                    suggestion
+                                                    .matched_task
+                                                    .title
+                                                }}
+                                            </strong>
+
+                                            {% if
+                                                suggestion
+                                                .matched_task
+                                                .status
+                                            %}
+
+                                                <small>
+                                                    Status:
+                                                    {{
+                                                        suggestion
+                                                        .matched_task
+                                                        .status
+                                                    }}
+                                                </small>
+
+                                            {% endif %}
+                                        </div>
+
+
+                                        <b>
+                                            {{
+                                                (
+                                                    suggestion.match_score
+                                                    * 100
+                                                )
+                                                | round
+                                                | int
+                                            }}%
+                                            match
+                                        </b>
+
+                                    </div>
+
+                                {% endif %}
+
+
+                                {{ source_reference(
+                                    suggestion.source,
+                                    true
+                                ) }}
+
+
+                                {% if suggestion.status == "Pending" %}
+
+                                    <div class="db-action-buttons">
+
+                                        {% if suggestion.matched_task %}
+
+                                            <form
+                                                method="POST"
+                                                action="{{ url_for(
+                                                    'document_bp.link_suggestion_route',
+                                                    document_id=document.id,
+                                                    suggestion_id=suggestion.id
+                                                ) }}"
+                                                data-loading-title="Linking task"
+                                                data-loading-message="Connecting the document action to the existing project task..."
+                                                data-db-inline-loading
+                                            >
+
+                                                <input
+                                                    type="hidden"
+                                                    name="csrf_token"
+                                                    value="{{ csrf_token() }}"
+                                                >
+
+                                                <button
+                                                    type="submit"
+                                                    class="workspace-primary-button"
+                                                >
+                                                    Use existing task
+                                                </button>
+
+                                            </form>
+
+
+                                            <form
+                                                method="POST"
+                                                action="{{ url_for(
+                                                    'document_bp.approve_suggestion_route',
+                                                    document_id=document.id,
+                                                    suggestion_id=suggestion.id
+                                                ) }}"
+                                                data-confirm
+                                                data-confirm-title="Create possible duplicate"
+                                                data-confirm-message="A similar task already exists. Create a separate task anyway?"
+                                                data-confirm-text="Create task"
+                                                data-confirm-variant="warning"
+                                                data-loading-title="Creating task"
+                                                data-loading-message="Adding the approved action to the connected project..."
+                                                data-db-inline-loading
+                                            >
+
+                                                <input
+                                                    type="hidden"
+                                                    name="csrf_token"
+                                                    value="{{ csrf_token() }}"
+                                                >
+
+                                                <input
+                                                    type="hidden"
+                                                    name="allow_possible_duplicate"
+                                                    value="1"
+                                                >
+
+                                                <button
+                                                    type="submit"
+                                                    class="workspace-secondary-button"
+                                                >
+                                                    Create anyway
+                                                </button>
+
+                                            </form>
+
+                                        {% else %}
+
+                                            <form
+                                                method="POST"
+                                                action="{{ url_for(
+                                                    'document_bp.approve_suggestion_route',
+                                                    document_id=document.id,
+                                                    suggestion_id=suggestion.id
+                                                ) }}"
+                                                data-loading-title="Creating task"
+                                                data-loading-message="Adding the approved action to the connected project..."
+                                                data-db-inline-loading
+                                            >
+
+                                                <input
+                                                    type="hidden"
+                                                    name="csrf_token"
+                                                    value="{{ csrf_token() }}"
+                                                >
+
+                                                <button
+                                                    type="submit"
+                                                    class="workspace-primary-button"
+                                                >
+                                                    Create project task
+                                                </button>
+
+                                            </form>
+
+                                        {% endif %}
+
+
+                                        <form
+                                            method="POST"
+                                            action="{{ url_for(
+                                                'document_bp.reject_suggestion_route',
+                                                document_id=document.id,
+                                                suggestion_id=suggestion.id
+                                            ) }}"
+                                            data-confirm
+                                            data-confirm-title="Reject suggestion"
+                                            data-confirm-message="Reject this suggestion? It will stay in the analysis history but will not create a task."
+                                            data-confirm-text="Reject"
+                                            data-confirm-variant="danger"
+                                        >
+
+                                            <input
+                                                type="hidden"
+                                                name="csrf_token"
+                                                value="{{ csrf_token() }}"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="db-danger-text-button"
+                                            >
+                                                Reject
+                                            </button>
+
+                                        </form>
+
+                                    </div>
+
+
+                                {% elif suggestion.status == "Approved" %}
+
+                                    <div class="db-action-result">
+
+                                        <span>✓</span>
+
+                                        <div>
+                                            <strong>Task created</strong>
+
+                                            {% if suggestion.created_task %}
+                                                <small>
+                                                    {{
+                                                        suggestion
+                                                        .created_task
+                                                        .title
+                                                    }}
+                                                </small>
+                                            {% endif %}
+                                        </div>
+
+                                    </div>
+
+
+                                {% elif suggestion.status == "Linked" %}
+
+                                    <div class="db-action-result">
+
+                                        <span>↗</span>
+
+                                        <div>
+                                            <strong>
+                                                Linked to an existing task
+                                            </strong>
+
+                                            {% if suggestion.created_task %}
+                                                <small>
+                                                    {{
+                                                        suggestion
+                                                        .created_task
+                                                        .title
+                                                    }}
+                                                </small>
+                                            {% endif %}
+                                        </div>
+
+                                    </div>
+
+
+                                {% elif suggestion.status == "Rejected" %}
+
+                                    <div class="db-action-result db-action-result-muted">
+
+                                        <span>×</span>
+
+                                        <div>
+                                            <strong>Suggestion rejected</strong>
+                                            <small>
+                                                No project task was created.
+                                            </small>
+                                        </div>
+
+                                    </div>
+
+                                {% endif %}
+
+                            </article>
+
+                        {% endfor %}
+
+                    </div>
+
+
+                    <div
+                        class="db-empty-state db-filter-empty"
+                        data-db-action-empty
+                        hidden
+                    >
+
+                        <span class="db-empty-icon">
+                            ✓
+                        </span>
+
+                        <div>
+                            <h3>No actions in this filter</h3>
+                            <p>Choose another status to continue.</p>
+                        </div>
+
+                    </div>
+
+                {% elif insights.get("action_items") %}
+
+                    <div class="db-alert db-alert-info">
+
+                        <div class="db-alert-icon">
+                            i
+                        </div>
+
+                        <div>
+                            <strong>
+                                Reanalyse to activate the review workflow
+                            </strong>
+
+                            <p>
+                                This analysis contains action items but was
+                                created before persistent task suggestions
+                                were enabled.
+                            </p>
+                        </div>
+
+                    </div>
+
+
+                    <div class="db-action-list">
+
+                        {% for action in
+                            insights.get(
+                                "action_items",
+                                []
+                            )
+                        %}
+
+                            <article class="db-action-card">
+
+                                <div class="db-action-card-heading">
+
+                                    <div>
+                                        <span
+                                            class="
+                                                db-priority-chip
+                                                db-priority-{{
+                                                    action.get(
+                                                        'priority',
+                                                        'Medium'
+                                                    ) | lower
+                                                }}
+                                            "
+                                        >
+                                            {{
+                                                action.get(
+                                                    "priority",
+                                                    "Medium"
+                                                )
+                                            }}
+                                        </span>
+
+                                        <h3>
+                                            {{ action.get("title") }}
+                                        </h3>
+                                    </div>
+
+
+                                    {% if action.get("deadline") %}
+                                        <span class="db-action-deadline">
+                                            Due
+                                            {{ action.get("deadline") }}
+                                        </span>
+                                    {% endif %}
+
+                                </div>
+
+                                <p class="db-action-description">
+                                    {{ action.get("description") }}
+                                </p>
+
+                                {{
+                                    source_reference(
+                                        action.get("source"),
+                                        true
+                                    )
+                                }}
+
+                            </article>
+
+                        {% endfor %}
+
+                    </div>
+
+                {% else %}
+
+                    <div class="db-empty-state">
+
+                        <span class="db-empty-icon">
+                            ✓
+                        </span>
+
+                        <div>
+                            <h2>No suggested actions</h2>
+
+                            <p>
+                                {% if analysis %}
+                                    The current analysis did not identify
+                                    work that should become a project task.
+                                {% else %}
+                                    Analyse this PDF to detect reviewable
+                                    project actions.
+                                {% endif %}
+                            </p>
+
+                            {% if not analysis %}
+                                <button
+                                    type="button"
+                                    class="workspace-primary-button"
+                                    data-db-tab-jump="overview"
+                                >
+                                    Go to analysis
+                                </button>
+                            {% endif %}
+                        </div>
+
+                    </div>
+
+                {% endif %}
+
+            </section>
+
+
+            <section
+                id="db-ask-panel"
+                class="db-tab-panel"
+                role="tabpanel"
+                data-db-panel="ask"
+            >
+
+                <div
+                    id="ask-document"
+                    class="db-ask-layout"
+                >
+
+                    <div class="db-ask-main">
+
+                        <div class="db-panel-heading">
+
+                            <div>
+                                <span class="db-kicker">
+                                    Grounded answers
                                 </span>
 
+                                <h2>Ask this document</h2>
+
+                                <p>
+                                    LifeOS searches the PDF, verifies that
+                                    direct evidence exists, then answers with
+                                    cited supporting excerpts.
+                                </p>
                             </div>
 
 
-                        {% elif saved_question.status == "Failed" %}
+                            <span class="db-grounded-badge">
+                                Document only
+                            </span>
 
-                            <div class="brain-error-panel">
+                        </div>
 
-                                <strong>
-                                    LifeOS could not answer this question
-                                </strong>
 
-                                <p>
-                                    {{
-                                        saved_question.error_message
-                                        or "The AI request failed."
-                                    }}
-                                </p>
+                        {% if document.extracted_text %}
+
+                            <form
+                                method="POST"
+                                action="{{ url_for(
+                                    'document_bp.ask_document_question_route',
+                                    document_id=document.id
+                                ) }}"
+                                class="db-ask-composer"
+                                data-db-question-form
+                                data-loading-title="Reading document"
+                                data-loading-message="Retrieving evidence, checking answerability and building a grounded answer..."
+                            >
+
+                                <input
+                                    type="hidden"
+                                    name="csrf_token"
+                                    value="{{ csrf_token() }}"
+                                >
+
+
+                                <label for="documentQuestion">
+                                    Ask a question about this PDF
+                                </label>
+
+                                <textarea
+                                    id="documentQuestion"
+                                    name="question"
+                                    rows="4"
+                                    maxlength="2000"
+                                    placeholder="For example: What are the main requirements and who owns them?"
+                                    required
+                                    data-db-question-input
+                                ></textarea>
+
+
+                                <div class="db-question-suggestions">
+
+                                    <button
+                                        type="button"
+                                        data-db-question-suggestion="Summarise the most important points in this document."
+                                    >
+                                        Main points
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        data-db-question-suggestion="What requirements are stated in this document?"
+                                    >
+                                        Requirements
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        data-db-question-suggestion="What risks or blockers are mentioned?"
+                                    >
+                                        Risks
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        data-db-question-suggestion="What deadlines and action items should I know about?"
+                                    >
+                                        Deadlines and actions
+                                    </button>
+
+                                </div>
+
+
+                                <div class="db-ask-composer-footer">
+
+                                    <span class="db-question-trust">
+                                        Answers are rejected when direct
+                                        evidence is not found.
+                                    </span>
+
+                                    <div>
+                                        <span
+                                            class="db-character-count"
+                                            data-db-character-count
+                                        >
+                                            0 / 2000
+                                        </span>
+
+                                        <button
+                                            type="submit"
+                                            class="workspace-primary-button"
+                                        >
+                                            Ask document
+                                        </button>
+                                    </div>
+
+                                </div>
+
+                            </form>
+
+                        {% else %}
+
+                            <div class="db-alert db-alert-warning">
+
+                                <div class="db-alert-icon">
+                                    !
+                                </div>
+
+                                <div>
+                                    <strong>
+                                        Questions are not available yet
+                                    </strong>
+
+                                    <p>
+                                        No readable text was extracted from
+                                        this PDF. OCR support is required
+                                        before grounded retrieval can run.
+                                    </p>
+                                </div>
 
                             </div>
 
                         {% endif %}
 
-                    </article>
 
-                {% endfor %}
+                        <div class="db-question-history">
 
-            </div>
+                            <div class="db-question-history-heading">
+
+                                <div>
+                                    <h3>Question history</h3>
+
+                                    <p>
+                                        Search and reopen the most recent
+                                        saved answers for this document.
+                                    </p>
+                                </div>
+
+
+                                {% if question_history %}
+                                    <span class="db-visible-count">
+                                        <strong data-db-question-count>
+                                            {{ question_history | length }}
+                                        </strong>
+                                        shown
+                                    </span>
+                                {% endif %}
+
+                            </div>
+
+
+                            {% if question_history %}
+
+                                <div class="db-question-toolbar">
+
+                                    <label class="db-search-field">
+
+                                        <span class="db-search-icon">
+                                            ⌕
+                                        </span>
+
+                                        <input
+                                            type="search"
+                                            placeholder="Search questions or answers"
+                                            aria-label="Search question history"
+                                            data-db-question-search
+                                        >
+
+                                    </label>
+
+
+                                    <div
+                                        class="db-filter-pills"
+                                        role="group"
+                                        aria-label="Filter question history"
+                                    >
+
+                                        <button
+                                            type="button"
+                                            class="is-active"
+                                            data-db-question-filter="all"
+                                            aria-pressed="true"
+                                        >
+                                            All
+                                            <span>
+                                                {{ question_history | length }}
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            data-db-question-filter="completed"
+                                            aria-pressed="false"
+                                        >
+                                            Answered
+                                            <span>
+                                                {{ question_stats.completed }}
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            data-db-question-filter="failed"
+                                            aria-pressed="false"
+                                        >
+                                            Failed
+                                            <span>
+                                                {{ question_stats.failed }}
+                                            </span>
+                                        </button>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div
+                                    class="db-question-list"
+                                    data-db-question-list
+                                >
+
+                                    {% for saved_question in question_history %}
+
+                                        <details
+                                            class="
+                                                db-question-card
+                                                db-question-{{
+                                                    saved_question.status
+                                                    | lower
+                                                }}
+                                            "
+                                            data-db-question-card
+                                            data-question-status="{{
+                                                saved_question.status
+                                                | lower
+                                            }}"
+                                            data-search="{{
+                                                (
+                                                    saved_question.question
+                                                    ~ ' '
+                                                    ~ (
+                                                        saved_question.answer
+                                                        or ''
+                                                    )
+                                                ) | lower
+                                            }}"
+                                            {% if loop.first %}open{% endif %}
+                                        >
+
+                                            <summary>
+
+                                                <div class="db-question-summary-icon">
+                                                    {% if
+                                                        saved_question.status
+                                                        == "Completed"
+                                                    %}
+                                                        Q
+                                                    {% else %}
+                                                        !
+                                                    {% endif %}
+                                                </div>
+
+
+                                                <div class="db-question-summary-copy">
+
+                                                    <div>
+                                                        <span
+                                                            class="
+                                                                db-suggestion-status
+                                                                db-suggestion-status-{{
+                                                                    saved_question
+                                                                    .status
+                                                                    | lower
+                                                                }}
+                                                            "
+                                                        >
+                                                            {{
+                                                                saved_question
+                                                                .status
+                                                            }}
+                                                        </span>
+
+                                                        {% if
+                                                            saved_question
+                                                            .created_at
+                                                        %}
+                                                            <time>
+                                                                {{
+                                                                    saved_question
+                                                                    .created_at
+                                                                    .strftime(
+                                                                        "%d %b %Y · %H:%M"
+                                                                    )
+                                                                }}
+                                                            </time>
+                                                        {% endif %}
+                                                    </div>
+
+                                                    <strong>
+                                                        {{
+                                                            saved_question
+                                                            .question
+                                                        }}
+                                                    </strong>
+
+                                                </div>
+
+
+                                                <span class="db-question-chevron">
+                                                    +
+                                                </span>
+
+                                            </summary>
+
+
+                                            <div class="db-question-content">
+
+                                                {% if
+                                                    saved_question.status
+                                                    == "Completed"
+                                                %}
+
+                                                    <div class="db-answer-block">
+
+                                                        <div class="db-answer-heading">
+
+                                                            <span>
+                                                                Grounded answer
+                                                            </span>
+
+                                                            <button
+                                                                type="button"
+                                                                class="db-copy-button"
+                                                                data-db-copy-target="answer-{{ saved_question.id }}"
+                                                            >
+                                                                Copy
+                                                            </button>
+
+                                                        </div>
+
+
+                                                        <p
+                                                            id="answer-{{ saved_question.id }}"
+                                                            class="db-answer-text"
+                                                        >
+                                                            {{
+                                                                saved_question
+                                                                .answer
+                                                            }}
+                                                        </p>
+
+                                                    </div>
+
+
+                                                    {% if
+                                                        saved_question.sources
+                                                    %}
+
+                                                        <details
+                                                            class="db-answer-sources"
+                                                        >
+
+                                                            <summary>
+                                                                <span>
+                                                                    Supporting
+                                                                    sources
+                                                                </span>
+
+                                                                <b>
+                                                                    {{
+                                                                        saved_question
+                                                                        .sources
+                                                                        | length
+                                                                    }}
+                                                                </b>
+                                                            </summary>
+
+
+                                                            <div class="db-source-list">
+
+                                                                {% for source in
+                                                                    saved_question
+                                                                    .sources
+                                                                %}
+
+                                                                    {{
+                                                                        source_reference(
+                                                                            source
+                                                                        )
+                                                                    }}
+
+                                                                {% endfor %}
+
+                                                            </div>
+
+                                                        </details>
+
+                                                    {% else %}
+
+                                                        <div class="db-no-match-answer">
+
+                                                            <span>i</span>
+
+                                                            <p>
+                                                                LifeOS did not
+                                                                find direct
+                                                                supporting
+                                                                evidence in
+                                                                this PDF.
+                                                            </p>
+
+                                                        </div>
+
+                                                    {% endif %}
+
+
+                                                    <div class="db-answer-meta">
+
+                                                        <span>
+                                                            {{
+                                                                saved_question
+                                                                .provider
+                                                            }}
+                                                            ·
+                                                            {{
+                                                                saved_question
+                                                                .model
+                                                            }}
+                                                        </span>
+
+                                                        <button
+                                                            type="button"
+                                                            class="db-text-button"
+                                                            data-db-reask="{{
+                                                                saved_question
+                                                                .question
+                                                            }}"
+                                                        >
+                                                            Ask again
+                                                        </button>
+
+                                                    </div>
+
+
+                                                {% elif
+                                                    saved_question.status
+                                                    == "Failed"
+                                                %}
+
+                                                    <div class="db-alert db-alert-error">
+
+                                                        <div class="db-alert-icon">
+                                                            !
+                                                        </div>
+
+                                                        <div>
+                                                            <strong>
+                                                                LifeOS could not
+                                                                complete this
+                                                                question
+                                                            </strong>
+
+                                                            <p>
+                                                                {{
+                                                                    saved_question
+                                                                    .error_message
+                                                                    or
+                                                                    "The AI request failed."
+                                                                }}
+                                                            </p>
+                                                        </div>
+
+                                                    </div>
+
+                                                {% endif %}
+
+                                            </div>
+
+                                        </details>
+
+                                    {% endfor %}
+
+                                </div>
+
+
+                                <div
+                                    class="db-empty-state db-filter-empty"
+                                    data-db-question-empty
+                                    hidden
+                                >
+
+                                    <span class="db-empty-icon">
+                                        ⌕
+                                    </span>
+
+                                    <div>
+                                        <h3>No matching questions</h3>
+                                        <p>
+                                            Try another search term or status.
+                                        </p>
+                                    </div>
+
+                                </div>
+
+                            {% else %}
+
+                                <div class="db-empty-state db-question-empty-state">
+
+                                    <span class="db-empty-icon">
+                                        Q
+                                    </span>
+
+                                    <div>
+                                        <h3>No questions asked yet</h3>
+
+                                        <p>
+                                            Use the composer above to ask the
+                                            first grounded question about this
+                                            document.
+                                        </p>
+                                    </div>
+
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+                    </div>
+
+
+                    <aside class="db-ask-sidebar">
+
+                        <article>
+
+                            <span class="db-sidebar-icon">
+                                1
+                            </span>
+
+                            <div>
+                                <strong>Hybrid retrieval</strong>
+                                <p>
+                                    Keyword and semantic search find the
+                                    strongest document chunks.
+                                </p>
+                            </div>
+
+                        </article>
+
+
+                        <article>
+
+                            <span class="db-sidebar-icon">
+                                2
+                            </span>
+
+                            <div>
+                                <strong>Answerability check</strong>
+                                <p>
+                                    LifeOS verifies that direct evidence
+                                    exists before generating an answer.
+                                </p>
+                            </div>
+
+                        </article>
+
+
+                        <article>
+
+                            <span class="db-sidebar-icon">
+                                3
+                            </span>
+
+                            <div>
+                                <strong>Cited claims</strong>
+                                <p>
+                                    Every stored answer is validated against
+                                    the supplied source IDs.
+                                </p>
+                            </div>
+
+                        </article>
+
+
+                        <div class="db-ask-stats">
+
+                            <span>
+                                <strong>{{ question_stats.completed }}</strong>
+                                answered
+                            </span>
+
+                            <span>
+                                <strong>{{ question_stats.sourced }}</strong>
+                                sourced
+                            </span>
+
+                            <span>
+                                <strong>{{ question_stats.failed }}</strong>
+                                failed
+                            </span>
+
+                        </div>
+
+                    </aside>
+
+                </div>
+
+            </section>
 
         </div>
 
-    {% else %}
+    </div>
 
-        <div class="document-question-empty">
 
-            <p>
-                No questions have been asked about this document yet.
-            </p>
+    <div class="db-mobile-actions">
 
-        </div>
+        <button
+            type="button"
+            data-db-tab-jump="ask"
+        >
+            Ask document
+        </button>
 
-    {% endif %}
+        {% if document.extracted_text %}
 
-</section>
+            <form
+                method="POST"
+                action="{{ url_for(
+                    'document_bp.analyse_document_route',
+                    document_id=document.id
+                ) }}"
+                data-loading-title="Analysing document"
+                data-loading-message="LifeOS is understanding the PDF..."
+                {% if analysis %}
+                    data-confirm
+                    data-confirm-title="Analyse again"
+                    data-confirm-message="Analyse this document again? A new analysis and a new set of suggestions will be created."
+                    data-confirm-text="Analyse"
+                    data-confirm-variant="warning"
+                {% endif %}
+            >
+
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+                {% if analysis %}
+                    <input
+                        type="hidden"
+                        name="force"
+                        value="1"
+                    >
+                {% endif %}
+
+                <button type="submit">
+                    {% if analysis %}
+                        Analyse again
+                    {% else %}
+                        Analyse
+                    {% endif %}
+                </button>
+
+            </form>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/document-brain-ui.js'
+        ) }}?v=phase2-document-brain"
+    ></script>
 
 {% endblock %}

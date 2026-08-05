@@ -65,6 +65,22 @@ document_bp = Blueprint(
 def documents():
     """Display owned documents and process PDF uploads."""
 
+    configured_limit = current_app.config.get(
+        "MAX_CONTENT_LENGTH"
+    )
+
+    max_upload_bytes = int(
+        configured_limit or 25 * 1024 * 1024
+    )
+
+    max_upload_mb = max(
+        1,
+        round(
+            max_upload_bytes
+            / (1024 * 1024)
+        ),
+    )
+
     if request.method == "POST":
         raw_project_id = request.form.get(
             "project_id",
@@ -86,20 +102,12 @@ def documents():
 
         upload = request.files.get("document")
 
-        configured_limit = current_app.config.get(
-            "MAX_CONTENT_LENGTH"
-        )
-
-        max_bytes = int(
-            configured_limit or 25 * 1024 * 1024
-        )
-
         try:
             result = create_project_pdf_document(
                 upload,
                 owner_id=current_user.id,
                 project_id=project_id,
-                max_bytes=max_bytes,
+                max_bytes=max_upload_bytes,
             )
 
         except (
@@ -188,6 +196,8 @@ def documents():
         "documents.html",
         documents=documents_list,
         projects=projects,
+        max_upload_bytes=max_upload_bytes,
+        max_upload_mb=max_upload_mb,
     )
 
 @document_bp.get("/<int:document_id>")
@@ -241,9 +251,9 @@ def document_details(document_id):
             .all()
         )
     question_history = list_owned_document_questions(
-    document_id=document.id,
-    user_id=current_user.id,
-    limit=20,
+        document_id=document.id,
+        user_id=current_user.id,
+        limit=50,
     )
 
     latest_attempt = (
