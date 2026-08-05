@@ -6,7 +6,9 @@ from typing import Any
 
 
 MAX_ANSWER_CHARACTERS = 4_000
-MAX_SOURCES = 6
+MAX_CLAIMS = 8
+MAX_CLAIM_CHARACTERS = 800
+MAX_SOURCES_PER_CLAIM = 3
 
 
 class DocumentQuestionValidationError(ValueError):
@@ -27,19 +29,6 @@ def clean_text(
     return cleaned[:max_length]
 
 
-def clean_page_number(
-    value: Any,
-) -> int | None:
-    """Return a valid positive PDF page number."""
-
-    try:
-        page = int(value)
-    except (TypeError, ValueError):
-        return None
-
-    return page if page > 0 else None
-
-
 def clean_boolean(
     value: Any,
 ) -> bool:
@@ -56,6 +45,8 @@ def clean_boolean(
         }
 
     return bool(value)
+
+
 def clean_source_id(
     value: Any,
 ) -> int | None:
@@ -63,29 +54,18 @@ def clean_source_id(
 
     try:
         source_id = int(value)
-
-    except (
-        TypeError,
-        ValueError,
-    ):
+    except (TypeError, ValueError):
         return None
 
-    return (
-        source_id
-        if source_id > 0
-        else None
-    )
+    return source_id if source_id > 0 else None
 
 
 def normalise_source_ids(
     value: Any,
 ) -> list[int]:
-    """Return unique positive retrieved-source numbers."""
+    """Return unique positive source numbers for one claim."""
 
-    if not isinstance(
-        value,
-        list,
-    ):
+    if not isinstance(value, list):
         return []
 
     source_ids: list[int] = []
@@ -96,103 +76,117 @@ def normalise_source_ids(
             raw_source_id
         )
 
-        if (
-            source_id is None
-            or source_id in seen
-        ):
+        if source_id is None or source_id in seen:
             continue
 
-        seen.add(
-            source_id
-        )
+        seen.add(source_id)
+        source_ids.append(source_id)
 
-        source_ids.append(
-            source_id
-        )
-
-        if len(source_ids) >= MAX_SOURCES:
+        if len(source_ids) >= MAX_SOURCES_PER_CLAIM:
             break
 
     return source_ids
 
-def normalise_answer_source(
+
+def normalise_answer_claim(
     value: Any,
-) -> dict[str, Any] | None:
-    """Normalise one supporting document reference."""
+    *,
+    claim_number: int,
+) -> dict[str, Any]:
+    """Validate one independently supported answer claim."""
 
     if not isinstance(value, dict):
-        return None
+        raise DocumentQuestionValidationError(
+            f"Claim {claim_number} must be a JSON object."
+        )
 
-    page = clean_page_number(
-        value.get("page")
+    text = clean_text(
+        value.get("text"),
+        max_length=MAX_CLAIM_CHARACTERS,
     )
 
-    section = clean_text(
-        value.get("section"),
-        max_length=160,
+    if not text:
+        raise DocumentQuestionValidationError(
+            f"Claim {claim_number} must include text."
+        )
+
+    source_ids = normalise_source_ids(
+        value.get("source_ids")
     )
 
-    evidence = clean_text(
-        value.get("evidence"),
-        max_length=500,
-    )
-
-    if page is None and not section and not evidence:
-        return None
+    if not source_ids:
+        raise DocumentQuestionValidationError(
+            f"Claim {claim_number} must cite at least one "
+            "retrieved source."
+        )
 
     return {
-        "page": page,
-        "section": section,
-        "evidence": evidence,
+        "text": text,
+        "source_ids": source_ids,
     }
 
 
-def normalise_answer_sources(
+def normalise_answer_claims(
     value: Any,
 ) -> list[dict[str, Any]]:
-    """Return valid, unique document references."""
+    """Validate the bounded list of grounded answer claims."""
 
     if not isinstance(value, list):
         return []
 
-    sources: list[dict[str, Any]] = []
-    seen: set[tuple[Any, ...]] = set()
+    claims: list[dict[str, Any]] = []
+    seen_text: set[str] = set()
 
-    for raw_source in value:
-        source = normalise_answer_source(
-            raw_source
+    for index, raw_claim in enumerate(
+        value[:MAX_CLAIMS],
+        start=1,
+    ):
+        claim = normalise_answer_claim(
+            raw_claim,
+            claim_number=index,
         )
 
-        if source is None:
+        identity = claim["text"].casefold()
+
+        if identity in seen_text:
             continue
 
-        identity = (
-            source["page"],
-            source["section"],
-            source["evidence"],
-        )
+        seen_text.add(identity)
+        claims.append(claim)
 
-        if identity in seen:
-            continue
-
-        seen.add(identity)
-        sources.append(source)
-
-        if len(sources) >= MAX_SOURCES:
-            break
-
-    return sources
+    return claims
 
 
 def normalise_document_answer(
     value: Any,
 ) -> dict[str, Any]:
-    """Validate a grounded answer returned by an AI provider."""
+    """Validate a claim-level grounded AI response."""
 
     if not isinstance(value, dict):
         raise DocumentQuestionValidationError(
             "The document answer must be a JSON object."
         )
+
+    found_in_document = clean_boolean(
+        value.get("found_in_document")
+    )
+
+    if found_in_document:
+        claims = normalise_answer_claims(
+            value.get("claims")
+        )
+
+        if not claims:
+            raise DocumentQuestionValidationError(
+                "An answer found in the document must include "
+                "at least one supported claim."
+            )
+
+        return {
+            "answer": "",
+            "found_in_document": True,
+            "claims": claims,
+        }
 
     answer = clean_text(
         value.get("answer"),
@@ -201,28 +195,11 @@ def normalise_document_answer(
 
     if not answer:
         raise DocumentQuestionValidationError(
-            "The document answer must include answer text."
+            "A not-found response must include answer text."
         )
-
-    found_in_document = clean_boolean(
-        value.get("found_in_document")
-    )
-
-    source_ids = normalise_source_ids(
-        value.get("source_ids")
-    )
-
-    if found_in_document and not source_ids:
-        raise DocumentQuestionValidationError(
-            "An answer found in the document must cite "
-            "at least one retrieved source."
-        )
-
-    if not found_in_document:
-        source_ids = []
 
     return {
         "answer": answer,
-        "found_in_document": found_in_document,
-        "source_ids": source_ids,
+        "found_in_document": False,
+        "claims": [],
     }

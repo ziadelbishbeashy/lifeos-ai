@@ -17,9 +17,11 @@
 
     {% if source %}
 
+        {% set source_id = source.get("source_id") %}
         {% set page = source.get("page") %}
         {% set section = source.get("section") %}
         {% set evidence = source.get("evidence") %}
+        {% set preview_type = source.get("preview_type") %}
 
         {% if page or section or evidence %}
 
@@ -27,22 +29,51 @@
 
                 <div class="brain-source-heading">
 
-                    {% if page %}
-                        Page {{ page }}
-                    {% endif %}
+                    <div class="brain-source-location">
 
-                    {% if page and section %}
-                        ·
-                    {% endif %}
+                        {% if source_id %}
 
-                    {% if section %}
-                        {{ section }}
+                            <span class="brain-source-id">
+                                Source {{ source_id }}
+                            </span>
+
+                        {% endif %}
+
+                        {% if page %}
+
+                            <span>
+                                Page {{ page }}
+                            </span>
+
+                        {% endif %}
+
+                        {% if section %}
+
+                            <span class="brain-source-section">
+                                {{ section }}
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    {% if preview_type == "focused" %}
+
+                        <span class="brain-source-preview-label">
+                            Focused excerpt
+                        </span>
+
                     {% endif %}
 
                 </div>
 
                 {% if evidence %}
-                    <p>{{ evidence }}</p>
+
+                    <blockquote class="brain-source-evidence">
+                        {{ evidence }}
+                    </blockquote>
+
                 {% endif %}
 
             </div>

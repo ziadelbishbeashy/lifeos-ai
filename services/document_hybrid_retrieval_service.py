@@ -35,6 +35,11 @@ MAX_QUERY_CHARACTERS = 2_000
 DEFAULT_KEYWORD_WEIGHT = 0.5
 DEFAULT_SEMANTIC_WEIGHT = 0.5
 RRF_CONSTANT = 60.0
+MIN_STRONG_SEMANTIC_SCORE = 0.58
+
+MIN_SUPPORTED_SEMANTIC_SCORE = 0.45
+
+MIN_KEYWORD_MATCHED_TERMS = 2
 
 PAGE_MARKER_PATTERN = re.compile(
     r"^--- Page\s+\d+\s+---\s*",
@@ -165,6 +170,187 @@ class DocumentHybridRetrievalResult:
 
     semantic_error: str | None
 
+@dataclass(frozen=True)
+class RetrievalRelevanceAssessment:
+    """Decision about whether retrieved evidence is strong enough."""
+
+    is_relevant: bool
+    reason: str
+
+    strongest_semantic_score: float | None
+    strongest_keyword_score: float | None
+
+    maximum_matched_terms: int
+    has_keyword_evidence: bool
+
+    retrieved_chunk_count: int
+
+def assess_hybrid_retrieval_relevance(
+    retrieval_result: DocumentHybridRetrievalResult,
+) -> RetrievalRelevanceAssessment:
+    """
+    Decide whether hybrid retrieval found useful evidence.
+
+    The fused RRF score is intentionally not used because it
+    measures ranking position rather than absolute relevance.
+    """
+
+    chunks = list(
+        retrieval_result.chunks or []
+    )
+
+    if not chunks:
+        return RetrievalRelevanceAssessment(
+            is_relevant=False,
+            reason="No document chunks were retrieved.",
+            strongest_semantic_score=None,
+            strongest_keyword_score=None,
+            maximum_matched_terms=0,
+            has_keyword_evidence=False,
+            retrieved_chunk_count=0,
+        )
+
+    semantic_scores = [
+        float(chunk.semantic_score)
+        for chunk in chunks
+        if chunk.semantic_score is not None
+    ]
+
+    keyword_scores = [
+        float(chunk.keyword_score)
+        for chunk in chunks
+        if chunk.keyword_score is not None
+    ]
+
+    strongest_semantic_score = (
+        max(semantic_scores)
+        if semantic_scores
+        else None
+    )
+
+    strongest_keyword_score = (
+        max(keyword_scores)
+        if keyword_scores
+        else None
+    )
+
+    maximum_matched_terms = max(
+        (
+            len(
+                tuple(
+                    chunk.matched_terms or ()
+                )
+            )
+            for chunk in chunks
+        ),
+        default=0,
+    )
+
+    has_keyword_evidence = any(
+        chunk.keyword_score is not None
+        and float(chunk.keyword_score) > 0
+        and bool(chunk.matched_terms)
+        for chunk in chunks
+    )
+
+    if (
+        strongest_semantic_score is not None
+        and strongest_semantic_score
+        >= MIN_STRONG_SEMANTIC_SCORE
+    ):
+        return RetrievalRelevanceAssessment(
+            is_relevant=True,
+            reason=(
+                "A retrieved chunk has a strong semantic "
+                "similarity score."
+            ),
+            strongest_semantic_score=(
+                strongest_semantic_score
+            ),
+            strongest_keyword_score=(
+                strongest_keyword_score
+            ),
+            maximum_matched_terms=(
+                maximum_matched_terms
+            ),
+            has_keyword_evidence=(
+                has_keyword_evidence
+            ),
+            retrieved_chunk_count=len(chunks),
+        )
+
+    if (
+        strongest_semantic_score is not None
+        and strongest_semantic_score
+        >= MIN_SUPPORTED_SEMANTIC_SCORE
+        and has_keyword_evidence
+    ):
+        return RetrievalRelevanceAssessment(
+            is_relevant=True,
+            reason=(
+                "Semantic similarity is supported by "
+                "keyword retrieval."
+            ),
+            strongest_semantic_score=(
+                strongest_semantic_score
+            ),
+            strongest_keyword_score=(
+                strongest_keyword_score
+            ),
+            maximum_matched_terms=(
+                maximum_matched_terms
+            ),
+            has_keyword_evidence=(
+                has_keyword_evidence
+            ),
+            retrieved_chunk_count=len(chunks),
+        )
+
+    if (
+        maximum_matched_terms
+        >= MIN_KEYWORD_MATCHED_TERMS
+    ):
+        return RetrievalRelevanceAssessment(
+            is_relevant=True,
+            reason=(
+                "A retrieved chunk matches multiple "
+                "question terms."
+            ),
+            strongest_semantic_score=(
+                strongest_semantic_score
+            ),
+            strongest_keyword_score=(
+                strongest_keyword_score
+            ),
+            maximum_matched_terms=(
+                maximum_matched_terms
+            ),
+            has_keyword_evidence=(
+                has_keyword_evidence
+            ),
+            retrieved_chunk_count=len(chunks),
+        )
+
+    return RetrievalRelevanceAssessment(
+        is_relevant=False,
+        reason=(
+            "The retrieved chunks did not meet the minimum "
+            "semantic or keyword relevance requirements."
+        ),
+        strongest_semantic_score=(
+            strongest_semantic_score
+        ),
+        strongest_keyword_score=(
+            strongest_keyword_score
+        ),
+        maximum_matched_terms=(
+            maximum_matched_terms
+        ),
+        has_keyword_evidence=(
+            has_keyword_evidence
+        ),
+        retrieved_chunk_count=len(chunks),
+    )
 
 @dataclass
 class _FusionCandidate:

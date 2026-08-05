@@ -8,7 +8,7 @@ from datetime import datetime
 import pytest
 
 from models import Document, DocumentChunk
-
+from types import SimpleNamespace
 import services.document_hybrid_retrieval_service as hybrid_service
 
 from services.document_hybrid_retrieval_service import (
@@ -17,6 +17,7 @@ from services.document_hybrid_retrieval_service import (
     build_hybrid_retrieval_context,
     fuse_retrieval_results,
     retrieve_owned_document_chunks_hybrid,
+    assess_hybrid_retrieval_relevance,
 )
 from services.document_retrieval_service import (
     DocumentRetrievalResult,
@@ -587,3 +588,132 @@ def test_semantic_failure_without_keyword_evidence_raises(
             user_id=1,
             query="Unmatched semantic question",
         )
+
+def make_relevance_chunk(
+    *,
+    semantic_score=None,
+    keyword_score=None,
+    matched_terms=(),
+):
+    """Create a lightweight retrieved chunk for relevance tests."""
+
+    return SimpleNamespace(
+        semantic_score=semantic_score,
+        keyword_score=keyword_score,
+        matched_terms=tuple(matched_terms),
+    )
+
+
+def make_relevance_result(
+    *chunks,
+):
+    """Create a lightweight hybrid result for relevance tests."""
+
+    return SimpleNamespace(
+        chunks=list(chunks),
+    )
+
+
+def test_empty_hybrid_result_is_not_relevant():
+    result = make_relevance_result()
+
+    assessment = assess_hybrid_retrieval_relevance(
+        result
+    )
+
+    assert assessment.is_relevant is False
+    assert assessment.strongest_semantic_score is None
+    assert assessment.maximum_matched_terms == 0
+
+
+def test_strong_semantic_match_is_relevant():
+    result = make_relevance_result(
+        make_relevance_chunk(
+            semantic_score=0.72,
+        )
+    )
+
+    assessment = assess_hybrid_retrieval_relevance(
+        result
+    )
+
+    assert assessment.is_relevant is True
+    assert assessment.strongest_semantic_score == 0.72
+
+
+def test_moderate_semantic_match_with_keyword_support_is_relevant():
+    result = make_relevance_result(
+        make_relevance_chunk(
+            semantic_score=0.49,
+            keyword_score=2.4,
+            matched_terms=(
+                "ownership",
+            ),
+        )
+    )
+
+    assessment = assess_hybrid_retrieval_relevance(
+        result
+    )
+
+    assert assessment.is_relevant is True
+    assert assessment.has_keyword_evidence is True
+
+
+def test_two_keyword_matches_are_relevant_without_semantic_search():
+    result = make_relevance_result(
+        make_relevance_chunk(
+            semantic_score=None,
+            keyword_score=3.1,
+            matched_terms=(
+                "session",
+                "security",
+            ),
+        )
+    )
+
+    assessment = assess_hybrid_retrieval_relevance(
+        result
+    )
+
+    assert assessment.is_relevant is True
+    assert assessment.maximum_matched_terms == 2
+
+
+def test_weak_semantic_match_with_one_keyword_is_not_relevant():
+    result = make_relevance_result(
+        make_relevance_chunk(
+            semantic_score=0.28,
+            keyword_score=0.4,
+            matched_terms=(
+                "system",
+            ),
+        )
+    )
+
+    assessment = assess_hybrid_retrieval_relevance(
+        result
+    )
+
+    assert assessment.is_relevant is False
+
+
+def test_unrelated_semantic_results_are_not_relevant():
+    result = make_relevance_result(
+        make_relevance_chunk(
+            semantic_score=0.31,
+        ),
+        make_relevance_chunk(
+            semantic_score=0.27,
+        ),
+        make_relevance_chunk(
+            semantic_score=0.21,
+        ),
+    )
+
+    assessment = assess_hybrid_retrieval_relevance(
+        result
+    )
+
+    assert assessment.is_relevant is False
+    assert assessment.strongest_semantic_score == 0.31

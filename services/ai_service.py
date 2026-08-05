@@ -280,20 +280,29 @@ def ask_document_question(
         raw_response
     )
 
+    claims = answer_data["claims"]
+
+    answer = (
+        _build_claim_level_answer(claims)
+        if answer_data["found_in_document"]
+        else answer_data["answer"]
+    )
+
     return {
         "success": True,
         "provider": config["provider"],
         "model": config["model"],
         "question": cleaned_question,
-        "answer": answer_data["answer"],
+        "answer": answer,
         "found_in_document": answer_data[
             "found_in_document"
         ],
-        "source_ids": answer_data["source_ids"],
+        "claims": claims,
         "input_characters": len(
             retrieved_context
         ),
     }
+
 
 def analyze_note(
     title: str,
@@ -832,7 +841,7 @@ def _build_document_question_prompt(
     retrieved_context: str,
     question: str,
 ) -> str:
-    """Build a grounded RAG question-answering prompt."""
+    """Build a claim-level grounded RAG prompt."""
 
     return f"""
 You are the Document Brain inside LifeOS.
@@ -840,33 +849,54 @@ You are the Document Brain inside LifeOS.
 Answer the user's question using only the retrieved document
 sources supplied below.
 
-Each source has an exact number:
+Each supplied source has an exact number:
 
 [Source 1 | Page 4 | Authentication Requirements]
 Supporting text
 
-STRICT RULES:
+STRICT GROUNDING RULES:
 1. Use only the supplied retrieved sources.
 2. Do not use outside knowledge.
-3. Do not invent facts, dates, decisions or requirements.
-4. Cite every source that directly supports the answer.
-5. Cite sources using only their Source numbers.
+3. Break the answer into independently verifiable claims.
+4. Every claim must cite the exact Source number or numbers that
+   directly support that claim.
+5. Never create a claim that is only implied by general topic
+   similarity.
 6. Never invent a source number.
 7. Do not cite a source merely because it is generally related.
-8. When multiple claims use different sources, include all
-   supporting source numbers.
-9. When the supplied sources do not answer the question, say so.
-10. When the answer is absent, set found_in_document to false.
-11. When found_in_document is false, return an empty source_ids list.
-12. Return valid JSON only.
-13. Do not use Markdown code fences.
+8. Keep each claim focused on one fact, rule, decision or conclusion.
+9. Do not write [Source N] inside claim text. LifeOS adds labels after
+   validating the source numbers.
+10. When the sources do not directly answer the question, set
+    found_in_document to false and return no claims.
+11. Return valid JSON only.
+12. Do not use Markdown code fences.
 
-RETURN EXACTLY THIS STRUCTURE:
+RETURN ONE OF THESE STRUCTURES.
+
+WHEN THE ANSWER IS SUPPORTED:
 
 {{
-  "answer": "Answer supported only by the retrieved sources",
   "found_in_document": true,
-  "source_ids": [1, 3]
+  "answer": "",
+  "claims": [
+    {{
+      "text": "One precise supported claim.",
+      "source_ids": [1]
+    }},
+    {{
+      "text": "A second independently supported claim.",
+      "source_ids": [2, 3]
+    }}
+  ]
+}}
+
+WHEN THE ANSWER IS NOT SUPPORTED:
+
+{{
+  "found_in_document": false,
+  "answer": "LifeOS could not find enough evidence in this document to answer the question.",
+  "claims": []
 }}
 
 DOCUMENT FILENAME:
@@ -878,6 +908,38 @@ USER QUESTION:
 RETRIEVED DOCUMENT SOURCES:
 {retrieved_context}
 """
+
+
+def _build_claim_level_answer(
+    claims: list[dict[str, Any]],
+) -> str:
+    """Build display text from validated claim-level citations."""
+
+    answer_parts: list[str] = []
+
+    for claim in claims:
+        text = str(
+            claim.get("text") or ""
+        ).strip()
+
+        source_ids = claim.get("source_ids") or []
+        source_labels = ", ".join(
+            f"Source {source_id}"
+            for source_id in source_ids
+        )
+
+        if text and source_labels:
+            answer_parts.append(
+                f"{text} [{source_labels}]"
+            )
+
+    if not answer_parts:
+        raise AIServiceError(
+            "The document answer did not contain supported claims."
+        )
+
+    return " ".join(answer_parts)
+
 
 def _build_note_question_prompt(
     title: str,

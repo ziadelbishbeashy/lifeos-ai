@@ -1,4 +1,4 @@
-"""Tests for AI-powered grounded document questions."""
+"""Tests for AI-powered claim-level document questions."""
 
 import json
 
@@ -25,7 +25,7 @@ def configure_fake_ai(monkeypatch):
     )
 
 
-def test_document_question_returns_validated_source_ids(
+def test_document_question_returns_validated_claims(
     monkeypatch,
 ):
     configure_fake_ai(monkeypatch)
@@ -37,12 +37,17 @@ def test_document_question_returns_validated_source_ids(
 
         return json.dumps(
             {
-                "answer": (
-                    "Users reset passwords through a secure "
-                    "email link."
-                ),
+                "answer": "",
                 "found_in_document": True,
-                "source_ids": [1, 3],
+                "claims": [
+                    {
+                        "text": (
+                            "Users reset passwords through a secure "
+                            "email link."
+                        ),
+                        "source_ids": [1, 3],
+                    }
+                ],
             }
         )
 
@@ -62,15 +67,24 @@ def test_document_question_returns_validated_source_ids(
     )
 
     assert result["found_in_document"] is True
-    assert result["source_ids"] == [1, 3]
+    assert result["claims"] == [
+        {
+            "text": (
+                "Users reset passwords through a secure email link."
+            ),
+            "source_ids": [1, 3],
+        }
+    ]
+    assert "[Source 1, Source 3]" in result["answer"]
     assert result["provider"] == "gemini"
     assert result["model"] == "test-model"
 
-    assert "source_ids" in captured["prompt"]
+    assert '"claims"' in captured["prompt"]
+    assert "independently verifiable claims" in captured["prompt"]
     assert "[Source 1 | Page 2" in captured["prompt"]
 
 
-def test_not_found_answer_has_no_source_ids(
+def test_not_found_answer_has_no_claims(
     monkeypatch,
 ):
     configure_fake_ai(monkeypatch)
@@ -82,7 +96,12 @@ def test_not_found_answer_has_no_source_ids(
             {
                 "answer": "The information was not found.",
                 "found_in_document": False,
-                "source_ids": [1],
+                "claims": [
+                    {
+                        "text": "Ignored claim.",
+                        "source_ids": [1],
+                    }
+                ],
             }
         ),
     )
@@ -97,7 +116,8 @@ def test_not_found_answer_has_no_source_ids(
     )
 
     assert result["found_in_document"] is False
-    assert result["source_ids"] == []
+    assert result["claims"] == []
+    assert result["answer"] == "The information was not found."
 
 
 def test_document_without_filename_is_rejected():
@@ -187,7 +207,7 @@ def test_invalid_provider_json_is_rejected(
         )
 
 
-def test_found_answer_without_source_ids_is_rejected(
+def test_found_answer_without_claim_sources_is_rejected(
     monkeypatch,
 ):
     configure_fake_ai(monkeypatch)
@@ -197,19 +217,24 @@ def test_found_answer_without_source_ids_is_rejected(
         "_generate_text",
         lambda **kwargs: json.dumps(
             {
-                "answer": "A supported answer.",
+                "answer": "",
                 "found_in_document": True,
-                "source_ids": [],
+                "claims": [
+                    {
+                        "text": "A supposedly supported claim.",
+                        "source_ids": [],
+                    }
+                ],
             }
         ),
     )
 
     with pytest.raises(
         AIServiceError,
-        match="at least one retrieved source",
+        match="must cite at least one retrieved source",
     ):
         ask_document_question(
             filename="requirements.pdf",
             extracted_text="Retrieved context.",
             question="What is required?",
-        ) 
+        )
