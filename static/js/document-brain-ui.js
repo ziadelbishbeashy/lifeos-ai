@@ -1404,6 +1404,118 @@
         apply();
     }
 
+    function initDocumentTypeConfirmation() {
+        const panel = document.querySelector(
+            "[data-db-type-confirmation]"
+        );
+
+        const reviewButtons = Array.from(
+            document.querySelectorAll(
+                "[data-db-type-review]"
+            )
+        );
+
+        function revealPanel() {
+            if (!panel) {
+                return;
+            }
+
+            panel.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+
+            const select = panel.querySelector(
+                "[data-db-type-select]"
+            );
+
+            if (select) {
+                window.setTimeout(
+                    function () {
+                        select.focus({
+                            preventScroll: true
+                        });
+                    },
+                    350
+                );
+            }
+        }
+
+        reviewButtons.forEach(function (button) {
+            button.addEventListener(
+                "click",
+                revealPanel
+            );
+        });
+
+        if (!panel) {
+            return;
+        }
+
+        const select = panel.querySelector(
+            "[data-db-type-select]"
+        );
+
+        const note = panel.querySelector(
+            "[data-db-type-choice-note]"
+        );
+
+        const detectedType = (
+            panel.dataset.dbDetectedType
+            || ""
+        );
+
+        if (!select || !note) {
+            return;
+        }
+
+        function updateChoiceMessage() {
+            const option = select.options[
+                select.selectedIndex
+            ];
+
+            if (!option) {
+                return;
+            }
+
+            const selectedLabel = (
+                option.textContent
+                || ""
+            ).trim();
+
+            if (select.value === detectedType) {
+                note.textContent = (
+                    "You are confirming LifeOS's detected type: "
+                    + selectedLabel
+                    + "."
+                );
+
+                panel.classList.remove(
+                    "has-user-override"
+                );
+
+                return;
+            }
+
+            note.textContent = (
+                "You changed the analysis type to "
+                + selectedLabel
+                + ". LifeOS will use your choice for the next analysis."
+            );
+
+            panel.classList.add(
+                "has-user-override"
+            );
+        }
+
+        select.addEventListener(
+            "change",
+            updateChoiceMessage
+        );
+
+        updateChoiceMessage();
+    }
+
     function initInlineLoading() {
         document
             .querySelectorAll(
@@ -1453,6 +1565,7 @@
         initInsightSearch();
         initActionFilters();
         initQuestionHistory();
+        initDocumentTypeConfirmation();
         initInlineLoading();
     });
 })();

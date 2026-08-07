@@ -393,3 +393,102 @@ def test_helper_cleaners():
     )
     assert clean_iso_date("15/08/2026") is None
     assert clean_iso_date(None) is None
+
+def test_mixed_legacy_formats_are_normalised():
+    result = normalise_document_analysis(
+        {
+            "overview": {
+                "text": "A legacy analysis summary."
+            },
+            "type": "Project Plan",
+            "main_points": "The project is delivered in phases.",
+            "requirements": {
+                "title": "Protect user data",
+                "description": "Apply ownership filtering.",
+                "page": "4",
+                "quote": "Every query checks the current user.",
+            },
+            "commitments": [
+                "Use one shared context service."
+            ],
+            "deadlines": {
+                "due_date": "2026-08-30",
+                "title": "Finish the first release.",
+            },
+            "actions": "Run the complete test suite.",
+            "questions_to_explore": [
+                {
+                    "prompt": "Which modules share context?",
+                    "purpose": "Understand integration boundaries.",
+                },
+                "What remains before release?",
+            ],
+        }
+    )
+
+    assert result["summary"] == "A legacy analysis summary."
+    assert result["document_type"] == "Project Plan"
+    assert result["key_points"][0]["title"] == (
+        "The project is delivered in phases."
+    )
+    assert result["requirements"][0]["requirement"] == (
+        "Protect user data"
+    )
+    assert result["requirements"][0]["source"]["page"] == 4
+    assert result["decisions"][0]["decision"] == (
+        "Use one shared context service."
+    )
+    assert result["deadlines"][0]["date"] == "2026-08-30"
+    assert result["action_items"][0]["title"] == (
+        "Run the complete test suite."
+    )
+    assert len(result["questions"]) == 2
+    assert result["questions"][0]["reason"] == (
+        "Understand integration boundaries."
+    )
+
+
+def test_questions_are_limited_and_invalid_entries_are_ignored():
+    result = normalise_document_analysis(
+        {
+            "summary": "Document summary.",
+            "questions": [
+                None,
+                {},
+                "",
+                *[
+                    f"Question {index}?"
+                    for index in range(20)
+                ],
+            ],
+        }
+    )
+
+    assert len(result["questions"]) == 8
+    assert result["questions"][0]["question"] == "Question 0?"
+
+
+
+def test_top_level_scalar_sections_are_supported():
+    result = normalise_document_analysis(
+        {
+            "summary": "Document summary.",
+            "key_points": "One important point.",
+            "requirements": "One clear requirement.",
+            "risks": "One documented risk.",
+            "action_items": "Complete one action.",
+        }
+    )
+
+    assert result["key_points"][0]["title"] == (
+        "One important point."
+    )
+    assert result["requirements"][0]["requirement"] == (
+        "One clear requirement."
+    )
+    assert result["risks"][0]["risk"] == (
+        "One documented risk."
+    )
+    assert result["action_items"][0]["title"] == (
+        "Complete one action."
+    )

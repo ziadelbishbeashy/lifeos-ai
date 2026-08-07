@@ -45,6 +45,25 @@ from services.document_task_action_service import (
     require_owned_document_suggestion,
 )
 
+from services.document_overview_service import (
+    build_structured_document_overview,
+)
+from services.document_type_detection_service import (
+    ALLOWED_DETECTION_CONFIDENCE,
+)
+from services.document_type_detection_workflow_service import (
+    DocumentTypeDetectionNotFoundError,
+    DocumentTypeDetectionNotReadyError,
+    DocumentTypeDetectionWorkflowError,
+    detect_owned_document_type,
+)
+from services.document_type_profile_service import (
+    document_type_choices,
+    resolve_document_type_key,
+)
+from services.document_type_workspace_service import (
+    build_document_type_workspace,
+)
 from services.document_question_workflow_service import (
     DocumentQuestionNotFoundError,
     DocumentQuestionNotReadyError,
@@ -205,7 +224,80 @@ def documents():
 def document_details(document_id):
     """Display one document and its latest AI analysis."""
 
-    document = (
+    document = _find_owned_document_for_details(
+        document_id
+    )
+
+    if document is None:
+        abort(404)
+
+    return _render_document_details(
+        document=document,
+    )
+
+
+@document_bp.post("/<int:document_id>/detect-type")
+@login_required
+def detect_document_type_route(document_id):
+    """
+    Detect a document type and show it for user confirmation.
+
+    The detector does not run the full analysis. The returned page lets
+    the user confirm LifeOS's suggestion or select a different type.
+    """
+
+    try:
+        result = detect_owned_document_type(
+            document_id=document_id,
+            user_id=current_user.id,
+        )
+
+    except DocumentTypeDetectionNotFoundError:
+        abort(404)
+
+    except DocumentTypeDetectionNotReadyError as error:
+        flash(
+            str(error),
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
+
+    except DocumentTypeDetectionWorkflowError as error:
+        current_app.logger.exception(
+            "Document type detection failed for document %s.",
+            document_id,
+        )
+
+        flash(
+            str(error),
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
+
+    return _render_document_details(
+        document=result.document,
+        type_detection=result.detection,
+    )
+
+
+def _find_owned_document_for_details(
+    document_id: int,
+) -> Document | None:
+    """Return the document only when the current user owns its project."""
+
+    return (
         Document.query
         .join(
             Project,
@@ -218,8 +310,13 @@ def document_details(document_id):
         .first()
     )
 
-    if document is None:
-        abort(404)
+
+def _render_document_details(
+    *,
+    document: Document,
+    type_detection=None,
+):
+    """Build all data required by the Document Brain details page."""
 
     latest_analysis = (
         DocumentAIAnalysis.query
@@ -234,6 +331,7 @@ def document_details(document_id):
         )
         .first()
     )
+
     suggestions = []
 
     if latest_analysis is not None:
@@ -250,6 +348,15 @@ def document_details(document_id):
             )
             .all()
         )
+
+    overview = build_structured_document_overview(
+        latest_analysis
+    )
+
+    type_workspace = build_document_type_workspace(
+        latest_analysis
+    )
+
     question_history = list_owned_document_questions(
         document_id=document.id,
         user_id=current_user.id,
@@ -273,24 +380,122 @@ def document_details(document_id):
         "document_details.html",
         document=document,
         analysis=latest_analysis,
+        overview=overview,
         suggestions=suggestions,
         latest_attempt=latest_attempt,
         question_history=question_history,
+        type_detection=type_detection,
+        document_type_choices=document_type_choices(),
+        type_workspace=type_workspace,
     )
 
 
 @document_bp.post("/<int:document_id>/analyse")
 @login_required
 def analyse_document_route(document_id):
-    """Run AI analysis for an owned document."""
+    """Run full analysis only after document-type confirmation."""
 
-    force = request.form.get("force") == "1"
+    force = request.form.get(
+        "force"
+    ) == "1"
+
+    confirmed_document_type = request.form.get(
+        "confirmed_document_type",
+        "",
+    ).strip()
+
+    detected_document_type = request.form.get(
+        "detected_document_type",
+        "",
+    ).strip()
+
+    detection_confidence = request.form.get(
+        "detection_confidence",
+        "",
+    ).strip().casefold()
+
+    if not (
+        confirmed_document_type
+        and detected_document_type
+    ):
+        flash(
+            "Detect the document type and confirm it before analysis.",
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
+
+    resolved_confirmed_type = resolve_document_type_key(
+        confirmed_document_type
+    )
+
+    if resolved_confirmed_type is None:
+        flash(
+            "Please choose a supported document type.",
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
+
+    resolved_detected_type = resolve_document_type_key(
+        detected_document_type
+    )
+
+    if resolved_detected_type is None:
+        flash(
+            "The detected document type is no longer valid. "
+            "Please detect the type again.",
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
+
+    if (
+        detection_confidence
+        not in ALLOWED_DETECTION_CONFIDENCE
+    ):
+        flash(
+            "The document-type detection result expired or is invalid. "
+            "Please detect the type again.",
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
 
     try:
         result = analyse_owned_document(
             document_id=document_id,
             user_id=current_user.id,
             force=force,
+            confirmed_document_type=(
+                resolved_confirmed_type
+            ),
+            detected_document_type=(
+                resolved_detected_type
+            ),
+            detection_confidence=(
+                detection_confidence
+            ),
         )
 
     except DocumentNotFoundError:
@@ -316,12 +521,13 @@ def analyse_document_route(document_id):
     else:
         if result.reused_existing:
             flash(
-                "The current document analysis is already up to date.",
+                "The current analysis for this document type "
+                "is already up to date.",
                 "info",
             )
         else:
             flash(
-                "Document analysis completed successfully.",
+                "Type-aware document analysis completed successfully.",
                 "success",
             )
 

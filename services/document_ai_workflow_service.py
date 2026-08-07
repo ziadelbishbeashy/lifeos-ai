@@ -20,10 +20,21 @@ from services.ai_service import (
     get_ai_configuration,
 )
 
+from services.document_analysis_service import (
+    DOCUMENT_ANALYSIS_SCHEMA_VERSION,
+)
+from services.document_type_detection_service import (
+    ALLOWED_DETECTION_CONFIDENCE,
+)
+from services.document_type_profile_service import (
+    get_document_type_label,
+    resolve_document_type_key,
+)
 from services.document_task_suggestion_service import (
     DocumentSuggestionBuildError,
     build_document_task_suggestions,
 )
+
 
 class DocumentAnalysisWorkflowError(RuntimeError):
     """Raised when document analysis cannot be completed."""
@@ -51,8 +62,11 @@ def analyse_owned_document(
     document_id: int,
     user_id: int,
     force: bool = False,
+    confirmed_document_type: str | None = None,
+    detected_document_type: str | None = None,
+    detection_confidence: str | None = None,
 ) -> SavedDocumentAnalysis:
-    """Analyse an owned document and save its structured insights."""
+    """Analyse an owned document using its user-confirmed type."""
 
     document = _find_owned_document(
         document_id=document_id,
@@ -74,8 +88,52 @@ def analyse_owned_document(
             "It may require OCR before analysis."
         )
 
+    confirmed_type_key: str | None = None
+
+    if confirmed_document_type not in (
+        None,
+        "",
+    ):
+        confirmed_type_key = resolve_document_type_key(
+            confirmed_document_type
+        )
+
+        if confirmed_type_key is None:
+            raise DocumentAnalysisWorkflowError(
+                "The confirmed document type is unsupported."
+            )
+
+    detected_type_key: str | None = None
+
+    if detected_document_type not in (
+        None,
+        "",
+    ):
+        detected_type_key = resolve_document_type_key(
+            detected_document_type
+        )
+
+        if detected_type_key is None:
+            raise DocumentAnalysisWorkflowError(
+                "The detected document type is unsupported."
+            )
+
+    cleaned_confidence = str(
+        detection_confidence or ""
+    ).strip().casefold()
+
+    if (
+        cleaned_confidence
+        and cleaned_confidence
+        not in ALLOWED_DETECTION_CONFIDENCE
+    ):
+        raise DocumentAnalysisWorkflowError(
+            "The document-type confidence value is invalid."
+        )
+
     fingerprint = _create_source_fingerprint(
-        extracted_text
+        extracted_text,
+        confirmed_document_type=confirmed_type_key,
     )
 
     if not force:
@@ -96,6 +154,7 @@ def analyse_owned_document(
         result = analyze_document(
             filename=document.filename,
             extracted_text=extracted_text,
+            confirmed_document_type=confirmed_type_key,
         )
 
     except AIServiceError as error:
@@ -104,13 +163,46 @@ def analyse_owned_document(
             user_id=user_id,
             fingerprint=fingerprint,
             error=error,
+            confirmed_document_type=confirmed_type_key,
         )
 
         raise DocumentAnalysisWorkflowError(
             str(error)
         ) from error
 
-    analysis_data = result["analysis"]
+    analysis_data = dict(
+        result["analysis"]
+    )
+
+    if confirmed_type_key is not None:
+        if detected_type_key is None:
+            type_source = "user_confirmed"
+        elif detected_type_key == confirmed_type_key:
+            type_source = "detected_confirmed"
+        else:
+            type_source = "user_override"
+
+        analysis_data[
+            "type_metadata"
+        ] = {
+            "detected_type_key": detected_type_key,
+            "detected_type": (
+                get_document_type_label(
+                    detected_type_key
+                )
+                if detected_type_key
+                else None
+            ),
+            "confirmed_type_key": confirmed_type_key,
+            "confirmed_type": get_document_type_label(
+                confirmed_type_key
+            ),
+            "source": type_source,
+            "confidence": (
+                cleaned_confidence
+                or None
+            ),
+        }
 
     analysis = DocumentAIAnalysis(
         document_id=document.id,
@@ -150,12 +242,22 @@ def analyse_owned_document(
             user_id=user_id,
         )
 
-        
         db.session.add_all(suggestions)
         db.session.commit()
-        
 
-    except (SQLAlchemyError, DocumentSuggestionBuildError) as error:
+    except (
+        SQLAlchemyError,
+        DocumentSuggestionBuildError,
+    ) as error:
+        db.session.rollback()
+
+        _save_failed_analysis(
+            document=document,
+            user_id=user_id,
+            fingerprint=fingerprint,
+            error=error,
+            confirmed_document_type=confirmed_type_key,
+        )
 
         raise DocumentAnalysisWorkflowError(
             "LifeOS generated the document analysis, "
@@ -216,11 +318,26 @@ def _find_reusable_analysis(
 
 def _create_source_fingerprint(
     extracted_text: str,
+    *,
+    confirmed_document_type: str | None = None,
 ) -> str:
-    """Create a stable SHA-256 fingerprint for document text."""
+    """Fingerprint document text, analysis schema, and confirmed type."""
+
+    type_identity = (
+        confirmed_document_type
+        or "legacy_unconfirmed"
+    )
+
+    fingerprint_input = (
+        f"{DOCUMENT_ANALYSIS_SCHEMA_VERSION}\n"
+        f"{type_identity}\n"
+        f"{extracted_text}"
+    )
 
     return hashlib.sha256(
-        extracted_text.encode("utf-8")
+        fingerprint_input.encode(
+            "utf-8"
+        )
     ).hexdigest()
 
 
@@ -230,6 +347,7 @@ def _save_failed_analysis(
     user_id: int,
     fingerprint: str,
     error: Exception,
+    confirmed_document_type: str | None = None,
 ) -> None:
     """Record an unsuccessful AI analysis attempt."""
 
@@ -241,7 +359,13 @@ def _save_failed_analysis(
         provider=provider,
         model=model,
         status="Failed",
-        document_type=None,
+        document_type=(
+            get_document_type_label(
+                confirmed_document_type
+            )
+            if confirmed_document_type
+            else None
+        ),
         summary=None,
         insights_json=None,
         source_fingerprint=fingerprint,

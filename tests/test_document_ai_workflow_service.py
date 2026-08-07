@@ -331,3 +331,90 @@ def test_ai_failure_is_recorded(
             "provider is unavailable"
             in failed_analysis.error_message
         )
+
+
+def test_analysis_fingerprint_includes_schema_version():
+    first = workflow._create_source_fingerprint(
+        "Stable document text."
+    )
+
+    second = workflow._create_source_fingerprint(
+        "Stable document text."
+    )
+
+    plain_text_hash = __import__("hashlib").sha256(
+        b"Stable document text."
+    ).hexdigest()
+
+    assert first == second
+    assert first != plain_text_hash
+
+
+def test_suggestion_save_failure_rolls_back_and_is_recorded(
+    app,
+    user,
+    monkeypatch,
+):
+    with app.app_context():
+        document = create_document(
+            user_id=user,
+            extracted_text="Readable content.",
+        )
+
+        monkeypatch.setattr(
+            workflow,
+            "analyze_document",
+            lambda **kwargs: fake_ai_result(),
+        )
+
+        monkeypatch.setattr(
+            workflow,
+            "build_document_task_suggestions",
+            lambda **kwargs: (_ for _ in ()).throw(
+                workflow.DocumentSuggestionBuildError(
+                    "Suggestion building failed."
+                )
+            ),
+        )
+
+        monkeypatch.setattr(
+            workflow,
+            "get_ai_configuration",
+            lambda: {
+                "provider": "gemini",
+                "model": "test-model",
+            },
+        )
+
+        with pytest.raises(
+            DocumentAnalysisWorkflowError,
+            match="could not save",
+        ):
+            analyse_owned_document(
+                document_id=document.id,
+                user_id=user,
+            )
+
+        completed_count = (
+            DocumentAIAnalysis.query
+            .filter_by(
+                document_id=document.id,
+                status="Completed",
+            )
+            .count()
+        )
+
+        failed_analysis = (
+            DocumentAIAnalysis.query
+            .filter_by(
+                document_id=document.id,
+                status="Failed",
+            )
+            .first()
+        )
+
+        assert completed_count == 0
+        assert failed_analysis is not None
+        assert "Suggestion building failed" in (
+            failed_analysis.error_message
+        )

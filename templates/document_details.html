@@ -110,9 +110,16 @@
 
 {% block content %}
 
-{% set insights = analysis.insights if analysis else {} %}
+{% set overview = overview | default({}, true) %}
+{% set insights = overview.get("analysis", analysis.insights if analysis else {}) %}
+{% set section_counts = overview.get("section_counts", {}) %}
 {% set suggestions = suggestions | default([], true) %}
 {% set question_history = question_history | default([], true) %}
+{% set type_detection = type_detection | default(none) %}
+{% set document_type_choices = document_type_choices | default([], true) %}
+{% set type_workspace = type_workspace | default({}, true) %}
+{% set type_sections = type_workspace.get("sections", []) %}
+{% set populated_type_sections = type_workspace.get("populated_sections", []) %}
 
 {% set action_stats = namespace(
     pending=0,
@@ -280,51 +287,50 @@
 
             {% if document.extracted_text %}
 
-                <form
-                    method="POST"
-                    action="{{ url_for(
-                        'document_bp.analyse_document_route',
-                        document_id=document.id
-                    ) }}"
-                    data-loading-title="Analysing document"
-                    data-loading-message="LifeOS is reading the document, extracting insights and preparing actions..."
-                    data-db-inline-loading
-                    {% if analysis %}
-                        data-confirm
-                        data-confirm-title="Analyse again"
-                        data-confirm-message="Analyse this document again? A new analysis and a new set of suggestions will be created."
-                        data-confirm-text="Analyse"
-                        data-confirm-variant="warning"
-                    {% endif %}
-                >
-
-                    <input
-                        type="hidden"
-                        name="csrf_token"
-                        value="{{ csrf_token() }}"
-                    >
-
-                    {% if analysis %}
-                        <input
-                            type="hidden"
-                            name="force"
-                            value="1"
-                        >
-                    {% endif %}
+                {% if type_detection %}
 
                     <button
-                        type="submit"
+                        type="button"
                         class="workspace-primary-button"
-                        data-db-submit-label
+                        data-db-type-review
                     >
-                        {% if analysis %}
-                            Analyse again
-                        {% else %}
-                            Analyse document
-                        {% endif %}
+                        Review detected type
                     </button>
 
-                </form>
+                {% else %}
+
+                    <form
+                        method="POST"
+                        action="{{ url_for(
+                            'document_bp.detect_document_type_route',
+                            document_id=document.id
+                        ) }}"
+                        data-loading-title="Detecting document type"
+                        data-loading-message="LifeOS is identifying the document purpose before analysis..."
+                        data-db-inline-loading
+                    >
+
+                        <input
+                            type="hidden"
+                            name="csrf_token"
+                            value="{{ csrf_token() }}"
+                        >
+
+                        <button
+                            type="submit"
+                            class="workspace-primary-button"
+                            data-db-submit-label
+                        >
+                            {% if analysis %}
+                                Detect type again
+                            {% else %}
+                                Detect document type
+                            {% endif %}
+                        </button>
+
+                    </form>
+
+                {% endif %}
 
             {% else %}
 
@@ -341,6 +347,195 @@
         </div>
 
     </header>
+
+
+    {% if type_detection %}
+
+        <section
+            id="document-type-confirmation"
+            class="db-type-confirmation"
+            data-db-type-confirmation
+            data-db-detected-type="{{ type_detection.document_type_key }}"
+        >
+
+            <div class="db-type-confirmation-copy">
+
+                <span class="db-kicker">
+                    Step 1 of 2 · Confirm analysis type
+                </span>
+
+                <div class="db-type-detected-heading">
+
+                    <div>
+                        <h2>
+                            LifeOS detected
+                            {{ type_detection.document_type_label }}
+                        </h2>
+
+                        <p>
+                            Confirm this type or choose a better match before
+                            the full document analysis starts.
+                        </p>
+                    </div>
+
+                    <span
+                        class="
+                            db-type-confidence
+                            db-type-confidence-{{ type_detection.confidence }}
+                        "
+                    >
+                        {{ type_detection.confidence | title }}
+                        confidence
+                    </span>
+
+                </div>
+
+                {% if type_detection.reason %}
+
+                    <div class="db-type-reason">
+
+                        <span>Why this type?</span>
+
+                        <p>
+                            {{ type_detection.reason }}
+                        </p>
+
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="db-type-confirmation-form">
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'document_bp.analyse_document_route',
+                        document_id=document.id
+                    ) }}"
+                    data-db-confirm-type-form
+                    data-loading-title="Analysing document"
+                    data-loading-message="LifeOS is analysing the PDF using the confirmed document type..."
+                    data-db-inline-loading
+                    {% if analysis %}
+                        data-confirm
+                        data-confirm-title="Analyse again"
+                        data-confirm-message="Run a new analysis using the confirmed document type? A new analysis and suggestion set will be created."
+                        data-confirm-text="Analyse"
+                        data-confirm-variant="warning"
+                    {% endif %}
+                >
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="detected_document_type"
+                        value="{{ type_detection.document_type_key }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="detection_confidence"
+                        value="{{ type_detection.confidence }}"
+                    >
+
+                    {% if analysis %}
+
+                        <input
+                            type="hidden"
+                            name="force"
+                            value="1"
+                        >
+
+                    {% endif %}
+
+                    <label
+                        for="confirmed-document-type"
+                        class="db-type-select-label"
+                    >
+                        Analysis type
+                    </label>
+
+                    <select
+                        id="confirmed-document-type"
+                        name="confirmed_document_type"
+                        class="db-type-select"
+                        data-db-type-select
+                        required
+                    >
+
+                        {% for type_key, type_label in document_type_choices %}
+
+                            <option
+                                value="{{ type_key }}"
+                                {% if type_key == type_detection.document_type_key %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ type_label }}
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                    <p
+                        class="db-type-choice-note"
+                        data-db-type-choice-note
+                    >
+                        LifeOS detected
+                        {{ type_detection.document_type_label }}.
+                        Keep it selected to confirm the suggestion, or choose
+                        another type to override it.
+                    </p>
+
+                    <button
+                        type="submit"
+                        class="workspace-primary-button"
+                        data-db-submit-label
+                    >
+                        Confirm and analyse
+                    </button>
+
+                </form>
+
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'document_bp.detect_document_type_route',
+                        document_id=document.id
+                    ) }}"
+                    data-db-inline-loading
+                >
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
+
+                    <button
+                        type="submit"
+                        class="workspace-secondary-button"
+                    >
+                        Detect again
+                    </button>
+
+                </form>
+
+            </div>
+
+        </section>
+
+    {% endif %}
 
 
     <section
@@ -536,6 +731,17 @@
                             (
                                 insights.get("deadlines", []) | length
                             )
+                            +
+                            (
+                                insights.get(
+                                    "missing_information",
+                                    []
+                                ) | length
+                            )
+                            +
+                            (
+                                insights.get("questions", []) | length
+                            )
                         }}
                     </b>
                 {% endif %}
@@ -632,6 +838,183 @@
                         {% endif %}
 
                     </article>
+
+
+                    <section
+                        class="db-overview-status"
+                        aria-label="Structured overview status"
+                    >
+
+                        <div>
+                            <span>Structured sections</span>
+                            <strong>
+                                {{ overview.get("populated_section_count", 0) }}
+                                /
+                                {{ overview.get("total_section_count", 8) }}
+                            </strong>
+                            <small>
+                                Sections containing supported findings
+                            </small>
+                        </div>
+
+                        <div>
+                            <span>Total findings</span>
+                            <strong>
+                                {{ overview.get("total_items", 0) }}
+                            </strong>
+                            <small>
+                                Across key points, requirements and more
+                            </small>
+                        </div>
+
+                        <div>
+                            <span>Needs attention</span>
+                            <strong>
+                                {{ overview.get("attention_items", 0) }}
+                            </strong>
+                            <small>
+                                Risks, deadlines and unclear information
+                            </small>
+                        </div>
+
+                        <div>
+                            <span>Analysis mode</span>
+                            <strong>
+                                {% if type_workspace.get("active") %}
+                                    Type-aware
+                                {% else %}
+                                    Structured
+                                {% endif %}
+                            </strong>
+                            <small>
+                                {% if type_workspace.get("active") %}
+                                    Specialized for
+                                    {{ type_workspace.get("type_label") }}
+                                {% else %}
+                                    Structured document overview
+                                {% endif %}
+                            </small>
+                        </div>
+
+                    </section>
+
+
+                    {% if type_workspace.get("active") %}
+
+                        <section class="db-type-aware-overview">
+
+                            <div class="db-type-aware-heading">
+
+                                <div>
+                                    <span class="db-kicker">
+                                        Type-aware analysis
+                                    </span>
+
+                                    <h2>
+                                        {{ type_workspace.get("type_label") }} workspace
+                                    </h2>
+
+                                    <p>
+                                        {{ type_workspace.get("description") }}
+                                    </p>
+                                </div>
+
+                                <div class="db-type-aware-status">
+                                    <span>
+                                        {{ type_workspace.get("metadata", {}).get("status_label") }}
+                                    </span>
+
+                                    {% if type_workspace.get("metadata", {}).get("confidence") %}
+                                        <small>
+                                            {{ type_workspace.get("metadata", {}).get("confidence") | title }}
+                                            detection confidence
+                                        </small>
+                                    {% endif %}
+                                </div>
+
+                            </div>
+
+                            {% if type_workspace.get("metadata", {}).get("source") == "user_override" %}
+
+                                <div class="db-type-override-note">
+                                    <strong>User override applied.</strong>
+                                    LifeOS originally detected
+                                    {{ type_workspace.get("metadata", {}).get("detected_type") or "another type" }},
+                                    then analysed the PDF as
+                                    {{ type_workspace.get("type_label") }}.
+                                </div>
+
+                            {% endif %}
+
+                            <div class="db-type-section-summary">
+
+                                {% for section in type_sections %}
+
+                                    <button
+                                        type="button"
+                                        class="{% if section.get('populated') %}has-content{% endif %}"
+                                        data-db-tab-jump="insights"
+                                        data-db-scroll-target="type-{{ section.get('key') | replace('_', '-') }}"
+                                        {% if not section.get('populated') %}disabled{% endif %}
+                                    >
+                                        <strong>
+                                            {{ section.get("count", 0) }}
+                                        </strong>
+
+                                        <span>
+                                            {{ section.get("label") }}
+                                        </span>
+                                    </button>
+
+                                {% endfor %}
+
+                            </div>
+
+                            {% if populated_type_sections %}
+
+                                <div class="db-type-spotlight-grid">
+
+                                    {% for section in type_workspace.get("spotlight_sections", []) %}
+
+                                        <article>
+                                            <span>
+                                                {{ section.get("label") }}
+                                            </span>
+
+                                            <p>
+                                                {{ section.get("preview") }}
+                                            </p>
+
+                                            <button
+                                                type="button"
+                                                class="db-text-button"
+                                                data-db-tab-jump="insights"
+                                                data-db-scroll-target="type-{{ section.get('key') | replace('_', '-') }}"
+                                            >
+                                                Review section
+                                            </button>
+                                        </article>
+
+                                    {% endfor %}
+
+                                </div>
+
+                            {% else %}
+
+                                <div class="db-type-empty-note">
+                                    <strong>No type-specific findings were supported.</strong>
+                                    <span>
+                                        The common structured analysis is still available below.
+                                        LifeOS did not invent content just to fill
+                                        {{ type_workspace.get("type_label") }} sections.
+                                    </span>
+                                </div>
+
+                            {% endif %}
+
+                        </section>
+
+                    {% endif %}
 
 
                     <div class="db-analysis-counts">
@@ -828,6 +1211,63 @@
 
                         </article>
 
+
+                        <article class="db-overview-card">
+
+                            <div class="db-overview-card-heading">
+                                <span class="db-overview-icon">
+                                    Q
+                                </span>
+
+                                <div>
+                                    <h3>Questions to explore</h3>
+                                    <p>
+                                        Grounded questions that can help you
+                                        inspect the document in more detail.
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            {% if insights.get("questions") %}
+
+                                <ul class="db-overview-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "questions",
+                                            []
+                                        )[:4]
+                                    %}
+
+                                        <li>
+                                            {{ item.get("question") }}
+                                        </li>
+
+                                    {% endfor %}
+
+                                </ul>
+
+                                <button
+                                    type="button"
+                                    class="db-text-button"
+                                    data-db-tab-jump="insights"
+                                    data-db-scroll-target="questions-to-explore"
+                                >
+                                    View exploration questions
+                                </button>
+
+                            {% else %}
+
+                                <p class="db-muted-copy">
+                                    No grounded exploration questions were
+                                    returned in the current analysis.
+                                </p>
+
+                            {% endif %}
+
+                        </article>
+
                     </div>
 
                 {% else %}
@@ -849,10 +1289,9 @@
 
                             <p>
                                 {% if document.extracted_text %}
-                                    Run analysis to create an executive
-                                    summary, extract requirements, identify
-                                    risks and turn action items into
-                                    reviewable project tasks.
+                                    First let LifeOS identify the document
+                                    type. You can confirm or change it before
+                                    the full structured analysis begins.
                                 {% else %}
                                     LifeOS stored the document safely, but
                                     could not extract readable embedded text.
@@ -862,30 +1301,45 @@
 
                             {% if document.extracted_text %}
 
-                                <form
-                                    method="POST"
-                                    action="{{ url_for(
-                                        'document_bp.analyse_document_route',
-                                        document_id=document.id
-                                    ) }}"
-                                    data-loading-title="Analysing document"
-                                    data-loading-message="LifeOS is understanding the PDF and preparing structured insights..."
-                                >
-
-                                    <input
-                                        type="hidden"
-                                        name="csrf_token"
-                                        value="{{ csrf_token() }}"
-                                    >
+                                {% if type_detection %}
 
                                     <button
-                                        type="submit"
+                                        type="button"
                                         class="workspace-primary-button"
+                                        data-db-type-review
                                     >
-                                        Analyse document
+                                        Review detected type
                                     </button>
 
-                                </form>
+                                {% else %}
+
+                                    <form
+                                        method="POST"
+                                        action="{{ url_for(
+                                            'document_bp.detect_document_type_route',
+                                            document_id=document.id
+                                        ) }}"
+                                        data-loading-title="Detecting document type"
+                                        data-loading-message="LifeOS is identifying the document purpose..."
+                                        data-db-inline-loading
+                                    >
+
+                                        <input
+                                            type="hidden"
+                                            name="csrf_token"
+                                            value="{{ csrf_token() }}"
+                                        >
+
+                                        <button
+                                            type="submit"
+                                            class="workspace-primary-button"
+                                        >
+                                            Detect document type
+                                        </button>
+
+                                    </form>
+
+                                {% endif %}
 
                             {% endif %}
                         </div>
@@ -948,6 +1402,107 @@
                         class="db-insight-groups"
                         data-db-insight-container
                     >
+
+                        {% if type_workspace.get("active") and populated_type_sections %}
+
+                            <div class="db-type-insights-banner">
+                                <div>
+                                    <span class="db-kicker">Adaptive workspace</span>
+                                    <h3>
+                                        {{ type_workspace.get("type_label") }} analysis
+                                    </h3>
+                                    <p>
+                                        These sections are specific to this document type.
+                                        Common LifeOS insights continue underneath.
+                                    </p>
+                                </div>
+
+                                <span>
+                                    {{ type_workspace.get("populated_section_count", 0) }}
+                                    of
+                                    {{ type_workspace.get("total_section_count", 0) }}
+                                    specialized sections populated
+                                </span>
+                            </div>
+
+                            {% for section in populated_type_sections %}
+
+                                <details
+                                    id="type-{{ section.get('key') | replace('_', '-') }}"
+                                    class="db-insight-group db-type-insight-group"
+                                    open
+                                    data-db-insight-group
+                                >
+
+                                    <summary>
+                                        <span>
+                                            <b>T</b>
+                                            <span>
+                                                <strong>
+                                                    {{ section.get("label") }}
+                                                </strong>
+                                                <small>
+                                                    {{ section.get("description") }}
+                                                </small>
+                                            </span>
+                                        </span>
+
+                                        <i>+</i>
+                                    </summary>
+
+                                    <div class="db-insight-list">
+
+                                        {% if section.get("value_kind") == "text" %}
+
+                                            {% set type_value = section.get("value") or {} %}
+
+                                            <div
+                                                data-db-insight-item
+                                                data-search="{{ (section.get('label', '') ~ ' ' ~ type_value.get('text', '')) | lower }}"
+                                            >
+                                                {{
+                                                    insight_item(
+                                                        section.get("label"),
+                                                        type_value.get("text"),
+                                                        type_value.get("source"),
+                                                        "type"
+                                                    )
+                                                }}
+                                            </div>
+
+                                        {% else %}
+
+                                            {% for item in section.get("items", []) %}
+
+                                                <div
+                                                    data-db-insight-item
+                                                    data-search="{{ ((section.get('label') or '') ~ ' ' ~ (item.get('text') or '') ~ ' ' ~ (item.get('detail') or '')) | lower }}"
+                                                >
+                                                    {{
+                                                        insight_item(
+                                                            item.get("text"),
+                                                            item.get("detail"),
+                                                            item.get("source"),
+                                                            "type"
+                                                        )
+                                                    }}
+                                                </div>
+
+                                            {% endfor %}
+
+                                        {% endif %}
+
+                                    </div>
+
+                                </details>
+
+                            {% endfor %}
+
+                            <div class="db-common-insights-divider">
+                                <span>Common LifeOS insights</span>
+                            </div>
+
+                        {% endif %}
 
                         {% if insights.get("key_points") %}
 
@@ -1391,6 +1946,99 @@
                                 </div>
 
                             </details>
+
+                        {% endif %}
+
+
+                        {% if insights.get("questions") %}
+
+                            <details
+                                id="questions-to-explore"
+                                class="db-insight-group"
+                                data-db-insight-group
+                            >
+
+                                <summary>
+                                    <span>
+                                        <b>Q</b>
+                                        <span>
+                                            <strong>Questions to explore</strong>
+                                            <small>
+                                                {{
+                                                    insights.get(
+                                                        "questions",
+                                                        []
+                                                    ) | length
+                                                }}
+                                                grounded prompts
+                                            </small>
+                                        </span>
+                                    </span>
+
+                                    <i>+</i>
+                                </summary>
+
+
+                                <div class="db-insight-list">
+
+                                    {% for item in
+                                        insights.get(
+                                            "questions",
+                                            []
+                                        )
+                                    %}
+
+                                        <div
+                                            data-db-insight-item
+                                            data-search="{{
+                                                (
+                                                    (item.get('question') or '')
+                                                    ~ ' '
+                                                    ~ (item.get('reason') or '')
+                                                ) | lower
+                                            }}"
+                                        >
+
+                                            {{
+                                                insight_item(
+                                                    item.get("question"),
+                                                    item.get("reason"),
+                                                    item.get("source"),
+                                                    "question"
+                                                )
+                                            }}
+
+                                        </div>
+
+                                    {% endfor %}
+
+                                </div>
+
+                            </details>
+
+                        {% endif %}
+
+
+                        {% if overview.get("summary_only") %}
+
+                            <div class="db-empty-state db-structured-empty">
+
+                                <span class="db-empty-icon">
+                                    0
+                                </span>
+
+                                <div>
+                                    <h3>Summary-only analysis</h3>
+                                    <p>
+                                        LifeOS created the overview, but no
+                                        supported structured findings were
+                                        returned for the eight insight
+                                        sections. Analyse again if the PDF
+                                        should contain more detail.
+                                    </p>
+                                </div>
+
+                            </div>
 
                         {% endif %}
 
@@ -2718,46 +3366,41 @@
 
         {% if document.extracted_text %}
 
-            <form
-                method="POST"
-                action="{{ url_for(
-                    'document_bp.analyse_document_route',
-                    document_id=document.id
-                ) }}"
-                data-loading-title="Analysing document"
-                data-loading-message="LifeOS is understanding the PDF..."
-                {% if analysis %}
-                    data-confirm
-                    data-confirm-title="Analyse again"
-                    data-confirm-message="Analyse this document again? A new analysis and a new set of suggestions will be created."
-                    data-confirm-text="Analyse"
-                    data-confirm-variant="warning"
-                {% endif %}
-            >
+            {% if type_detection %}
 
-                <input
-                    type="hidden"
-                    name="csrf_token"
-                    value="{{ csrf_token() }}"
+                <button
+                    type="button"
+                    data-db-type-review
                 >
-
-                {% if analysis %}
-                    <input
-                        type="hidden"
-                        name="force"
-                        value="1"
-                    >
-                {% endif %}
-
-                <button type="submit">
-                    {% if analysis %}
-                        Analyse again
-                    {% else %}
-                        Analyse
-                    {% endif %}
+                    Confirm type
                 </button>
 
-            </form>
+            {% else %}
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'document_bp.detect_document_type_route',
+                        document_id=document.id
+                    ) }}"
+                    data-loading-title="Detecting document type"
+                    data-loading-message="LifeOS is identifying the document purpose..."
+                    data-db-inline-loading
+                >
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
+
+                    <button type="submit">
+                        Detect type
+                    </button>
+
+                </form>
+
+            {% endif %}
 
         {% endif %}
 

@@ -287,3 +287,35 @@ def test_analysis_without_summary_is_rejected(
             "document.pdf",
             "--- Page 1 ---\nReadable text.",
         )
+
+def test_document_analysis_prompt_separates_questions_from_gaps(
+    monkeypatch,
+):
+    captured = {}
+
+    monkeypatch.setattr(
+        ai_service,
+        "get_ai_configuration",
+        fake_configuration,
+    )
+
+    def fake_generate_text(**kwargs):
+        captured["prompt"] = kwargs["prompt"]
+        return valid_provider_response()
+
+    monkeypatch.setattr(
+        ai_service,
+        "_generate_text",
+        fake_generate_text,
+    )
+
+    analyze_document(
+        "document.pdf",
+        "--- Page 1 ---\nReadable content.",
+    )
+
+    assert '"questions"' in captured["prompt"]
+    assert (
+        "Keep missing_information and questions separate"
+        in captured["prompt"]
+    )

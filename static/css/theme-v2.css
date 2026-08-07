@@ -6602,3 +6602,442 @@ html[data-theme="light"] .db-hero-document > div span {
         transition: none;
     }
 }
+
+/* ---------- Document Brain Step 5 structured overview ---------- */
+
+.db-overview-status {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    margin-top: 15px;
+    border: 1px solid var(--studio-border);
+    border-radius: 18px;
+    background: var(--studio-border);
+}
+
+.db-overview-status > div {
+    display: grid;
+    gap: 5px;
+    min-height: 112px;
+    align-content: center;
+    padding: 17px;
+    background: var(--studio-surface-soft);
+}
+
+.db-overview-status span {
+    color: var(--studio-text-faint);
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.db-overview-status strong {
+    color: var(--studio-text);
+    font-size: 1.35rem;
+}
+
+.db-overview-status small {
+    color: var(--studio-text-soft);
+    font-size: 0.69rem;
+    line-height: 1.45;
+}
+
+.db-structured-empty {
+    margin-top: 0;
+    border: 1px dashed var(--studio-border-strong);
+    background: var(--studio-surface-soft);
+}
+
+@media (max-width: 980px) {
+    .db-overview-status {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .db-overview-status {
+        grid-template-columns: 1fr;
+    }
+
+    .db-overview-status > div {
+        min-height: 92px;
+    }
+
+    .db-overview-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* ---------- Document type detection + confirmation (Step 6C) ---------- */
+
+.db-type-confirmation {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
+    gap: 24px;
+    padding: 26px;
+    border: 1px solid var(--studio-border-strong);
+    border-radius: 24px;
+    background:
+        radial-gradient(
+            circle at 95% 5%,
+            rgba(110, 94, 232, 0.14),
+            transparent 33%
+        ),
+        var(--studio-surface);
+    box-shadow: var(--studio-shadow-sm);
+}
+
+.db-type-detected-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-top: 8px;
+}
+
+.db-type-detected-heading h2 {
+    margin: 0;
+    color: var(--studio-text);
+    font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.db-type-detected-heading p {
+    max-width: 720px;
+    margin: 8px 0 0;
+    color: var(--studio-text-muted);
+    line-height: 1.65;
+}
+
+.db-type-confidence {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 6px 10px;
+    border: 1px solid var(--studio-border);
+    border-radius: 999px;
+    background: var(--studio-surface-solid);
+    color: var(--studio-text-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: capitalize;
+}
+
+.db-type-confidence-high {
+    border-color: rgba(49, 167, 112, 0.28);
+    background: rgba(49, 167, 112, 0.1);
+}
+
+.db-type-confidence-medium {
+    border-color: rgba(214, 157, 51, 0.3);
+    background: rgba(214, 157, 51, 0.1);
+}
+
+.db-type-confidence-low {
+    border-color: rgba(214, 90, 90, 0.28);
+    background: rgba(214, 90, 90, 0.09);
+}
+
+.db-type-reason {
+    margin-top: 20px;
+    padding: 16px 18px;
+    border: 1px solid var(--studio-border);
+    border-radius: 16px;
+    background: color-mix(
+        in srgb,
+        var(--studio-surface-solid) 82%,
+        transparent
+    );
+}
+
+.db-type-reason span,
+.db-type-select-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--studio-text);
+    font-size: 0.73rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.db-type-reason p,
+.db-type-choice-note {
+    margin: 0;
+    color: var(--studio-text-muted);
+    font-size: 0.86rem;
+    line-height: 1.6;
+}
+
+.db-type-confirmation-form {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    padding: 18px;
+    border: 1px solid var(--studio-border);
+    border-radius: 18px;
+    background: var(--studio-surface-solid);
+}
+
+.db-type-confirmation-form form {
+    margin: 0;
+}
+
+.db-type-confirmation-form form:first-child {
+    display: grid;
+    gap: 12px;
+}
+
+.db-type-select {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid var(--studio-border-strong);
+    border-radius: 12px;
+    padding: 0 40px 0 13px;
+    background: var(--studio-surface);
+    color: var(--studio-text);
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.db-type-select:focus {
+    outline: 3px solid color-mix(
+        in srgb,
+        var(--studio-primary) 24%,
+        transparent
+    );
+    outline-offset: 1px;
+}
+
+.db-type-confirmation.has-user-override {
+    border-color: color-mix(
+        in srgb,
+        var(--studio-primary) 48%,
+        var(--studio-border-strong)
+    );
+}
+
+@media (max-width: 900px) {
+    .db-type-confirmation {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .db-type-confirmation {
+        gap: 16px;
+        padding: 18px;
+        border-radius: 20px;
+    }
+
+    .db-type-detected-heading {
+        flex-direction: column;
+    }
+
+    .db-type-confirmation-form {
+        padding: 14px;
+    }
+}
+
+
+/* Step 6E: adaptive document-type analysis workspace */
+
+.db-type-aware-overview {
+    display: grid;
+    gap: 1rem;
+    margin: 1.25rem 0;
+    padding: 1.2rem;
+    border: 1px solid var(--border-color, rgba(127, 127, 127, 0.2));
+    border-radius: 1rem;
+    background: var(--surface-card, rgba(127, 127, 127, 0.05));
+}
+
+.db-type-aware-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 1.25rem;
+    align-items: flex-start;
+}
+
+.db-type-aware-heading h2,
+.db-type-insights-banner h3 {
+    margin: 0.2rem 0 0.35rem;
+}
+
+.db-type-aware-heading p,
+.db-type-insights-banner p {
+    margin: 0;
+    max-width: 48rem;
+    color: var(--text-muted, #667085);
+}
+
+.db-type-aware-status {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 11rem;
+    text-align: right;
+}
+
+.db-type-aware-status span {
+    font-weight: 700;
+}
+
+.db-type-aware-status small {
+    color: var(--text-muted, #667085);
+}
+
+.db-type-override-note,
+.db-type-empty-note {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    padding: 0.8rem 0.9rem;
+    border-radius: 0.75rem;
+    background: rgba(127, 127, 127, 0.08);
+    font-size: 0.88rem;
+}
+
+.db-type-empty-note {
+    display: grid;
+}
+
+.db-type-empty-note span {
+    color: var(--text-muted, #667085);
+}
+
+.db-type-section-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 0.65rem;
+}
+
+.db-type-section-summary button {
+    display: grid;
+    gap: 0.2rem;
+    min-height: 4.4rem;
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid var(--border-color, rgba(127, 127, 127, 0.2));
+    border-radius: 0.8rem;
+    background: transparent;
+    color: inherit;
+}
+
+.db-type-section-summary button.has-content {
+    cursor: pointer;
+    background: rgba(127, 127, 127, 0.06);
+}
+
+.db-type-section-summary button:disabled {
+    opacity: 0.5;
+}
+
+.db-type-section-summary strong {
+    font-size: 1.15rem;
+}
+
+.db-type-section-summary span {
+    font-size: 0.8rem;
+    color: var(--text-muted, #667085);
+}
+
+.db-type-spotlight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+
+.db-type-spotlight-grid article {
+    display: grid;
+    align-content: start;
+    gap: 0.55rem;
+    padding: 0.9rem;
+    border-radius: 0.85rem;
+    background: rgba(127, 127, 127, 0.06);
+}
+
+.db-type-spotlight-grid article > span {
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, #667085);
+}
+
+.db-type-spotlight-grid p {
+    margin: 0;
+    line-height: 1.55;
+}
+
+.db-type-insights-banner {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 1rem;
+    border-radius: 0.9rem;
+    background: rgba(127, 127, 127, 0.07);
+}
+
+.db-type-insights-banner > span {
+    max-width: 13rem;
+    text-align: right;
+    color: var(--text-muted, #667085);
+    font-size: 0.82rem;
+}
+
+.db-type-insight-group > summary > span > b {
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+}
+
+.db-insight-type {
+    border-left: 3px solid currentColor;
+}
+
+.db-common-insights-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.3rem 0;
+    color: var(--text-muted, #667085);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.db-common-insights-divider::before,
+.db-common-insights-divider::after {
+    content: "";
+    height: 1px;
+    flex: 1;
+    background: var(--border-color, rgba(127, 127, 127, 0.2));
+}
+
+@media (max-width: 760px) {
+    .db-type-aware-heading,
+    .db-type-insights-banner {
+        flex-direction: column;
+    }
+
+    .db-type-aware-status,
+    .db-type-insights-banner > span {
+        min-width: 0;
+        max-width: none;
+        text-align: left;
+    }
+
+    .db-type-section-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 460px) {
+    .db-type-section-summary {
+        grid-template-columns: 1fr;
+    }
+}
