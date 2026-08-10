@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
-from difflib import SequenceMatcher
 from typing import Any
 
 from models import (
@@ -14,40 +13,23 @@ from models import (
     DocumentTaskSuggestion,
     Task,
 )
+from services.task_duplicate_service import (
+    DUPLICATE_OVERALL_THRESHOLD,
+    assess_task_duplicate,
+    title_similarity_score,
+)
 
 
-MATCH_THRESHOLD = 0.72
+
+# Backward-compatible public constant used by the existing Step 9 tests and
+# callers. Step 11 now owns the threshold in task_duplicate_service.
+MATCH_THRESHOLD = DUPLICATE_OVERALL_THRESHOLD
+
 
 SUPPORTED_PRIORITIES = {
     "Low",
     "Medium",
     "High",
-}
-
-# These words describe actions but usually do not identify
-# the actual subject of a task.
-MATCH_STOP_WORDS = {
-    "a",
-    "an",
-    "the",
-    "and",
-    "or",
-    "to",
-    "for",
-    "of",
-    "in",
-    "on",
-    "with",
-    "build",
-    "create",
-    "implement",
-    "develop",
-    "add",
-    "prepare",
-    "update",
-    "fix",
-    "test",
-    "complete",
 }
 
 
@@ -123,9 +105,17 @@ def build_document_task_suggestions(
             action.get("deadline")
         )
 
-        matched_task, match_score = find_best_task_match(
+        duplicate_assessment = assess_task_duplicate(
             suggestion_title=title,
+            suggestion_description=description,
             existing_tasks=existing_tasks,
+        )
+
+        matched_task = duplicate_assessment.matched_task
+        match_score = duplicate_assessment.overall_score
+
+        tags = _clean_tags(
+            action.get("tags")
         )
 
         source = action.get("source")
@@ -140,6 +130,7 @@ def build_document_task_suggestions(
                 user_id=user_id,
                 title=title,
                 description=description,
+                tags=tags,
                 priority=priority,
                 deadline=deadline,
                 source_json=json.dumps(
@@ -168,87 +159,40 @@ def find_best_task_match(
     suggestion_title: str,
     existing_tasks: list[Task],
 ) -> tuple[Task | None, float]:
-    """Return the most similar existing task above the threshold."""
+    """Backward-compatible Step 9 title-only duplicate helper."""
 
-    best_task: Task | None = None
-    best_score = 0.0
+    assessment = assess_task_duplicate(
+        suggestion_title=suggestion_title,
+        suggestion_description=None,
+        existing_tasks=existing_tasks,
+        use_semantic=False,
+    )
 
-    for task in existing_tasks:
-        score = calculate_task_match_score(
-            suggestion_title,
-            task.title,
-        )
-
-        if score > best_score:
-            best_task = task
-            best_score = score
-
-    if best_score < MATCH_THRESHOLD:
-        return None, best_score
-
-    return best_task, best_score
+    return (
+        assessment.matched_task,
+        assessment.overall_score,
+    )
 
 
 def calculate_task_match_score(
     first_title: Any,
     second_title: Any,
 ) -> float:
-    """Calculate a deterministic similarity score for two task titles."""
+    """Backward-compatible deterministic title similarity helper."""
 
-    first = _normalise_match_text(
-        first_title
+    return title_similarity_score(
+        first_title,
+        second_title,
     )
-
-    second = _normalise_match_text(
-        second_title
-    )
-
-    if not first or not second:
-        return 0.0
-
-    if first == second:
-        return 1.0
-
-    sequence_score = SequenceMatcher(
-        None,
-        first,
-        second,
-    ).ratio()
-
-    first_tokens = _meaningful_tokens(first)
-    second_tokens = _meaningful_tokens(second)
-
-    token_score = 0.0
-
-    if first_tokens and second_tokens:
-        intersection = (
-            first_tokens
-            & second_tokens
-        )
-
-        smaller_size = min(
-            len(first_tokens),
-            len(second_tokens),
-        )
-
-        token_score = (
-            len(intersection)
-            / smaller_size
-        )
-
-    return max(
-        sequence_score,
-        token_score,
-    )
-
 
 def _normalise_match_text(
     value: Any,
 ) -> str:
-    """Normalise a title for duplicate comparison."""
+    """Normalise titles used to deduplicate suggestions generated together."""
 
     cleaned = str(
-        value or ""
+        value
+        or ""
     ).casefold()
 
     cleaned = re.sub(
@@ -263,19 +207,34 @@ def _normalise_match_text(
     )
 
 
-def _meaningful_tokens(
-    value: str,
-) -> set[str]:
-    """Return useful title tokens without generic action words."""
+def _clean_tags(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
 
-    return {
-        token
-        for token in value.split()
-        if (
-            len(token) > 1
-            and token not in MATCH_STOP_WORDS
-        )
-    }
+    if isinstance(value, str):
+        raw_items = value.replace(";", ",").split(",")
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = value
+    else:
+        raw_items = [value]
+
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    for raw_item in raw_items:
+        tag = _clean_text(raw_item, limit=40)
+        key = tag.casefold()
+
+        if not tag or key in seen:
+            continue
+
+        seen.add(key)
+        tags.append(tag)
+
+        if len(tags) >= 6:
+            break
+
+    return ", ".join(tags) or None
 
 
 def _clean_text(

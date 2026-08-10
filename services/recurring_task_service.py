@@ -74,6 +74,7 @@ def generate_next_occurrence(task):
         title=task.title,
         description=task.description,
         module=task.module,
+        tags=task.tags,
         importance=task.importance,
         difficulty=task.difficulty,
         deadline=next_date,

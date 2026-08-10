@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_document_task_suggestions.html" import render_document_task_suggestions %}
 
 {% block title %}
     {{ document.filename }} | Document Brain
@@ -76,6 +77,24 @@
 
                 {% endif %}
 
+
+                {% if page and not compact %}
+
+                    <div class="db-source-navigation-actions">
+
+                        <button
+                            type="button"
+                            class="db-source-action-button"
+                            data-db-open-pdf
+                            data-db-pdf-page="{{ page }}"
+                        >
+                            View in PDF
+                        </button>
+
+                    </div>
+
+                {% endif %}
+
             </article>
 
         {% endif %}
@@ -120,6 +139,7 @@
 {% set type_workspace = type_workspace | default({}, true) %}
 {% set type_sections = type_workspace.get("sections", []) %}
 {% set populated_type_sections = type_workspace.get("populated_sections", []) %}
+{% set document_search = document_search | default(none) %}
 
 {% set action_stats = namespace(
     pending=0,
@@ -168,6 +188,7 @@
 <div
     class="db-detail"
     data-db-detail
+    data-db-initial-tab="{{ 'search' if document_search else 'overview' }}"
 >
 
     <nav
@@ -745,6 +766,18 @@
                         }}
                     </b>
                 {% endif %}
+            </button>
+
+
+            <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="db-search-panel"
+                data-db-tab="search"
+                data-db-hash="pdf-document"
+            >
+                <span>PDF</span>
             </button>
 
 
@@ -2096,614 +2129,121 @@
 
 
             <section
+                id="db-search-panel"
+                class="db-tab-panel"
+                role="tabpanel"
+                data-db-panel="search"
+            >
+
+                <div class="db-panel-heading db-search-panel-heading">
+                    <div>
+                        <span class="db-kicker">PDF workspace</span>
+                        <h2>Read and explore the original PDF</h2>
+                        <p>
+                            Open the full document, search for a concept, and
+                            LifeOS will highlight related passages directly on
+                            the PDF instead of showing retrieval internals.
+                        </p>
+                    </div>
+                </div>
+
+                {% if document.extracted_text %}
+                    <div class="db-pdf-entry-card">
+                        <div class="db-pdf-entry-copy">
+                            <span class="db-pdf-entry-icon" aria-hidden="true">▤</span>
+                            <div>
+                                <h3>{{ document.filename }}</h3>
+                                <p>
+                                    Semantic search runs in the background.
+                                    Stronger matches use stronger highlighting;
+                                    related passages stay visible with lighter
+                                    highlighting.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="db-pdf-entry-actions">
+                            <button
+                                type="button"
+                                class="workspace-primary-button"
+                                data-db-open-pdf
+                            >
+                                Open PDF
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="db-pdf-feature-strip" aria-label="PDF capabilities">
+                        <span>Full PDF viewer</span>
+                        <span>Semantic search</span>
+                        <span>In-page highlights</span>
+                        <span>Page-aware navigation</span>
+                    </div>
+                {% else %}
+                    <div class="db-empty-state">
+                        <span class="db-empty-icon">▤</span>
+                        <div>
+                            <h2>This PDF is not searchable yet</h2>
+                            <p>
+                                LifeOS needs readable extracted text before
+                                semantic highlights can be created.
+                            </p>
+                        </div>
+                    </div>
+                {% endif %}
+
+            </section>
+            <section
                 id="db-actions-panel"
                 class="db-tab-panel"
                 role="tabpanel"
                 data-db-panel="actions"
             >
-
                 <div class="db-panel-heading">
-
                     <div>
-                        <span class="db-kicker">
-                            Human-approved automation
-                        </span>
-
-                        <h2>Suggested project actions</h2>
-
+                        <span class="db-kicker">Human-approved automation</span>
+                        <h2>Suggested project tasks</h2>
                         <p>
-                            LifeOS never creates work silently. Review,
-                            connect or reject every detected action.
+                            Review document findings before they become project work.
+                            Create one, edit first, ignore it, or select several safe
+                            suggestions and create them together.
                         </p>
                     </div>
-
-
-                    {% if suggestions %}
-
-                        <span class="db-visible-count">
-                            <strong data-db-action-count>
-                                {{ suggestions | length }}
-                            </strong>
-                            shown
-                        </span>
-
-                    {% endif %}
-
                 </div>
 
-
                 {% if suggestions %}
-
-                    <div class="db-action-summary">
-
-                        <article>
-                            <strong>{{ action_stats.pending }}</strong>
-                            <span>Pending review</span>
-                        </article>
-
-                        <article>
-                            <strong>
-                                {{
-                                    action_stats.approved
-                                    + action_stats.linked
-                                }}
-                            </strong>
-                            <span>Accepted</span>
-                        </article>
-
-                        <article>
-                            <strong>{{ action_stats.rejected }}</strong>
-                            <span>Rejected</span>
-                        </article>
-
-                    </div>
-
-
-                    <div
-                        class="db-filter-pills"
-                        role="group"
-                        aria-label="Filter action suggestions"
-                    >
-
-                        <button
-                            type="button"
-                            class="is-active"
-                            data-db-action-filter="all"
-                            aria-pressed="true"
-                        >
-                            All
-                            <span>{{ suggestions | length }}</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            data-db-action-filter="pending"
-                            aria-pressed="false"
-                        >
-                            Pending
-                            <span>{{ action_stats.pending }}</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            data-db-action-filter="accepted"
-                            aria-pressed="false"
-                        >
-                            Accepted
-                            <span>
-                                {{
-                                    action_stats.approved
-                                    + action_stats.linked
-                                }}
-                            </span>
-                        </button>
-
-                        <button
-                            type="button"
-                            data-db-action-filter="rejected"
-                            aria-pressed="false"
-                        >
-                            Rejected
-                            <span>{{ action_stats.rejected }}</span>
-                        </button>
-
-                    </div>
-
-
-                    <div
-                        class="db-action-list"
-                        data-db-action-list
-                    >
-
-                        {% for suggestion in suggestions %}
-
-                            {% if suggestion.status in [
-                                "Approved",
-                                "Linked"
-                            ] %}
-                                {% set action_group = "accepted" %}
-                            {% else %}
-                                {% set action_group =
-                                    suggestion.status | lower
-                                %}
-                            {% endif %}
-
-                            <article
-                                class="db-action-card"
-                                data-db-action-card
-                                data-action-status="{{ action_group }}"
-                            >
-
-                                <div class="db-action-card-heading">
-
-                                    <div>
-
-                                        <div class="db-action-labels">
-
-                                            <span
-                                                class="
-                                                    db-suggestion-status
-                                                    db-suggestion-status-{{
-                                                        suggestion.status
-                                                        | lower
-                                                    }}
-                                                "
-                                            >
-                                                {{ suggestion.status }}
-                                            </span>
-
-                                            <span
-                                                class="
-                                                    db-priority-chip
-                                                    db-priority-{{
-                                                        suggestion.priority
-                                                        | lower
-                                                    }}
-                                                "
-                                            >
-                                                {{ suggestion.priority }}
-                                            </span>
-
-                                        </div>
-
-                                        <h3>{{ suggestion.title }}</h3>
-
-                                    </div>
-
-
-                                    {% if suggestion.deadline %}
-
-                                        <span class="db-action-deadline">
-                                            Due
-                                            {{
-                                                suggestion.deadline.strftime(
-                                                    "%d %b %Y"
-                                                )
-                                            }}
-                                        </span>
-
-                                    {% endif %}
-
-                                </div>
-
-
-                                {% if suggestion.description %}
-
-                                    <p class="db-action-description">
-                                        {{ suggestion.description }}
-                                    </p>
-
-                                {% endif %}
-
-
-                                {% if suggestion.matched_task %}
-
-                                    <div class="db-duplicate-card">
-
-                                        <div>
-                                            <span>
-                                                Possible existing task
-                                            </span>
-
-                                            <strong>
-                                                {{
-                                                    suggestion
-                                                    .matched_task
-                                                    .title
-                                                }}
-                                            </strong>
-
-                                            {% if
-                                                suggestion
-                                                .matched_task
-                                                .status
-                                            %}
-
-                                                <small>
-                                                    Status:
-                                                    {{
-                                                        suggestion
-                                                        .matched_task
-                                                        .status
-                                                    }}
-                                                </small>
-
-                                            {% endif %}
-                                        </div>
-
-
-                                        <b>
-                                            {{
-                                                (
-                                                    suggestion.match_score
-                                                    * 100
-                                                )
-                                                | round
-                                                | int
-                                            }}%
-                                            match
-                                        </b>
-
-                                    </div>
-
-                                {% endif %}
-
-
-                                {{ source_reference(
-                                    suggestion.source,
-                                    true
-                                ) }}
-
-
-                                {% if suggestion.status == "Pending" %}
-
-                                    <div class="db-action-buttons">
-
-                                        {% if suggestion.matched_task %}
-
-                                            <form
-                                                method="POST"
-                                                action="{{ url_for(
-                                                    'document_bp.link_suggestion_route',
-                                                    document_id=document.id,
-                                                    suggestion_id=suggestion.id
-                                                ) }}"
-                                                data-loading-title="Linking task"
-                                                data-loading-message="Connecting the document action to the existing project task..."
-                                                data-db-inline-loading
-                                            >
-
-                                                <input
-                                                    type="hidden"
-                                                    name="csrf_token"
-                                                    value="{{ csrf_token() }}"
-                                                >
-
-                                                <button
-                                                    type="submit"
-                                                    class="workspace-primary-button"
-                                                >
-                                                    Use existing task
-                                                </button>
-
-                                            </form>
-
-
-                                            <form
-                                                method="POST"
-                                                action="{{ url_for(
-                                                    'document_bp.approve_suggestion_route',
-                                                    document_id=document.id,
-                                                    suggestion_id=suggestion.id
-                                                ) }}"
-                                                data-confirm
-                                                data-confirm-title="Create possible duplicate"
-                                                data-confirm-message="A similar task already exists. Create a separate task anyway?"
-                                                data-confirm-text="Create task"
-                                                data-confirm-variant="warning"
-                                                data-loading-title="Creating task"
-                                                data-loading-message="Adding the approved action to the connected project..."
-                                                data-db-inline-loading
-                                            >
-
-                                                <input
-                                                    type="hidden"
-                                                    name="csrf_token"
-                                                    value="{{ csrf_token() }}"
-                                                >
-
-                                                <input
-                                                    type="hidden"
-                                                    name="allow_possible_duplicate"
-                                                    value="1"
-                                                >
-
-                                                <button
-                                                    type="submit"
-                                                    class="workspace-secondary-button"
-                                                >
-                                                    Create anyway
-                                                </button>
-
-                                            </form>
-
-                                        {% else %}
-
-                                            <form
-                                                method="POST"
-                                                action="{{ url_for(
-                                                    'document_bp.approve_suggestion_route',
-                                                    document_id=document.id,
-                                                    suggestion_id=suggestion.id
-                                                ) }}"
-                                                data-loading-title="Creating task"
-                                                data-loading-message="Adding the approved action to the connected project..."
-                                                data-db-inline-loading
-                                            >
-
-                                                <input
-                                                    type="hidden"
-                                                    name="csrf_token"
-                                                    value="{{ csrf_token() }}"
-                                                >
-
-                                                <button
-                                                    type="submit"
-                                                    class="workspace-primary-button"
-                                                >
-                                                    Create project task
-                                                </button>
-
-                                            </form>
-
-                                        {% endif %}
-
-
-                                        <form
-                                            method="POST"
-                                            action="{{ url_for(
-                                                'document_bp.reject_suggestion_route',
-                                                document_id=document.id,
-                                                suggestion_id=suggestion.id
-                                            ) }}"
-                                            data-confirm
-                                            data-confirm-title="Reject suggestion"
-                                            data-confirm-message="Reject this suggestion? It will stay in the analysis history but will not create a task."
-                                            data-confirm-text="Reject"
-                                            data-confirm-variant="danger"
-                                        >
-
-                                            <input
-                                                type="hidden"
-                                                name="csrf_token"
-                                                value="{{ csrf_token() }}"
-                                            >
-
-                                            <button
-                                                type="submit"
-                                                class="db-danger-text-button"
-                                            >
-                                                Reject
-                                            </button>
-
-                                        </form>
-
-                                    </div>
-
-
-                                {% elif suggestion.status == "Approved" %}
-
-                                    <div class="db-action-result">
-
-                                        <span>✓</span>
-
-                                        <div>
-                                            <strong>Task created</strong>
-
-                                            {% if suggestion.created_task %}
-                                                <small>
-                                                    {{
-                                                        suggestion
-                                                        .created_task
-                                                        .title
-                                                    }}
-                                                </small>
-                                            {% endif %}
-                                        </div>
-
-                                    </div>
-
-
-                                {% elif suggestion.status == "Linked" %}
-
-                                    <div class="db-action-result">
-
-                                        <span>↗</span>
-
-                                        <div>
-                                            <strong>
-                                                Linked to an existing task
-                                            </strong>
-
-                                            {% if suggestion.created_task %}
-                                                <small>
-                                                    {{
-                                                        suggestion
-                                                        .created_task
-                                                        .title
-                                                    }}
-                                                </small>
-                                            {% endif %}
-                                        </div>
-
-                                    </div>
-
-
-                                {% elif suggestion.status == "Rejected" %}
-
-                                    <div class="db-action-result db-action-result-muted">
-
-                                        <span>×</span>
-
-                                        <div>
-                                            <strong>Suggestion rejected</strong>
-                                            <small>
-                                                No project task was created.
-                                            </small>
-                                        </div>
-
-                                    </div>
-
-                                {% endif %}
-
-                            </article>
-
-                        {% endfor %}
-
-                    </div>
-
-
-                    <div
-                        class="db-empty-state db-filter-empty"
-                        data-db-action-empty
-                        hidden
-                    >
-
-                        <span class="db-empty-icon">
-                            ✓
-                        </span>
-
-                        <div>
-                            <h3>No actions in this filter</h3>
-                            <p>Choose another status to continue.</p>
-                        </div>
-
-                    </div>
-
+                    {{ render_document_task_suggestions(
+                        suggestions,
+                        url_for(
+                            'document_bp.bulk_create_suggestions_route',
+                            document_id=document.id
+                        ),
+                        'documentSuggestionBulkForm',
+                        false
+                    ) }}
                 {% elif insights.get("action_items") %}
-
                     <div class="db-alert db-alert-info">
-
-                        <div class="db-alert-icon">
-                            i
-                        </div>
-
+                        <div class="db-alert-icon">i</div>
                         <div>
-                            <strong>
-                                Reanalyse to activate the review workflow
-                            </strong>
-
+                            <strong>Reanalyse to activate task review</strong>
                             <p>
-                                This analysis contains action items but was
-                                created before persistent task suggestions
-                                were enabled.
+                                This older analysis contains action items but was
+                                created before the persistent Step 9 suggestion flow.
                             </p>
                         </div>
-
                     </div>
-
-
-                    <div class="db-action-list">
-
-                        {% for action in
-                            insights.get(
-                                "action_items",
-                                []
-                            )
-                        %}
-
-                            <article class="db-action-card">
-
-                                <div class="db-action-card-heading">
-
-                                    <div>
-                                        <span
-                                            class="
-                                                db-priority-chip
-                                                db-priority-{{
-                                                    action.get(
-                                                        'priority',
-                                                        'Medium'
-                                                    ) | lower
-                                                }}
-                                            "
-                                        >
-                                            {{
-                                                action.get(
-                                                    "priority",
-                                                    "Medium"
-                                                )
-                                            }}
-                                        </span>
-
-                                        <h3>
-                                            {{ action.get("title") }}
-                                        </h3>
-                                    </div>
-
-
-                                    {% if action.get("deadline") %}
-                                        <span class="db-action-deadline">
-                                            Due
-                                            {{ action.get("deadline") }}
-                                        </span>
-                                    {% endif %}
-
-                                </div>
-
-                                <p class="db-action-description">
-                                    {{ action.get("description") }}
-                                </p>
-
-                                {{
-                                    source_reference(
-                                        action.get("source"),
-                                        true
-                                    )
-                                }}
-
-                            </article>
-
-                        {% endfor %}
-
-                    </div>
-
                 {% else %}
-
                     <div class="db-empty-state">
-
-                        <span class="db-empty-icon">
-                            ✓
-                        </span>
-
+                        <span class="db-empty-icon">✓</span>
                         <div>
-                            <h2>No suggested actions</h2>
-
+                            <h3>No task suggestions from this document</h3>
                             <p>
-                                {% if analysis %}
-                                    The current analysis did not identify
-                                    work that should become a project task.
-                                {% else %}
-                                    Analyse this PDF to detect reviewable
-                                    project actions.
-                                {% endif %}
+                                LifeOS only proposes work that is supported by the
+                                analysed PDF.
                             </p>
-
-                            {% if not analysis %}
-                                <button
-                                    type="button"
-                                    class="workspace-primary-button"
-                                    data-db-tab-jump="overview"
-                                >
-                                    Go to analysis
-                                </button>
-                            {% endif %}
                         </div>
-
                     </div>
-
                 {% endif %}
-
             </section>
 
 
@@ -2764,6 +2304,68 @@
                                     name="csrf_token"
                                     value="{{ csrf_token() }}"
                                 >
+
+                                <input
+                                    type="hidden"
+                                    name="selected_context_text"
+                                    data-db-selected-context-input
+                                >
+
+                                <input
+                                    type="hidden"
+                                    name="selected_context_page"
+                                    data-db-selected-context-page-input
+                                >
+
+                                <input
+                                    type="hidden"
+                                    name="selected_context_section"
+                                    data-db-selected-context-section-input
+                                >
+
+                                <div
+                                    class="db-selected-context-card"
+                                    data-db-selected-context-card
+                                    hidden
+                                >
+                                    <div class="db-selected-context-heading">
+                                        <div>
+                                            <span class="db-kicker">Selected PDF context</span>
+                                            <strong data-db-selected-context-location>
+                                                Selected passage
+                                            </strong>
+                                        </div>
+
+                                        <div class="db-selected-context-actions">
+                                            <button
+                                                type="button"
+                                                class="db-text-button"
+                                                data-db-open-pdf
+                                                data-db-selected-context-open-pdf
+                                                data-db-pdf-page=""
+                                                hidden
+                                            >
+                                                View in PDF
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                class="db-text-button"
+                                                data-db-remove-selected-context
+                                            >
+                                                Remove context
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <blockquote data-db-selected-context-preview></blockquote>
+
+                                    <p>
+                                        LifeOS will treat this passage as preferred
+                                        context and can still retrieve related evidence
+                                        elsewhere in the PDF.
+                                    </p>
+                                </div>
 
 
                                 <label for="documentQuestion">
@@ -3063,6 +2665,57 @@
                                                     == "Completed"
                                                 %}
 
+                                                    {% set answer_context = namespace(selected=none) %}
+                                                    {% for source in saved_question.sources %}
+                                                        {% if
+                                                            source.get("context_role") == "selected"
+                                                            and answer_context.selected is none
+                                                        %}
+                                                            {% set answer_context.selected = source %}
+                                                        {% endif %}
+                                                    {% endfor %}
+
+                                                    {% if answer_context.selected %}
+                                                        <div class="db-saved-selected-context">
+                                                            <div class="db-saved-selected-context-heading">
+                                                                <div>
+                                                                    <span class="db-kicker">
+                                                                        Asked from selected PDF context
+                                                                    </span>
+
+                                                                    <strong>
+                                                                        {% if answer_context.selected.get("page") %}
+                                                                            Page {{ answer_context.selected.get("page") }}
+                                                                        {% else %}
+                                                                            Selected passage
+                                                                        {% endif %}
+
+                                                                        {% if answer_context.selected.get("section") %}
+                                                                            · {{ answer_context.selected.get("section") }}
+                                                                        {% endif %}
+                                                                    </strong>
+                                                                </div>
+
+                                                                {% if answer_context.selected.get("page") %}
+                                                                    <button
+                                                                        type="button"
+                                                                        class="db-text-button"
+                                                                        data-db-open-pdf
+                                                                        data-db-pdf-page="{{ answer_context.selected.get("page") }}"
+                                                                    >
+                                                                        View in PDF
+                                                                    </button>
+                                                                {% endif %}
+                                                            </div>
+
+                                                            {% if answer_context.selected.get("evidence") %}
+                                                                <blockquote>
+                                                                    {{ answer_context.selected.get("evidence") }}
+                                                                </blockquote>
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endif %}
+
                                                     <div class="db-answer-block">
 
                                                         <div class="db-answer-heading">
@@ -3095,9 +2748,16 @@
                                                     </div>
 
 
-                                                    {% if
-                                                        saved_question.sources
-                                                    %}
+                                                    {% set source_counts = namespace(cited=0, selected=0) %}
+                                                    {% for source in saved_question.sources %}
+                                                        {% if source.get("context_role") == "selected" %}
+                                                            {% set source_counts.selected = source_counts.selected + 1 %}
+                                                        {% else %}
+                                                            {% set source_counts.cited = source_counts.cited + 1 %}
+                                                        {% endif %}
+                                                    {% endfor %}
+
+                                                    {% if source_counts.cited %}
 
                                                         <details
                                                             class="db-answer-sources"
@@ -3109,13 +2769,7 @@
                                                                     sources
                                                                 </span>
 
-                                                                <b>
-                                                                    {{
-                                                                        saved_question
-                                                                        .sources
-                                                                        | length
-                                                                    }}
-                                                                </b>
+                                                                <b>{{ source_counts.cited }}</b>
                                                             </summary>
 
 
@@ -3126,11 +2780,13 @@
                                                                     .sources
                                                                 %}
 
-                                                                    {{
-                                                                        source_reference(
-                                                                            source
-                                                                        )
-                                                                    }}
+                                                                    {% if source.get("context_role") != "selected" %}
+                                                                        {{
+                                                                            source_reference(
+                                                                                source
+                                                                            )
+                                                                        }}
+                                                                    {% endif %}
 
                                                                 {% endfor %}
 
@@ -3138,7 +2794,7 @@
 
                                                         </details>
 
-                                                    {% else %}
+                                                    {% elif not source_counts.selected %}
 
                                                         <div class="db-no-match-answer">
 
@@ -3408,6 +3064,352 @@
 
 </div>
 
+
+<!-- Step 8B: Full in-LifeOS PDF viewer. -->
+<div
+    class="db-pdf-modal"
+    data-db-pdf-modal
+    data-db-document-id="{{ document.id }}"
+    data-db-pdf-url="{{ url_for(
+        'document_bp.document_file_route',
+        document_id=document.id
+    ) }}"
+    data-db-document-name="{{ document.filename }}"
+    data-db-pdf-semantic-search-url="{{ url_for(
+        'document_bp.semantic_search_document_route',
+        document_id=document.id
+    ) }}"
+    aria-hidden="true"
+>
+    <div class="db-pdf-modal-backdrop" data-db-close-pdf></div>
+
+    <section
+        class="db-pdf-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="db-pdf-viewer-title"
+    >
+        <header class="db-pdf-titlebar">
+            <div class="db-pdf-title-copy">
+                <span class="db-kicker">Document viewer</span>
+                <h2 id="db-pdf-viewer-title">{{ document.filename }}</h2>
+            </div>
+
+            <div class="db-pdf-title-actions">
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-new-tab
+                    title="Open the PDF in a new browser tab"
+                >
+                    New tab
+                </button>
+
+                <button
+                    type="button"
+                    class="db-pdf-close-button"
+                    data-db-close-pdf
+                    aria-label="Close PDF viewer"
+                    title="Close"
+                >
+                    ×
+                </button>
+            </div>
+        </header>
+
+        <div class="db-pdf-toolbar" data-db-pdf-toolbar>
+            <div class="db-pdf-toolbar-group">
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button db-pdf-sidebar-toggle"
+                    data-db-pdf-sidebar-toggle
+                    aria-pressed="true"
+                    title="Show or hide thumbnails and semantic search"
+                >
+                    Sidebar
+                </button>
+            </div>
+
+            <div class="db-pdf-toolbar-group db-pdf-page-controls">
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-previous
+                    title="Previous page"
+                >
+                    ‹
+                </button>
+
+                <label class="db-pdf-page-input-wrap">
+                    <span class="sr-only">Page number</span>
+                    <input
+                        type="number"
+                        min="1"
+                        value="1"
+                        inputmode="numeric"
+                        data-db-pdf-page-input
+                    >
+                    <span>/</span>
+                    <strong data-db-pdf-page-count>—</strong>
+                </label>
+
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-next
+                    title="Next page"
+                >
+                    ›
+                </button>
+            </div>
+
+            <div class="db-pdf-toolbar-group db-pdf-zoom-controls">
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-zoom-out
+                    title="Zoom out"
+                >
+                    −
+                </button>
+
+                <span class="db-pdf-zoom-label" data-db-pdf-zoom-label>
+                    Fit width
+                </span>
+
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-zoom-in
+                    title="Zoom in"
+                >
+                    +
+                </button>
+
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-fit-width
+                    title="Fit page to viewer width"
+                >
+                    Fit width
+                </button>
+            </div>
+
+            <div class="db-pdf-toolbar-group db-pdf-document-controls">
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-rotate-left
+                    title="Rotate left"
+                >
+                    ↺
+                </button>
+
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-rotate-right
+                    title="Rotate right"
+                >
+                    ↻
+                </button>
+
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-print
+                    title="Print PDF"
+                >
+                    Print
+                </button>
+
+                <button
+                    type="button"
+                    class="db-pdf-toolbar-button"
+                    data-db-pdf-download
+                    title="Download PDF"
+                >
+                    Download
+                </button>
+            </div>
+        </div>
+
+        <div class="db-pdf-progress" data-db-pdf-progress hidden>
+            <div class="db-pdf-progress-bar" data-db-pdf-progress-bar></div>
+        </div>
+
+        <div class="db-pdf-workspace" data-db-pdf-workspace>
+            <aside class="db-pdf-sidebar" data-db-pdf-sidebar>
+                <div class="db-pdf-sidebar-tabs" role="tablist">
+                    <button
+                        type="button"
+                        class="db-pdf-sidebar-tab is-active"
+                        data-db-pdf-sidebar-view="pages"
+                    >
+                        Pages
+                    </button>
+                    <button
+                        type="button"
+                        class="db-pdf-sidebar-tab"
+                        data-db-pdf-sidebar-view="find"
+                    >
+                        Smart search
+                    </button>
+                </div>
+
+                <div
+                    class="db-pdf-sidebar-panel is-active"
+                    data-db-pdf-sidebar-panel="pages"
+                >
+                    <div
+                        class="db-pdf-thumbnails"
+                        data-db-pdf-thumbnails
+                        aria-label="PDF page thumbnails"
+                    ></div>
+                </div>
+
+                <div
+                    class="db-pdf-sidebar-panel"
+                    data-db-pdf-sidebar-panel="find"
+                >
+                    <form class="db-pdf-find-form" data-db-pdf-find-form>
+                        <label>
+                            <span>Search by meaning</span>
+                            <div class="db-pdf-find-row">
+                                <input
+                                    type="search"
+                                    autocomplete="off"
+                                    maxlength="500"
+                                    placeholder="Search a topic or concept..."
+                                    data-db-pdf-find-input
+                                >
+                                <button
+                                    type="submit"
+                                    class="db-pdf-toolbar-button"
+                                >
+                                    Search
+                                </button>
+                            </div>
+                        </label>
+                    </form>
+
+                    <p class="db-pdf-find-status" data-db-pdf-find-status>
+                        LifeOS will highlight related passages in the PDF.
+                    </p>
+
+                    <div
+                        class="db-pdf-match-navigation"
+                        data-db-pdf-match-navigation
+                        hidden
+                    >
+                        <button
+                            type="button"
+                            class="db-pdf-toolbar-button"
+                            data-db-pdf-match-previous
+                            title="Previous related passage"
+                        >
+                            ‹
+                        </button>
+                        <strong data-db-pdf-match-position>0 of 0</strong>
+                        <button
+                            type="button"
+                            class="db-pdf-toolbar-button"
+                            data-db-pdf-match-next
+                            title="Next related passage"
+                        >
+                            ›
+                        </button>
+                    </div>
+
+                    <div
+                        class="db-pdf-find-results"
+                        data-db-pdf-find-results
+                    ></div>
+                </div>
+            </aside>
+
+            <main class="db-pdf-stage" data-db-pdf-stage>
+                <div class="db-pdf-loading" data-db-pdf-loading>
+                    <span class="db-pdf-spinner" aria-hidden="true"></span>
+                    <strong>Opening PDF…</strong>
+                    <small>Loading the protected document viewer.</small>
+                </div>
+
+                <div class="db-pdf-error" data-db-pdf-error hidden>
+                    <strong>LifeOS could not open the PDF viewer.</strong>
+                    <p data-db-pdf-error-message>
+                        Try opening the document in a new browser tab.
+                    </p>
+                    <button
+                        type="button"
+                        class="workspace-secondary-button"
+                        data-db-pdf-error-new-tab
+                    >
+                        Open in new tab
+                    </button>
+                </div>
+
+                <div class="db-pdf-canvas-wrap" data-db-pdf-canvas-wrap hidden>
+                    <div class="db-pdf-page-stack" data-db-pdf-page-stack>
+                        <canvas data-db-pdf-canvas></canvas>
+                        <div
+                            class="db-pdf-text-layer"
+                            data-db-pdf-text-layer
+                            aria-label="Selectable PDF text"
+                        ></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <div class="db-pdf-native-fallback" data-db-pdf-native-fallback hidden>
+            <div class="db-pdf-fallback-note">
+                <strong>Using your browser's PDF viewer.</strong>
+                <span>
+                    The embedded PDF.js viewer could not start, so LifeOS
+                    switched to the browser viewer for this document.
+                </span>
+            </div>
+            <iframe
+                title="PDF document"
+                data-db-pdf-fallback-frame
+            ></iframe>
+        </div>
+
+        <div
+            class="db-pdf-selection-toolbar"
+            data-db-pdf-selection-toolbar
+            hidden
+            role="toolbar"
+            aria-label="Selected PDF text actions"
+        >
+            <button
+                type="button"
+                class="db-pdf-selection-primary"
+                data-db-pdf-selection-ask
+            >
+                Ask about this
+            </button>
+
+            <button
+                type="button"
+                class="db-pdf-selection-secondary"
+                data-db-pdf-selection-copy
+            >
+                Copy
+            </button>
+        </div>
+
+        <footer class="db-pdf-statusbar">
+            <span data-db-pdf-status>Ready</span>
+            <span class="db-pdf-shortcuts">
+                ←/→ pages · Ctrl+F find · Esc close
+            </span>
+        </footer>
+    </section>
+</div>
+
 {% endblock %}
 
 
@@ -3418,6 +3420,21 @@
             'static',
             filename='js/document-brain-ui.js'
         ) }}?v=phase2-document-brain"
+    ></script>
+
+    <script
+        type="module"
+        src="{{ url_for(
+            'static',
+            filename='js/document-pdf-viewer.js'
+        ) }}?v=step8d-selected-context"
+    ></script>
+
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/document-task-suggestions.js'
+        ) }}?v=step9-task-conversion"
     ></script>
 
 {% endblock %}

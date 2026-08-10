@@ -1924,6 +1924,7 @@ document.addEventListener("DOMContentLoaded", function () {
             taskCard.dataset.title,
             taskCard.dataset.description,
             taskCard.dataset.module,
+            taskCard.dataset.tags,
             taskCard.textContent
         ]
             .join(" ")

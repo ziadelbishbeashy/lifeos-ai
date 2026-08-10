@@ -11,6 +11,8 @@ from flask import (
     request,
     url_for,
     abort,
+    jsonify,
+    send_file,
 )
 from flask_login import current_user, login_required
 
@@ -26,6 +28,7 @@ from services.document_service import (
 from services.pdf_service import PDFValidationError
 from services.project_service import list_owned_projects
 from storage.base import StorageError
+from storage.service import get_storage
 
 from models import Document, DocumentAIAnalysis, Project , DocumentTaskSuggestion
 
@@ -36,11 +39,17 @@ from services.document_ai_workflow_service import (
     analyse_owned_document,
 )
 from services.document_task_action_service import (
+    DocumentSuggestionDuplicateError,
     DocumentSuggestionNotFoundError,
     DocumentSuggestionPersistenceError,
     DocumentSuggestionWorkflowError,
     approve_document_suggestion,
+    build_suggestion_task_input,
+    bulk_create_document_suggestions,
+    default_suggestion_task_input,
     link_suggestion_to_existing_task,
+    list_document_suggestions,
+    preview_possible_duplicate,
     reject_document_suggestion,
     require_owned_document_suggestion,
 )
@@ -65,11 +74,34 @@ from services.document_type_workspace_service import (
     build_document_type_workspace,
 )
 from services.document_question_workflow_service import (
+    NO_MATCH_ANSWER,
     DocumentQuestionNotFoundError,
     DocumentQuestionNotReadyError,
     DocumentQuestionWorkflowError,
     ask_owned_document,
     list_owned_document_questions,
+)
+from services.document_search_service import (
+    DocumentSearchError,
+    DocumentSearchNotFoundError,
+    DocumentSearchNotReadyError,
+    DocumentSearchValidationError,
+    search_owned_document,
+)
+from services.document_navigation_service import (
+    DocumentNavigationError,
+    DocumentNavigationNotFoundError,
+    DocumentNavigationNotReadyError,
+    DocumentNavigationValidationError,
+    get_owned_document_context,
+    prepare_owned_document_file,
+)
+from services.document_pdf_search_service import (
+    DocumentPDFSearchError,
+    DocumentPDFSearchNotFoundError,
+    DocumentPDFSearchNotReadyError,
+    DocumentPDFSearchValidationError,
+    search_owned_document_for_pdf,
 )
 
 document_bp = Blueprint(
@@ -315,6 +347,7 @@ def _render_document_details(
     *,
     document: Document,
     type_detection=None,
+    document_search=None,
 ):
     """Build all data required by the Document Brain details page."""
 
@@ -332,22 +365,13 @@ def _render_document_details(
         .first()
     )
 
-    suggestions = []
-
-    if latest_analysis is not None:
-        suggestions = (
-            DocumentTaskSuggestion.query
-            .filter_by(
-                analysis_id=latest_analysis.id,
-                document_id=document.id,
-                user_id=current_user.id,
-            )
-            .order_by(
-                DocumentTaskSuggestion.created_at.asc(),
-                DocumentTaskSuggestion.id.asc(),
-            )
-            .all()
+    try:
+        suggestions = list_document_suggestions(
+            document_id=document.id,
+            user_id=current_user.id,
         )
+    except DocumentSuggestionNotFoundError:
+        suggestions = []
 
     overview = build_structured_document_overview(
         latest_analysis
@@ -387,6 +411,259 @@ def _render_document_details(
         type_detection=type_detection,
         document_type_choices=document_type_choices(),
         type_workspace=type_workspace,
+        document_search=document_search,
+    )
+
+
+@document_bp.get("/<int:document_id>/search")
+@login_required
+def search_document_route(document_id):
+    """Search real passages inside one owned document."""
+
+    query = request.args.get(
+        "q",
+        "",
+    )
+
+    try:
+        result = search_owned_document(
+            document_id=document_id,
+            user_id=current_user.id,
+            query=query,
+        )
+
+    except DocumentSearchNotFoundError:
+        abort(404)
+
+    except (
+        DocumentSearchNotReadyError,
+        DocumentSearchValidationError,
+    ) as error:
+        flash(
+            str(error),
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+            + "#search-document"
+        )
+
+    except DocumentSearchError as error:
+        current_app.logger.exception(
+            "Document search failed for document %s.",
+            document_id,
+        )
+
+        flash(
+            str(error),
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+            + "#search-document"
+        )
+
+    return _render_document_details(
+        document=result.document,
+        document_search=result,
+    )
+
+
+@document_bp.get("/<int:document_id>/semantic-search")
+@login_required
+def semantic_search_document_route(document_id):
+    """Return reader-friendly semantic matches for the embedded PDF."""
+
+    query = request.args.get(
+        "q",
+        "",
+    )
+
+    try:
+        result = search_owned_document_for_pdf(
+            document_id=document_id,
+            user_id=current_user.id,
+            query=query,
+        )
+
+    except DocumentPDFSearchNotFoundError:
+        abort(404)
+
+    except DocumentPDFSearchValidationError as error:
+        return jsonify(
+            {
+                "ok": False,
+                "message": str(error),
+            }
+        ), 400
+
+    except DocumentPDFSearchNotReadyError as error:
+        return jsonify(
+            {
+                "ok": False,
+                "message": str(error),
+            }
+        ), 409
+
+    except DocumentPDFSearchError:
+        current_app.logger.exception(
+            "Semantic PDF search failed for document %s.",
+            document_id,
+        )
+
+        return jsonify(
+            {
+                "ok": False,
+                "message": (
+                    "LifeOS could not search this PDF right now."
+                ),
+            }
+        ), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            **result.as_dict(),
+        }
+    )
+
+
+@document_bp.get("/<int:document_id>/file")
+@login_required
+def document_file_route(document_id):
+    """Serve one owned original PDF for the Step 8 viewer."""
+
+    try:
+        file_info = prepare_owned_document_file(
+            document_id=document_id,
+            user_id=current_user.id,
+        )
+
+    except DocumentNavigationNotFoundError:
+        abort(404)
+
+    except DocumentNavigationValidationError:
+        abort(404)
+
+    except DocumentNavigationNotReadyError:
+        abort(404)
+
+    except DocumentNavigationError:
+        current_app.logger.exception(
+            "Could not prepare PDF navigation for document %s.",
+            document_id,
+        )
+        abort(500)
+
+    download_requested = request.args.get(
+        "download"
+    ) == "1"
+
+    try:
+        if file_info.local_path is not None:
+            response = send_file(
+                file_info.local_path,
+                mimetype="application/pdf",
+                as_attachment=download_requested,
+                download_name=file_info.filename,
+                conditional=True,
+            )
+
+        else:
+            storage = get_storage()
+            stream = storage.open(
+                file_info.storage_key,
+                "rb",
+            )
+
+            response = send_file(
+                stream,
+                mimetype="application/pdf",
+                as_attachment=download_requested,
+                download_name=file_info.filename,
+                conditional=False,
+            )
+
+    except StorageError:
+        current_app.logger.exception(
+            "Could not stream PDF for document %s.",
+            document_id,
+        )
+        abort(500)
+
+    # This route is private and will be used by the embedded PDF viewer.
+    response.headers["Cache-Control"] = "private, no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+
+    return response
+
+
+@document_bp.get(
+    "/<int:document_id>/context/<int:chunk_id>"
+)
+@login_required
+def document_context_route(
+    document_id,
+    chunk_id,
+):
+    """Return trusted previous/current/next context for one source."""
+
+    try:
+        context = get_owned_document_context(
+            document_id=document_id,
+            user_id=current_user.id,
+            chunk_id=chunk_id,
+        )
+
+    except DocumentNavigationNotFoundError:
+        abort(404)
+
+    except DocumentNavigationValidationError as error:
+        return jsonify(
+            {
+                "ok": False,
+                "message": str(error),
+            }
+        ), 400
+
+    except DocumentNavigationNotReadyError as error:
+        return jsonify(
+            {
+                "ok": False,
+                "message": str(error),
+            }
+        ), 409
+
+    except DocumentNavigationError:
+        current_app.logger.exception(
+            "Could not load source context for document %s, chunk %s.",
+            document_id,
+            chunk_id,
+        )
+
+        return jsonify(
+            {
+                "ok": False,
+                "message": (
+                    "LifeOS could not load the surrounding document context."
+                ),
+            }
+        ), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            **context.as_dict(),
+        }
     )
 
 
@@ -539,6 +816,176 @@ def analyse_document_route(document_id):
     )
 
 
+@document_bp.route(
+    "/<int:document_id>/suggestions/<int:suggestion_id>/edit-create",
+    methods=["GET", "POST"],
+)
+@login_required
+def edit_create_suggestion_route(
+    document_id,
+    suggestion_id,
+):
+    """Review editable task fields, then explicitly create the task."""
+
+    try:
+        suggestion = require_owned_document_suggestion(
+            document_id=document_id,
+            suggestion_id=suggestion_id,
+            user_id=current_user.id,
+        )
+
+        if suggestion.status != "Pending":
+            flash(
+                "This suggestion has already been handled.",
+                "info",
+            )
+            return redirect(
+                url_for(
+                    "document_bp.document_details",
+                    document_id=document_id,
+                )
+            )
+
+        if request.method == "POST":
+            task_input = build_suggestion_task_input(
+                form=request.form,
+                suggestion=suggestion,
+                user_id=current_user.id,
+            )
+
+            allow_duplicate = (
+                request.form.get("allow_possible_duplicate") == "1"
+            )
+
+            task = approve_document_suggestion(
+                suggestion=suggestion,
+                user_id=current_user.id,
+                allow_possible_duplicate=allow_duplicate,
+                task_input=task_input,
+            )
+
+            flash(
+                f'Task "{task.title}" was created successfully.',
+                "success",
+            )
+
+            return redirect(
+                url_for(
+                    "document_bp.document_details",
+                    document_id=document_id,
+                )
+            )
+
+        task_input = default_suggestion_task_input(
+            suggestion=suggestion
+        )
+
+        possible_duplicate = preview_possible_duplicate(
+            suggestion=suggestion,
+            user_id=current_user.id,
+            task_input=task_input,
+        )
+
+    except DocumentSuggestionNotFoundError:
+        abort(404)
+
+    except DocumentSuggestionDuplicateError as error:
+        flash(str(error), "warning")
+        task_input = build_suggestion_task_input(
+            form=request.form,
+            suggestion=suggestion,
+            user_id=current_user.id,
+        )
+        possible_duplicate = error.task
+
+    except DocumentSuggestionWorkflowError as error:
+        flash(str(error), "warning")
+        task_input = default_suggestion_task_input(
+            suggestion=suggestion
+        )
+        possible_duplicate = preview_possible_duplicate(
+            suggestion=suggestion,
+            user_id=current_user.id,
+            task_input=task_input,
+        )
+
+    except DocumentSuggestionPersistenceError as error:
+        current_app.logger.exception(
+            "Could not create edited document suggestion %s.",
+            suggestion_id,
+        )
+        flash(str(error), "error")
+        task_input = default_suggestion_task_input(
+            suggestion=suggestion
+        )
+        possible_duplicate = None
+
+    return render_template(
+        "document_suggestion_edit.html",
+        document=suggestion.document,
+        suggestion=suggestion,
+        task_input=task_input,
+        projects=list_owned_projects(current_user.id),
+        possible_duplicate=possible_duplicate,
+    )
+
+
+@document_bp.post(
+    "/<int:document_id>/suggestions/bulk-create"
+)
+@login_required
+def bulk_create_suggestions_route(document_id):
+    """Create several explicitly selected non-duplicate suggestions."""
+
+    try:
+        result = bulk_create_document_suggestions(
+            suggestion_ids=request.form.getlist("suggestion_ids"),
+            user_id=current_user.id,
+            document_id=document_id,
+        )
+
+    except DocumentSuggestionNotFoundError:
+        abort(404)
+
+    except DocumentSuggestionWorkflowError as error:
+        flash(str(error), "warning")
+
+    except DocumentSuggestionPersistenceError as error:
+        current_app.logger.exception(
+            "Could not bulk-create document suggestions for document %s.",
+            document_id,
+        )
+        flash(str(error), "error")
+
+    else:
+        if result.created_count:
+            flash(
+                f"Created {result.created_count} task"
+                f"{'s' if result.created_count != 1 else ''} from the selected suggestions.",
+                "success",
+            )
+
+        if result.duplicate_count:
+            flash(
+                f"Skipped {result.duplicate_count} possible duplicate"
+                f"{'s' if result.duplicate_count != 1 else ''}. Review them individually.",
+                "warning",
+            )
+
+        if not result.created_count and not result.duplicate_count:
+            flash(
+                "The selected suggestions were already handled.",
+                "info",
+            )
+
+    return redirect(
+        url_for(
+            "document_bp.document_details",
+            document_id=document_id,
+        )
+    )
+
+
 @document_bp.post(
     "/<int:document_id>/suggestions/"
     "<int:suggestion_id>/approve"
@@ -572,6 +1019,12 @@ def approve_suggestion_route(
 
     except DocumentSuggestionNotFoundError:
         abort(404)
+
+    except DocumentSuggestionDuplicateError as error:
+        flash(
+            str(error),
+            "warning",
+        )
 
     except DocumentSuggestionWorkflowError as error:
         flash(
@@ -706,12 +1159,12 @@ def reject_suggestion_route(
     else:
         if result == "already_rejected":
             flash(
-                "This suggestion was already rejected.",
+                "This suggestion was already ignored.",
                 "info",
             )
         else:
             flash(
-                "Document suggestion rejected.",
+                "Document suggestion ignored.",
                 "success",
             )
 
@@ -735,12 +1188,30 @@ def ask_document_question_route(document_id):
 
     force = request.form.get("force") == "1"
 
+    selected_context_text = request.form.get(
+        "selected_context_text",
+        "",
+    )
+
+    selected_context_page = request.form.get(
+        "selected_context_page",
+        "",
+    )
+
+    selected_context_section = request.form.get(
+        "selected_context_section",
+        "",
+    )
+
     try:
         result = ask_owned_document(
             document_id=document_id,
             user_id=current_user.id,
             question_text=question_text,
             force=force,
+            selected_context_text=selected_context_text,
+            selected_context_page=selected_context_page,
+            selected_context_section=selected_context_section,
         )
 
     except DocumentQuestionNotFoundError:
@@ -769,11 +1240,35 @@ def ask_document_question_route(document_id):
                 "LifeOS found an existing answer for this question.",
                 "info",
             )
+
         else:
-            flash(
-                "Your document question was answered successfully.",
-                "success",
+            saved_question = getattr(
+                result,
+                "question",
+                None,
             )
+
+            saved_answer = str(
+                getattr(
+                    saved_question,
+                    "answer",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            if saved_answer == NO_MATCH_ANSWER:
+                flash(
+                    "LifeOS could not find enough document evidence "
+                    "to answer that question.",
+                    "warning",
+                )
+
+            else:
+                flash(
+                    "Your document question was answered successfully.",
+                    "success",
+                )
 
     return redirect(
         url_for(

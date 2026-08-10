@@ -11,10 +11,18 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Mapping
 
+from sqlalchemy import case
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
-from models import Note, Project, Task
+from models import (
+    Document,
+    DocumentTaskSuggestion,
+    Note,
+    Project,
+    ProjectQuestion,
+    Task,
+)
 
 
 PROJECT_STATUSES = frozenset({"Planning", "In Progress", "Paused", "Completed"})
@@ -523,6 +531,72 @@ def build_project_workspace(
         project_notes_query.order_by(Note.updated_at.desc()).limit(6).all()
     )
 
+    document_suggestions = (
+        DocumentTaskSuggestion.query
+        .join(
+            Document,
+            DocumentTaskSuggestion.document_id == Document.id,
+        )
+        .filter(
+            Document.project_id == project.id,
+            DocumentTaskSuggestion.user_id == owner_id,
+        )
+        .order_by(
+            case(
+                (DocumentTaskSuggestion.status == "Pending", 0),
+                (DocumentTaskSuggestion.status == "Approved", 1),
+                (DocumentTaskSuggestion.status == "Linked", 2),
+                else_=3,
+            ),
+            DocumentTaskSuggestion.created_at.desc(),
+            DocumentTaskSuggestion.id.desc(),
+        )
+        .limit(80)
+        .all()
+    )
+
+    pending_document_suggestions = [
+        suggestion
+        for suggestion in document_suggestions
+        if suggestion.status == "Pending"
+    ]
+
+    project_documents = (
+        Document.query
+        .filter_by(project_id=project.id)
+        .order_by(
+            Document.uploaded_at.desc(),
+            Document.id.desc(),
+        )
+        .all()
+    )
+
+    searchable_project_documents = [
+        document
+        for document in project_documents
+        if str(document.extracted_text or "").strip()
+    ]
+
+    project_question_query = (
+        ProjectQuestion.query
+        .filter_by(
+            project_id=project.id,
+            user_id=owner_id,
+        )
+    )
+
+    project_question_count = project_question_query.count()
+
+    project_question_history = (
+        project_question_query
+        .order_by(
+            ProjectQuestion.created_at.desc(),
+            ProjectQuestion.id.desc(),
+        )
+        .limit(40)
+        .all()
+    )
+
     module_names = sorted({task.module for task in tasks if task.module})
     days_to_deadline = None
     if project.deadline:
@@ -547,5 +621,14 @@ def build_project_workspace(
         "days_to_deadline": days_to_deadline,
         "recent_notes": recent_notes,
         "notes_count": notes_count,
+        "document_suggestions": document_suggestions,
+        "pending_document_suggestions": pending_document_suggestions,
+        "document_suggestion_count": len(document_suggestions),
+        "pending_document_suggestion_count": len(pending_document_suggestions),
+        "project_documents": project_documents,
+        "project_document_count": len(project_documents),
+        "searchable_project_document_count": len(searchable_project_documents),
+        "project_question_history": project_question_history,
+        "project_question_count": project_question_count,
         "today": effective_today,
     }

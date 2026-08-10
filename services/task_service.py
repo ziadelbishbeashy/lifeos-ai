@@ -14,7 +14,7 @@ from typing import Any, Mapping
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
-from models import AITaskSuggestion, Project, Task
+from models import AITaskSuggestion, DocumentTaskSuggestion, Project, Task
 from services.recurring_task_service import calculate_next_date, generate_next_occurrence
 
 
@@ -51,6 +51,7 @@ class TaskInput:
     title: str
     description: str | None
     module: str | None
+    tags: str | None
     importance: str
     difficulty: str
     deadline: date | None
@@ -72,6 +73,7 @@ class TaskInput:
             "title": self.title,
             "description": self.description,
             "module": self.module,
+            "tags": self.tags,
             "importance": self.importance,
             "difficulty": self.difficulty,
             "deadline": self.deadline,
@@ -130,6 +132,31 @@ def _clean_optional_text(value: str | None) -> str | None:
 
     cleaned = value.strip()
     return cleaned or None
+
+
+def normalize_task_tags(value: str | None) -> str | None:
+    """Normalize a comma-separated tag list without trusting raw form text."""
+
+    if not value:
+        return None
+
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    for raw_tag in str(value).replace(";", ",").split(","):
+        tag = " ".join(raw_tag.strip().split())[:40]
+        key = tag.casefold()
+
+        if not tag or key in seen:
+            continue
+
+        seen.add(key)
+        tags.append(tag)
+
+        if len(tags) >= 12:
+            break
+
+    return ", ".join(tags) or None
 
 
 def _resolve_project_id(
@@ -270,6 +297,7 @@ def build_task_input(
         title=(form.get("title") or "").strip(),
         description=_clean_optional_text(form.get("description")),
         module=_clean_optional_text(form.get("module")),
+        tags=normalize_task_tags(form.get("tags")),
         importance=(form.get("importance") or "Medium").strip(),
         difficulty=(form.get("difficulty") or "Medium").strip(),
         deadline=deadline,
@@ -475,6 +503,24 @@ def delete_task(task: Task) -> DeletedTaskResult:
                 synchronize_session=False,
             )
         )
+
+        (
+            DocumentTaskSuggestion.query.filter_by(created_task_id=task.id).update(
+                {
+                    DocumentTaskSuggestion.created_task_id: None,
+                    DocumentTaskSuggestion.status: "Pending",
+                },
+                synchronize_session=False,
+            )
+        )
+
+        (
+            DocumentTaskSuggestion.query.filter_by(matched_task_id=task.id).update(
+                {DocumentTaskSuggestion.matched_task_id: None},
+                synchronize_session=False,
+            )
+        )
+
         db.session.delete(task)
         db.session.commit()
         return result

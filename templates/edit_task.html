@@ -236,6 +236,20 @@
                     </div>
 
                     <div class="task-form-field">
+                        <label for="editTaskTags">
+                            Tags
+                        </label>
+
+                        <input
+                            type="text"
+                            id="editTaskTags"
+                            name="tags"
+                            value="{{ task.tags or '' }}"
+                            placeholder="Example: backend, testing"
+                        >
+                    </div>
+
+                    <div class="task-form-field">
                         <label for="editTaskStatus">
                             Status
                         </label>

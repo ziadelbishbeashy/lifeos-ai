@@ -28,8 +28,18 @@ from services.document_hybrid_retrieval_service import (
     DocumentHybridRetrievalNotFoundError,
     DocumentHybridRetrievalNotReadyError,
     DocumentHybridRetrievalValidationError,
+    HybridRetrievedDocumentChunk,
     build_hybrid_retrieval_context,
     retrieve_owned_document_chunks_hybrid,
+)
+
+from services.document_selected_context_service import (
+    DocumentSelectedContextError,
+    DocumentSelectedContextNotFoundError,
+    DocumentSelectedContextValidationError,
+    ValidatedDocumentSelection,
+    resolve_selection_chunks,
+    validate_owned_pdf_selection,
 )
 
 from services.document_answerability_service import (
@@ -49,7 +59,7 @@ from services.document_rag_logging_service import (
 
 
 QUESTION_WORKFLOW_VERSION = (
-    "document-question-focused-evidence-v8"
+    "document-question-selected-context-v11"
 )
 
 RETRIEVAL_RESULT_LIMIT = 5
@@ -92,6 +102,9 @@ def ask_owned_document(
     user_id: int,
     question_text: str,
     force: bool = False,
+    selected_context_text: str = "",
+    selected_context_page: int | str | None = None,
+    selected_context_section: str = "",
 ) -> SavedDocumentQuestion:
     """Retrieve evidence, validate claim citations and save the answer."""
 
@@ -130,6 +143,33 @@ def ask_owned_document(
             f"Use at most {MAX_QUESTION_CHARACTERS:,} characters."
         )
 
+    selected_context: ValidatedDocumentSelection | None = None
+
+    if str(selected_context_text or "").strip():
+        try:
+            selected_context = validate_owned_pdf_selection(
+                document_id=document.id,
+                user_id=user_id,
+                selected_text=selected_context_text,
+                page=selected_context_page,
+                section=selected_context_section,
+            )
+
+        except DocumentSelectedContextNotFoundError as error:
+            raise DocumentQuestionNotFoundError(
+                str(error)
+            ) from error
+
+        except DocumentSelectedContextValidationError as error:
+            raise DocumentQuestionWorkflowError(
+                str(error)
+            ) from error
+
+        except DocumentSelectedContextError as error:
+            raise DocumentQuestionWorkflowError(
+                "LifeOS could not prepare the selected PDF context."
+            ) from error
+
     trace_id = create_document_rag_trace_id()
 
     log_document_rag_event(
@@ -142,7 +182,8 @@ def ask_owned_document(
     )
 
     source_fingerprint = _create_source_fingerprint(
-        extracted_text
+        extracted_text,
+        selected_context=selected_context,
     )
 
     if not force:
@@ -170,11 +211,16 @@ def ask_owned_document(
             )
 
     try:
+        retrieval_query = _build_question_retrieval_query(
+            question=cleaned_question,
+            selected_context=selected_context,
+        )
+
         retrieval_result = (
             retrieve_owned_document_chunks_hybrid(
                 document_id=document.id,
                 user_id=user_id,
-                query=cleaned_question,
+                query=retrieval_query,
                 limit=RETRIEVAL_RESULT_LIMIT,
             )
         )
@@ -238,6 +284,29 @@ def ask_owned_document(
             str(error)
         ) from error
 
+    if selected_context is not None:
+        preferred_chunks = resolve_selection_chunks(
+            selected_context,
+            user_id=user_id,
+        )
+
+        retrieval_result = _prefer_selected_context_chunks(
+            retrieval_result=retrieval_result,
+            selected_context=selected_context,
+            preferred_chunks=preferred_chunks,
+        )
+
+        log_document_rag_event(
+            event="selected_context_prepared",
+            trace_id=trace_id,
+            document_id=document.id,
+            question=cleaned_question,
+            selected_page=selected_context.page,
+            preferred_chunk_count=len(
+                preferred_chunks
+            ),
+        )
+
     log_document_rag_event(
         event="retrieval_completed",
         trace_id=trace_id,
@@ -249,6 +318,11 @@ def ask_owned_document(
     )
 
     answer_retrieval_result = retrieval_result
+
+    model_question = _build_model_question(
+        question=cleaned_question,
+        selected_context=selected_context,
+    )
 
     retrieval_context = build_hybrid_retrieval_context(
         retrieval_result,
@@ -280,7 +354,7 @@ def ask_owned_document(
             verification = verify_document_answerability(
                 filename=document.filename,
                 retrieved_context=retrieval_context,
-                question=cleaned_question,
+                question=model_question,
             )
 
         except DocumentAnswerabilityError as error:
@@ -424,7 +498,7 @@ def ask_owned_document(
                 result = ask_document_question(
                     filename=document.filename,
                     extracted_text=verified_context,
-                    question=cleaned_question,
+                    question=model_question,
                 )
 
             except AIServiceError as error:
@@ -506,6 +580,33 @@ def ask_owned_document(
             )
 
             raise
+
+    if selected_context is not None:
+        selected_source = selected_context.as_source()
+
+        preferred_chunks = resolve_selection_chunks(
+            selected_context,
+            user_id=user_id,
+        )
+
+        if preferred_chunks:
+            selected_source["chunk_id"] = int(
+                preferred_chunks[0].id
+            )
+            selected_source["chunk_index"] = int(
+                preferred_chunks[0].chunk_index
+            )
+
+        grounded_sources = [
+            source
+            for source in grounded_sources
+            if source.get("context_role") != "selected"
+        ]
+
+        grounded_sources = [
+            selected_source,
+            *grounded_sources,
+        ]
 
     if not saved_answer:
         error = DocumentQuestionWorkflowError(
@@ -726,6 +827,216 @@ def list_owned_document_questions(
     )
 
 
+def _build_model_question(
+    *,
+    question: str,
+    selected_context: ValidatedDocumentSelection | None,
+) -> str:
+    """
+    Make deictic selected-context questions explicit for AI stages.
+
+    The user-facing and stored question stays unchanged. This expanded
+    formulation is used only internally by the answerability verifier and
+    answer generator so phrases such as "this", "it", "here", and
+    "this passage" have an unambiguous referent.
+    """
+
+    cleaned_question = " ".join(
+        str(question or "").split()
+    ).strip()
+
+    if selected_context is None:
+        return cleaned_question
+
+    page_label = (
+        str(selected_context.page)
+        if selected_context.page is not None
+        else "unknown"
+    )
+
+    section = " ".join(
+        str(
+            selected_context.section
+            or ""
+        ).split()
+    ).strip()
+
+    location = f"page {page_label}"
+
+    if section:
+        location = (
+            f"{location}, section "
+            f'"{section}"'
+        )
+
+    return (
+        "The user explicitly highlighted Source 1 in the PDF "
+        f"({location}) and is asking about that selected passage. "
+        'Interpret words such as "this", "it", "here", '
+        'and "this passage" as referring to Source 1. '
+        "For requests to explain, simplify, summarize, clarify, "
+        "interpret, or restate the highlighted passage, Source 1 "
+        "itself is direct evidence and can be sufficient. "
+        "For questions that require broader relationships or facts, "
+        "use Source 1 as the primary anchor and use the other supplied "
+        "document sources as additional evidence. "
+        "Do not require the document to contain a separate sentence "
+        "that literally answers an explanatory request. "
+        "\n\nOriginal user question:\n"
+        f"{cleaned_question}"
+    )
+
+
+def _build_question_retrieval_query(
+    *,
+    question: str,
+    selected_context: ValidatedDocumentSelection | None,
+) -> str:
+    """
+    Search the whole PDF using the question plus the selected passage.
+
+    This makes contextual questions such as "explain this" useful while
+    still allowing retrieval to discover related evidence elsewhere.
+    """
+
+    cleaned_question = " ".join(
+        str(question or "").split()
+    ).strip()
+
+    if selected_context is None:
+        return cleaned_question
+
+    selected_excerpt = " ".join(
+        str(selected_context.text or "").split()
+    ).strip()[:1500]
+
+    if not selected_excerpt:
+        return cleaned_question
+
+    return (
+        f"{cleaned_question}\n\n"
+        "Selected PDF context:\n"
+        f"{selected_excerpt}"
+    )
+
+
+def _prefer_selected_context_chunks(
+    *,
+    retrieval_result: Any,
+    preferred_chunks: list[Any],
+    selected_context: ValidatedDocumentSelection | None = None,
+) -> Any:
+    """
+    Put the exact verified PDF selection first, then related document chunks.
+
+    The visible selection itself is a trusted source because it was already
+    verified against the owned PDF page. It must not disappear merely because
+    chunk mapping or a generic question such as "explain this" retrieved
+    different passages.
+    """
+
+    existing = list(
+        retrieval_result.chunks or []
+    )
+
+    selected_retrieved = None
+
+    if selected_context is not None:
+        selected_virtual_chunk = SimpleNamespace(
+            id=None,
+            document_id=selected_context.document.id,
+            chunk_index=-1,
+            page_start=selected_context.page,
+            page_end=selected_context.page,
+            section_title=(
+                selected_context.section
+                or "Selected PDF context"
+            ),
+            text=selected_context.text,
+            context_role="selected",
+        )
+
+        selected_retrieved = HybridRetrievedDocumentChunk(
+            chunk=selected_virtual_chunk,
+            score=1.0,
+            keyword_score=None,
+            semantic_score=None,
+            keyword_rank=None,
+            semantic_rank=None,
+            matched_terms=(),
+        )
+
+    preferred_ids = {
+        int(chunk.id)
+        for chunk in preferred_chunks
+        if getattr(chunk, "id", None) is not None
+    }
+
+    preferred_wrapped = [
+        HybridRetrievedDocumentChunk(
+            chunk=chunk,
+            score=1.0,
+            keyword_score=None,
+            semantic_score=None,
+            keyword_rank=None,
+            semantic_rank=None,
+            matched_terms=(),
+        )
+        for chunk in preferred_chunks
+    ]
+
+    existing_without_preferred = [
+        retrieved
+        for retrieved in existing
+        if getattr(
+            getattr(retrieved, "chunk", None),
+            "id",
+            None,
+        ) not in preferred_ids
+    ]
+
+    combined = [
+        *(
+            [selected_retrieved]
+            if selected_retrieved is not None
+            else []
+        ),
+        *preferred_wrapped,
+        *existing_without_preferred,
+    ]
+
+    # With selected context, the exact verified selection is always first.
+    # Without it, preserve the older helper contract: preferred mapped chunks
+    # come before normal retrieval results.
+    leading_count = (
+        1
+        if selected_retrieved is not None
+        else 0
+    )
+
+    combined = combined[
+        : max(
+            RETRIEVAL_RESULT_LIMIT + 3,
+            leading_count + len(preferred_wrapped),
+        )
+    ]
+
+    if is_dataclass(retrieval_result):
+        return replace(
+            retrieval_result,
+            chunks=combined,
+        )
+
+    data = dict(
+        vars(retrieval_result)
+    )
+    data["chunks"] = combined
+
+    return SimpleNamespace(
+        **data
+    )
+
+
 def _find_owned_document(
     *,
     document_id: int,
@@ -775,17 +1086,23 @@ def _find_reusable_question(
 
 def _create_source_fingerprint(
     extracted_text: str,
+    *,
+    selected_context: ValidatedDocumentSelection | None = None,
 ) -> str:
-    """
-    Fingerprint the document and current question workflow.
+    """Fingerprint document + workflow + optional selected PDF context."""
 
-    Including the workflow version prevents old full-document
-    answers from being reused after switching to RAG.
-    """
+    selected_identity = ""
+
+    if selected_context is not None:
+        selected_identity = (
+            f"\nselected-page:{selected_context.page}"
+            f"\nselected-text:{selected_context.text}"
+        )
 
     fingerprint_input = (
         f"{QUESTION_WORKFLOW_VERSION}\n"
         f"{str(extracted_text or '')}"
+        f"{selected_identity}"
     )
 
     return hashlib.sha256(
@@ -977,25 +1294,69 @@ def _sources_from_claims(
             )
         )
 
+        database_chunk = getattr(
+            retrieved_source,
+            "chunk",
+            None,
+        )
+
+        chunk_id = getattr(
+            database_chunk,
+            "id",
+            None,
+        )
+
+        chunk_index = getattr(
+            database_chunk,
+            "chunk_index",
+            None,
+        )
+
+        source_item = {
+            # source_id is the temporary numbered source shown to
+            # the answer model. chunk_id/chunk_index stay backend-only.
+            "source_id": source_id,
+            "chunk_id": (
+                int(chunk_id)
+                if chunk_id is not None
+                else None
+            ),
+            "chunk_index": (
+                int(chunk_index)
+                if chunk_index is not None
+                else None
+            ),
+            "page": trusted_source.get(
+                "page"
+            ),
+            "section": str(
+                trusted_source.get(
+                    "section"
+                )
+                or ""
+            ).strip(),
+            "evidence": preview.text,
+            "preview_type": (
+                "focused"
+                if preview.focused
+                else "leading"
+            ),
+        }
+
+        context_role = str(
+            getattr(
+                database_chunk,
+                "context_role",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if context_role:
+            source_item["context_role"] = context_role
+
         sources.append(
-            {
-                "source_id": source_id,
-                "page": trusted_source.get(
-                    "page"
-                ),
-                "section": str(
-                    trusted_source.get(
-                        "section"
-                    )
-                    or ""
-                ).strip(),
-                "evidence": preview.text,
-                "preview_type": (
-                    "focused"
-                    if preview.focused
-                    else "leading"
-                ),
-            }
+            source_item
         )
 
     if not sources:

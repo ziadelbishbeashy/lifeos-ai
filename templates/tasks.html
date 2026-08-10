@@ -202,6 +202,7 @@
                     data-title="{{ task.title|lower }}"
                     data-description="{{ (task.description or '')|lower }}"
                     data-module="{{ (task.module or '')|lower }}"
+                        data-tags="{{ (task.tags or '')|lower }}"
                     data-status="{{ task.status|lower }}" data-recurring="{{ 'true' if task.is_recurring else 'false' }}"
                     data-importance="{{ task.importance|lower }}"
                     data-scope="{% if task.project_id %}project{% else %}general{% endif %}"
@@ -585,6 +586,19 @@
                         <option value="Deployment">
                         <option value="Documentation">
                     </datalist>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="workspaceTaskTags">
+                        Tags
+                    </label>
+
+                    <input
+                        type="text"
+                        id="workspaceTaskTags"
+                        name="tags"
+                        placeholder="Example: backend, testing"
+                    >
                 </div>
 
                 <div class="task-form-field">

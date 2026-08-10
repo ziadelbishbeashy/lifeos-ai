@@ -56,6 +56,12 @@ class User(UserMixin, db.Model):
     back_populates="user",
     lazy=True,
     )
+    project_questions = db.relationship(
+    "ProjectQuestion",
+    back_populates="user",
+    lazy=True,
+    cascade="all, delete-orphan",
+    )
     document_task_suggestions = db.relationship(
     "DocumentTaskSuggestion",
     back_populates="user",
@@ -175,6 +181,13 @@ class Project(db.Model):
         cascade="all, delete-orphan",
     )
 
+    project_questions = db.relationship(
+        "ProjectQuestion",
+        back_populates="project",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     
 
 
@@ -229,6 +242,7 @@ class Task(db.Model):
     title = db.Column(db.Unicode(200), nullable=False)
     description = db.Column(db.UnicodeText, nullable=True)
     module = db.Column(db.Unicode(100), nullable=True)
+    tags = db.Column(db.Unicode(500), nullable=True)
     importance = db.Column(db.Unicode(50), default="Medium")
     difficulty = db.Column(db.Unicode(50), default="Medium")
     deadline = db.Column(db.Date, nullable=True)
@@ -310,6 +324,19 @@ class Task(db.Model):
     @property
     def scope_label(self):
         return "General Workspace" if self.is_general else "Project Task"
+
+    @property
+    def tags_list(self) -> list[str]:
+        """Return normalized comma-separated task tags."""
+
+        if not self.tags:
+            return []
+
+        return [
+            item.strip()
+            for item in self.tags.split(",")
+            if item.strip()
+        ]
 
     def __repr__(self):
         return f"<Task {self.title}>"
@@ -1304,6 +1331,11 @@ class DocumentTaskSuggestion(db.Model):
         nullable=True,
     )
 
+    tags = db.Column(
+        db.Unicode(500),
+        nullable=True,
+    )
+
     priority = db.Column(
         db.Unicode(20),
         nullable=False,
@@ -1404,10 +1436,134 @@ class DocumentTaskSuggestion(db.Model):
 
         return parsed if isinstance(parsed, dict) else {}
 
+    @property
+    def lifecycle_label(self) -> str:
+        """Return the user-facing Step 9 lifecycle label."""
+
+        return {
+            "Pending": "Suggested",
+            "Approved": "Created",
+            "Linked": "Existing task",
+            "Rejected": "Ignored",
+        }.get(self.status, self.status or "Suggested")
+
+    @property
+    def tags_list(self) -> list[str]:
+        if not self.tags:
+            return []
+
+        return [
+            item.strip()
+            for item in self.tags.split(",")
+            if item.strip()
+        ]
+
+    @property
+    def is_actionable(self) -> bool:
+        return self.status == "Pending"
+
     def __repr__(self):
         return (
             f"<DocumentTaskSuggestion "
             f"id={self.id} status={self.status}>"
+        )
+
+
+class ProjectQuestion(db.Model):
+    """A grounded answer produced from all readable PDFs in one project."""
+
+    __tablename__ = "project_questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    project_id = db.Column(
+        db.Integer,
+        db.ForeignKey("projects.id"),
+        nullable=False,
+        index=True,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    question = db.Column(
+        db.Unicode(2000),
+        nullable=False,
+    )
+
+    answer = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    sources_json = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    provider = db.Column(
+        db.Unicode(30),
+        nullable=False,
+    )
+
+    model = db.Column(
+        db.Unicode(100),
+        nullable=False,
+    )
+
+    status = db.Column(
+        db.Unicode(20),
+        nullable=False,
+        default="Completed",
+        index=True,
+    )
+
+    source_fingerprint = db.Column(
+        db.Unicode(64),
+        nullable=True,
+    )
+
+    error_message = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    project = db.relationship(
+        "Project",
+        back_populates="project_questions",
+    )
+
+    user = db.relationship(
+        "User",
+        back_populates="project_questions",
+    )
+
+    @property
+    def sources(self) -> list:
+        if not self.sources_json:
+            return []
+
+        try:
+            parsed = json.loads(self.sources_json)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+        return parsed if isinstance(parsed, list) else []
+
+    def __repr__(self):
+        return (
+            f"<ProjectQuestion id={self.id} "
+            f"project_id={self.project_id} status={self.status}>"
         )
 
 

@@ -682,7 +682,12 @@
             }
 
             if (
-                ["overview", "insights", "actions"].includes(
+                [
+                    "overview",
+                    "insights",
+                    "search",
+                    "actions"
+                ].includes(
                     cleaned
                 )
             ) {
@@ -896,6 +901,20 @@
                                 },
                                 50
                             );
+                        } else if (panel === "search") {
+                            window.setTimeout(
+                                function () {
+                                    const input =
+                                        detail.querySelector(
+                                            "[data-db-document-search-input]"
+                                        );
+
+                                    if (input) {
+                                        input.focus();
+                                    }
+                                },
+                                50
+                            );
                         }
                     }
                 );
@@ -905,8 +924,14 @@
             const hash = window.location.hash
                 .replace(/^#/, "");
 
+            const initialPanel = (
+                hash
+                || detail.dataset.dbInitialTab
+                || "overview"
+            );
+
             activate(
-                hash || "overview",
+                initialPanel,
                 {
                     updateHash: false,
                     focus: false
@@ -1516,6 +1541,81 @@
         updateChoiceMessage();
     }
 
+    function initDocumentPassageSearch() {
+        const form = document.querySelector(
+            "[data-db-passage-search-form]"
+        );
+
+        if (!form) {
+            return;
+        }
+
+        const input = form.querySelector(
+            "[data-db-document-search-input]"
+        );
+
+        const clearButton = form.querySelector(
+            "[data-db-document-search-clear]"
+        );
+
+        if (!input) {
+            return;
+        }
+
+        function updateClearState() {
+            if (!clearButton) {
+                return;
+            }
+
+            clearButton.hidden = !input.value.trim();
+        }
+
+        input.addEventListener(
+            "input",
+            updateClearState
+        );
+
+        if (clearButton) {
+            clearButton.addEventListener(
+                "click",
+                function () {
+                    input.value = "";
+                    updateClearState();
+                    input.focus();
+                }
+            );
+        }
+
+        form.addEventListener(
+            "submit",
+            function (event) {
+                const cleaned = input.value.trim();
+
+                if (!cleaned) {
+                    event.preventDefault();
+                    input.focus();
+                    return;
+                }
+
+                input.value = cleaned;
+
+                const button = form.querySelector(
+                    "button[type='submit']"
+                );
+
+                if (button) {
+                    button.disabled = true;
+                    button.dataset.originalLabel =
+                        button.textContent.trim();
+                    button.textContent = "Searching…";
+                    button.classList.add("is-loading");
+                }
+            }
+        );
+
+        updateClearState();
+    }
+
     function initInlineLoading() {
         document
             .querySelectorAll(
@@ -1566,6 +1666,7 @@
         initActionFilters();
         initQuestionHistory();
         initDocumentTypeConfirmation();
+        initDocumentPassageSearch();
         initInlineLoading();
     });
 })();

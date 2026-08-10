@@ -1,0 +1,20 @@
+LifeOS Document Brain — Step 5 Structured Document Overview
+
+New files:
+- services/document_overview_service.py
+- tests/test_document_overview_service.py
+- STEP5_STRUCTURED_DOCUMENT_OVERVIEW.md
+
+Updated files:
+- services/document_analysis_service.py
+- services/ai_service.py
+- services/document_ai_workflow_service.py
+- routes/document_routes.py
+- templates/document_details.html
+- static/css/theme-v2.css
+- tests/test_document_analysis_service.py
+- tests/test_ai_service_document.py
+- tests/test_document_ai_workflow_service.py
+- tests/test_document_brain_ui.py
+
+No database migration is required.

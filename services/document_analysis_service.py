@@ -457,6 +457,38 @@ def normalise_deadlines(
     return deadlines
 
 
+def normalise_action_tags(value: Any) -> list[str]:
+    """Return a small, safe tag list for a suggested task."""
+
+    if value in (None, ""):
+        return []
+
+    if isinstance(value, str):
+        raw_items = value.replace(";", ",").split(",")
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = list(value)
+    else:
+        raw_items = [value]
+
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    for raw_tag in raw_items:
+        tag = clean_text(raw_tag, max_length=40)
+        key = tag.casefold()
+
+        if not tag or key in seen:
+            continue
+
+        seen.add(key)
+        tags.append(tag)
+
+        if len(tags) >= 6:
+            break
+
+    return tags
+
+
 def normalise_action_items(
     value: Any,
     *,
@@ -495,6 +527,10 @@ def normalise_action_items(
                 )
             )
 
+            tags = normalise_action_tags(
+                raw_item.get("tags")
+            )
+
             source = _source_from_item(
                 raw_item
             )
@@ -510,6 +546,7 @@ def normalise_action_items(
             description = ""
             priority = "Medium"
             deadline = None
+            tags = []
             source = normalise_source(None)
 
         if not title:
@@ -521,6 +558,7 @@ def normalise_action_items(
                 "description": description,
                 "priority": priority,
                 "deadline": deadline,
+                "tags": tags,
                 "source": source,
             }
         )

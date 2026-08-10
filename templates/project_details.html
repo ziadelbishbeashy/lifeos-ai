@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_document_task_suggestions.html" import render_document_task_suggestions %}
 
 {% block title %}
     {{ project.title }} | LifeOS AI
@@ -147,6 +148,15 @@
             aria-selected="false"
         >
             Notes <span>{{ notes_count }}</span>
+        </button>
+
+        <button
+            type="button"
+            class="project-studio-tab"
+            data-project-studio-tab="ask-project"
+            aria-selected="false"
+        >
+            Ask Documents <span>{{ project_document_count }}</span>
         </button>
     </nav>
 
@@ -401,6 +411,34 @@
             </button>
         </div>
 
+        {% if document_suggestions %}
+            <section class="project-document-suggestions-block">
+                <div class="project-document-suggestions-heading">
+                    <div>
+                        <span class="workspace-eyebrow">From linked documents</span>
+                        <h3>Document task suggestions</h3>
+                        <p>
+                            Review work detected from PDFs connected to this project.
+                            Nothing is created until you approve it.
+                        </p>
+                    </div>
+                    <span class="project-document-suggestion-count">
+                        {{ pending_document_suggestion_count }} awaiting review
+                    </span>
+                </div>
+
+                {{ render_document_task_suggestions(
+                    document_suggestions,
+                    url_for(
+                        'project_bp.bulk_create_document_suggestions_route',
+                        project_id=project.id
+                    ),
+                    'projectSuggestionBulkForm',
+                    true
+                ) }}
+            </section>
+        {% endif %}
+
         {% if tasks %}
             <section class="project-filter-panel project-studio-task-filter">
                 <div class="project-search-wrapper">
@@ -446,6 +484,7 @@
                         data-title="{{ task.title|lower }}"
                         data-description="{{ (task.description or '')|lower }}"
                         data-module="{{ (task.module or '')|lower }}"
+                        data-tags="{{ (task.tags or '')|lower }}"
                         data-status="{{ (task.status or 'pending')|lower }}"
                         data-importance="{{ (task.importance or 'medium')|lower }}"
                         data-scope="project"
@@ -484,6 +523,9 @@
 
                             <div class="project-studio-task-meta">
                                 <span>{{ task.module or "General" }}</span>
+                                {% if task.tags_list %}
+                                    <span>{{ task.tags_list | join(', ') }}</span>
+                                {% endif %}
                                 <span>{{ task.status }}</span>
                                 <span>{{ task.importance or "Medium" }} priority</span>
                                 {% if task.deadline %}
@@ -627,6 +669,186 @@
         {% endif %}
     </section>
 
+
+    <!-- PROJECT-WIDE MULTI-DOCUMENT RAG -->
+    <section
+        class="project-studio-panel project-rag-panel"
+        data-project-studio-panel="ask-project"
+        id="ask-project"
+        hidden
+    >
+        <div class="project-studio-panel-heading project-rag-heading">
+            <div>
+                <span class="workspace-eyebrow">Project-wide document intelligence</span>
+                <h2>Ask across linked PDFs</h2>
+                <p>
+                    LifeOS searches every readable PDF linked to this project,
+                    verifies the evidence, and keeps each answer tied to its
+                    source document and page.
+                </p>
+            </div>
+
+            <a
+                href="{{ url_for('document_bp.documents') }}"
+                class="workspace-secondary-button"
+            >
+                Manage Documents
+            </a>
+        </div>
+
+        <section class="project-rag-status" aria-label="Project document search coverage">
+            <div>
+                <span>Linked PDFs</span>
+                <strong>{{ project_document_count }}</strong>
+            </div>
+            <div>
+                <span>Searchable now</span>
+                <strong>{{ searchable_project_document_count }}</strong>
+            </div>
+            <div>
+                <span>Saved questions</span>
+                <strong>{{ project_question_count }}</strong>
+            </div>
+        </section>
+
+        {% if searchable_project_document_count %}
+            <form
+                method="POST"
+                action="{{ url_for('project_bp.ask_project_documents_route', project_id=project.id) }}"
+                class="project-rag-question-form"
+                data-page-loading
+                data-loading-title="Searching project documents"
+                data-loading-message="Finding and verifying evidence across linked PDFs..."
+            >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <label for="projectDocumentQuestion">
+                    Ask a question about the project PDFs
+                </label>
+
+                <div class="project-rag-question-row">
+                    <textarea
+                        id="projectDocumentQuestion"
+                        name="question"
+                        maxlength="2000"
+                        rows="3"
+                        required
+                        placeholder="Example: What risks and deadlines are mentioned across the project documents?"
+                    ></textarea>
+
+                    <button type="submit" class="workspace-primary-button">
+                        Ask Project Documents
+                    </button>
+                </div>
+
+                <p class="project-rag-helper">
+                    Answers use retrieved PDF evidence only. LifeOS will say when
+                    the linked documents do not directly support an answer.
+                </p>
+            </form>
+        {% else %}
+            <section class="project-rag-empty">
+                <strong>No searchable project PDFs yet</strong>
+                <p>
+                    Upload a readable PDF linked to this project before asking a
+                    project-wide document question.
+                </p>
+                <a
+                    href="{{ url_for('document_bp.documents') }}"
+                    class="workspace-primary-button"
+                >
+                    Open Document Brain
+                </a>
+            </section>
+        {% endif %}
+
+        {% if project_question_history %}
+            <section class="project-rag-history">
+                <div class="project-rag-history-heading">
+                    <div>
+                        <span class="workspace-eyebrow">Grounded history</span>
+                        <h3>Project document answers</h3>
+                    </div>
+                    <span>{{ project_question_count }} saved</span>
+                </div>
+
+                <div class="project-rag-question-list">
+                    {% for saved_question in project_question_history %}
+                        <details class="project-rag-question-card" {% if loop.first %}open{% endif %}>
+                            <summary>
+                                <div>
+                                    <strong>{{ saved_question.question }}</strong>
+                                    <span>
+                                        {{ saved_question.created_at.strftime("%d %b %Y · %H:%M") if saved_question.created_at else "Saved answer" }}
+                                        · {{ saved_question.status }}
+                                    </span>
+                                </div>
+                                <span class="project-rag-chevron">+</span>
+                            </summary>
+
+                            <div class="project-rag-answer-body">
+                                {% if saved_question.status == "Completed" %}
+                                    <div class="project-rag-answer">
+                                        <span>Grounded answer</span>
+                                        <p>{{ saved_question.answer }}</p>
+                                    </div>
+
+                                    {% if saved_question.sources %}
+                                        <div class="project-rag-sources">
+                                            <div class="project-rag-sources-heading">
+                                                <strong>Supporting sources</strong>
+                                                <span>{{ saved_question.sources | length }}</span>
+                                            </div>
+
+                                            <div class="project-rag-source-list">
+                                                {% for source in saved_question.sources %}
+                                                    <article class="project-rag-source-card">
+                                                        <div class="project-rag-source-heading">
+                                                            <div>
+                                                                <span>Source {{ source.get('source_id') }}</span>
+                                                                <strong>{{ source.get('filename') or 'Project document' }}</strong>
+                                                                <small>
+                                                                    {% if source.get('page') %}Page {{ source.get('page') }}{% endif %}
+                                                                    {% if source.get('page') and source.get('section') %} · {% endif %}
+                                                                    {{ source.get('section') or '' }}
+                                                                </small>
+                                                            </div>
+
+                                                            {% if source.get('document_id') %}
+                                                                <a
+                                                                    href="{{ url_for('document_bp.document_details', document_id=source.get('document_id'), pdf_page=source.get('page')) if source.get('page') else url_for('document_bp.document_details', document_id=source.get('document_id')) }}#ask-document"
+                                                                    class="workspace-secondary-button compact"
+                                                                >
+                                                                    View source
+                                                                </a>
+                                                            {% endif %}
+                                                        </div>
+
+                                                        {% if source.get('evidence') %}
+                                                            <blockquote>{{ source.get('evidence') }}</blockquote>
+                                                        {% endif %}
+                                                    </article>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <div class="project-rag-no-answer">
+                                            No directly supporting passage was found across the linked PDFs.
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="project-rag-no-answer">
+                                        This attempt could not be completed. Ask again after checking the linked PDFs or AI configuration.
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </details>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+    </section>
+
 </div>
 
 
@@ -738,6 +960,22 @@
                         <option value="Deployment">
                         <option value="Documentation">
                     </datalist>
+
+                </div>
+
+
+                <div class="task-form-field">
+
+                    <label for="newTaskTags">
+                        Tags
+                    </label>
+
+                    <input
+                        type="text"
+                        id="newTaskTags"
+                        name="tags"
+                        placeholder="Example: backend, testing"
+                    >
 
                 </div>
 
@@ -921,3 +1159,13 @@
 </div>
 
 {% endblock %}
+
+{% block scripts %}
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/document-task-suggestions.js'
+        ) }}?v=step9-task-conversion"
+    ></script>
+{% endblock %}
+

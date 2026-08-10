@@ -14,6 +14,20 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
+from services.document_task_action_service import (
+    DocumentSuggestionNotFoundError,
+    DocumentSuggestionPersistenceError,
+    DocumentSuggestionWorkflowError,
+    bulk_create_document_suggestions,
+)
+
+from services.project_question_workflow_service import (
+    ProjectQuestionNotFoundError,
+    ProjectQuestionNotReadyError,
+    ProjectQuestionWorkflowError,
+    ask_owned_project_documents,
+)
+
 from services.project_service import (
     ProjectNotFoundError,
     ProjectPersistenceError,
@@ -73,6 +87,122 @@ def project_details(project_id):
         abort(404)
 
     return render_template("project_details.html", **workspace)
+
+
+@project_bp.post("/projects/<int:project_id>/questions")
+@login_required
+def ask_project_documents_route(project_id):
+    """Ask one grounded question across every readable PDF in the project."""
+
+    _owned_project_or_404(project_id)
+
+    question_text = request.form.get("question", "")
+    force = request.form.get("force") == "1"
+
+    try:
+        result = ask_owned_project_documents(
+            project_id=project_id,
+            user_id=current_user.id,
+            question_text=question_text,
+            force=force,
+        )
+
+    except ProjectQuestionNotFoundError:
+        abort(404)
+
+    except ProjectQuestionNotReadyError as error:
+        flash(str(error), "warning")
+
+    except ProjectQuestionWorkflowError as error:
+        current_app.logger.warning(
+            "Project document question failed for project %s: %s",
+            project_id,
+            type(error).__name__,
+        )
+        flash(str(error), "error")
+
+    else:
+        if result.reused_existing:
+            flash(
+                "LifeOS found an existing answer for this unchanged project document set.",
+                "info",
+            )
+        elif result.question.sources:
+            flash(
+                "Your project document question was answered with grounded sources.",
+                "success",
+            )
+        else:
+            flash(
+                "LifeOS could not find enough evidence in the linked PDFs to answer that question.",
+                "info",
+            )
+
+    return redirect(
+        url_for(
+            "project_bp.project_details",
+            project_id=project_id,
+        )
+        + "#ask-project"
+    )
+
+
+@project_bp.post(
+    "/projects/<int:project_id>/document-suggestions/bulk-create"
+)
+@login_required
+def bulk_create_document_suggestions_route(project_id):
+    """Create selected document-derived tasks from the Project Studio."""
+
+    _owned_project_or_404(project_id)
+
+    try:
+        result = bulk_create_document_suggestions(
+            suggestion_ids=request.form.getlist("suggestion_ids"),
+            user_id=current_user.id,
+            project_id=project_id,
+        )
+
+    except DocumentSuggestionNotFoundError:
+        abort(404)
+
+    except DocumentSuggestionWorkflowError as error:
+        flash(str(error), "warning")
+
+    except DocumentSuggestionPersistenceError as error:
+        current_app.logger.exception(
+            "Could not bulk-create project document suggestions for project %s.",
+            project_id,
+        )
+        flash(str(error), "error")
+
+    else:
+        if result.created_count:
+            flash(
+                f"Created {result.created_count} task"
+                f"{'s' if result.created_count != 1 else ''} from document suggestions.",
+                "success",
+            )
+
+        if result.duplicate_count:
+            flash(
+                f"Skipped {result.duplicate_count} possible duplicate"
+                f"{'s' if result.duplicate_count != 1 else ''}. Review them individually.",
+                "warning",
+            )
+
+        if not result.created_count and not result.duplicate_count:
+            flash(
+                "The selected suggestions were already handled.",
+                "info",
+            )
+
+    return redirect(
+        url_for(
+            "project_bp.project_details",
+            project_id=project_id,
+        )
+    )
 
 
 @project_bp.route(
