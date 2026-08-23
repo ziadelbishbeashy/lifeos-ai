@@ -34,6 +34,9 @@ from services.project_document_retrieval_service import (
     retrieve_owned_project_document_chunks,
     select_project_retrieval_sources,
 )
+from services.document_version_service import (
+    current_document_filter,
+)
 
 
 PROJECT_QUESTION_WORKFLOW_VERSION = "project-document-rag-v1"
@@ -324,7 +327,10 @@ def create_project_document_source_fingerprint(
 
     documents = (
         Document.query
-        .filter_by(project_id=project.id)
+        .filter(
+            Document.project_id == project.id,
+            current_document_filter(),
+        )
         .order_by(Document.id.asc())
         .all()
     )

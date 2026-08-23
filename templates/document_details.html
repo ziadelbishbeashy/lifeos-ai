@@ -140,6 +140,8 @@
 {% set type_sections = type_workspace.get("sections", []) %}
 {% set populated_type_sections = type_workspace.get("populated_sections", []) %}
 {% set document_search = document_search | default(none) %}
+{% set version_history = version_history | default(none) %}
+{% set current_version = version_history.current_document if version_history else document %}
 
 {% set action_stats = namespace(
     pending=0,
@@ -167,7 +169,7 @@
 ) %}
 
 {% for saved_question in question_history %}
-    {% if saved_question.status == "Completed" %}
+    {% if saved_question.status in ["Completed", "Historical", "Outdated"] %}
         {% set question_stats.completed =
             question_stats.completed + 1
         %}
@@ -245,7 +247,19 @@
                         }}
                     </span>
 
-                    {% if analysis %}
+                    {% if document.is_historical_version %}
+
+                        <span class="db-status-badge db-status-version-previous">
+                            Previous version
+                        </span>
+
+                    {% elif document.is_versioned %}
+
+                        <span class="db-status-badge db-status-version-current">
+                            Current · {{ document.version_label }}
+                        </span>
+
+                    {% elif analysis %}
 
                         <span class="db-status-badge db-status-analysed">
                             Analysis ready
@@ -270,7 +284,12 @@
                 <h1>{{ document.filename }}</h1>
 
                 <p>
-                    {% if analysis %}
+                    {% if document.is_historical_version %}
+                        {{ document.version_label }} · Historical source.
+                        {% if analysis %}
+                            Saved analysis is retained for history and is not current project truth.
+                        {% endif %}
+                    {% elif analysis %}
                         {{
                             analysis.document_type
                             or "General Reference"
@@ -306,7 +325,19 @@
             {% endif %}
 
 
-            {% if document.extracted_text %}
+            {% if document.is_historical_version %}
+
+                <a
+                    href="{{ url_for(
+                        'document_bp.document_details',
+                        document_id=current_version.id
+                    ) }}"
+                    class="workspace-primary-button"
+                >
+                    Open current version
+                </a>
+
+            {% elif document.extracted_text %}
 
                 {% if type_detection %}
 
@@ -370,7 +401,172 @@
     </header>
 
 
-    {% if type_detection %}
+    {% if version_history %}
+
+        <section class="db-version-panel">
+
+            <div class="db-version-panel-heading">
+                <div>
+                    <span class="db-kicker">Document versioning</span>
+                    <h2>
+                        {% if version_history.family %}
+                            {{ version_history.family.name }}
+                        {% else %}
+                            Version history
+                        {% endif %}
+                    </h2>
+                    <p>
+                        Previous PDFs stay available for history, while project
+                        intelligence uses only the current version by default.
+                    </p>
+                </div>
+
+                {% if not document.is_historical_version %}
+                    <span class="db-version-current-badge">
+                        Current · {{ document.version_label }}
+                    </span>
+                {% else %}
+                    <span class="db-version-previous-badge">
+                        {{ document.version_label }} · Previous
+                    </span>
+                {% endif %}
+            </div>
+
+
+            {% if not document.is_historical_version %}
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'document_bp.upload_new_document_version_route',
+                        document_id=document.id
+                    ) }}"
+                    enctype="multipart/form-data"
+                    class="db-version-upload"
+                    data-loading-title="Uploading new document version"
+                    data-loading-message="LifeOS is preserving the old PDF, indexing the new version and invalidating stale answers..."
+                    data-confirm
+                    data-confirm-title="Create new version"
+                    data-confirm-message="Keep the current PDF as history and make the selected PDF the new current version?"
+                    data-confirm-text="Create version"
+                    data-confirm-variant="warning"
+                >
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
+
+                    <label>
+                        <span>Upload replacement PDF</span>
+                        <input
+                            type="file"
+                            name="document"
+                            accept="application/pdf,.pdf"
+                            required
+                        >
+                    </label>
+
+                    <button
+                        type="submit"
+                        class="workspace-secondary-button"
+                    >
+                        Upload new version
+                    </button>
+                </form>
+
+            {% endif %}
+
+
+            {% if version_history.versions | length > 1 %}
+
+                <div class="db-version-timeline">
+
+                    {% for version in version_history.versions | reverse %}
+
+                        <article
+                            class="db-version-item {% if version.id == document.id %}is-open{% endif %}"
+                        >
+                            <div class="db-version-node"></div>
+
+                            <div class="db-version-copy">
+                                <div>
+                                    <strong>{{ version.version_label }}</strong>
+
+                                    {% if version.is_current_version %}
+                                        <span class="db-version-current-badge">Current</span>
+                                    {% else %}
+                                        <span class="db-version-previous-badge">Previous</span>
+                                    {% endif %}
+                                </div>
+
+                                <span>{{ version.filename }}</span>
+
+                                <small>
+                                    {{ version.uploaded_at.strftime("%d %b %Y · %H:%M") if version.uploaded_at else "Upload date unavailable" }}
+                                </small>
+
+                                {% if version.version_change %}
+                                    {% set change = version.version_change %}
+                                    <small>
+                                        {{ change.get("changed_page_count", 0) }} changed ·
+                                        {{ change.get("added_page_count", 0) }} added ·
+                                        {{ change.get("removed_page_count", 0) }} removed pages
+                                    </small>
+                                {% endif %}
+                            </div>
+
+                            <div class="db-version-actions">
+                                {% if version.id != document.id %}
+                                    <a
+                                        href="{{ url_for(
+                                            'document_bp.document_details',
+                                            document_id=version.id
+                                        ) }}"
+                                        class="workspace-secondary-button compact"
+                                    >
+                                        Open
+                                    </a>
+                                {% endif %}
+
+                                {% if version.id != current_version.id %}
+                                    <a
+                                        href="{{ url_for(
+                                            'document_bp.compare_documents',
+                                            document_a_id=version.id,
+                                            document_b_id=current_version.id
+                                        ) }}"
+                                        class="workspace-secondary-button compact"
+                                    >
+                                        Compare with current
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </article>
+
+                    {% endfor %}
+
+                </div>
+
+            {% endif %}
+
+
+            {% if document.is_historical_version %}
+                <div class="db-version-history-warning">
+                    <strong>Historical information</strong>
+                    <p>
+                        This PDF is preserved for history. Its old analyses and
+                        answers are not used as current project knowledge.
+                    </p>
+                </div>
+            {% endif %}
+
+        </section>
+
+    {% endif %}
+
+
+    {% if type_detection and not document.is_historical_version %}
 
         <section
             id="document-type-confirmation"
@@ -2595,10 +2791,7 @@
                                             <summary>
 
                                                 <div class="db-question-summary-icon">
-                                                    {% if
-                                                        saved_question.status
-                                                        == "Completed"
-                                                    %}
+                                                    {% if saved_question.status in ["Completed", "Historical", "Outdated"] %}
                                                         Q
                                                     {% else %}
                                                         !
@@ -2660,10 +2853,16 @@
 
                                             <div class="db-question-content">
 
-                                                {% if
-                                                    saved_question.status
-                                                    == "Completed"
-                                                %}
+                                                {% if saved_question.status in ["Completed", "Historical", "Outdated"] %}
+
+                                                    {% if saved_question.status in ["Historical", "Outdated"] %}
+                                                        <div class="db-alert db-version-history-warning">
+                                                            <strong>Historical answer</strong>
+                                                            <p>
+                                                                This answer belongs to a previous document version and is not current project truth.
+                                                            </p>
+                                                        </div>
+                                                    {% endif %}
 
                                                     {% set answer_context = namespace(selected=none) %}
                                                     {% for source in saved_question.sources %}

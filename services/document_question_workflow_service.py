@@ -118,6 +118,12 @@ def ask_owned_document(
             "The requested document was not found."
         )
 
+    answer_status = (
+        "Historical"
+        if document.is_historical_version
+        else "Completed"
+    )
+
     extracted_text = str(
         document.extracted_text or ""
     ).strip()
@@ -192,6 +198,7 @@ def ask_owned_document(
             user_id=user_id,
             question_text=cleaned_question,
             fingerprint=source_fingerprint,
+            expected_status=answer_status,
         )
 
         if existing_question is not None:
@@ -638,7 +645,7 @@ def ask_owned_document(
         model=str(
             result.get("model") or "unknown"
         )[:100],
-        status="Completed",
+        status=answer_status,
         source_fingerprint=source_fingerprint,
         error_message=None,
     )
@@ -1064,6 +1071,7 @@ def _find_reusable_question(
     user_id: int,
     question_text: str,
     fingerprint: str,
+    expected_status: str = "Completed",
 ) -> DocumentQuestion | None:
     """Reuse an identical completed question for unchanged text."""
 
@@ -1073,7 +1081,7 @@ def _find_reusable_question(
             document_id=document_id,
             user_id=user_id,
             question=question_text,
-            status="Completed",
+            status=expected_status,
             source_fingerprint=fingerprint,
         )
         .order_by(

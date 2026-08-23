@@ -62,6 +62,17 @@ class User(UserMixin, db.Model):
     lazy=True,
     cascade="all, delete-orphan",
     )
+    document_comparisons = db.relationship(
+        "DocumentComparison",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+    document_version_families = db.relationship(
+        "DocumentVersionFamily",
+        back_populates="user",
+        lazy=True,
+    )
     document_task_suggestions = db.relationship(
     "DocumentTaskSuggestion",
     back_populates="user",
@@ -177,6 +188,13 @@ class Project(db.Model):
     documents = db.relationship(
         "Document",
         backref="project",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    document_version_families = db.relationship(
+        "DocumentVersionFamily",
+        back_populates="project",
         lazy=True,
         cascade="all, delete-orphan",
     )
@@ -1117,6 +1135,75 @@ class AITaskSuggestion(db.Model):
         )
 
 
+class DocumentVersionFamily(db.Model):
+    """One logical document with an immutable history of uploaded versions."""
+
+    __tablename__ = "document_version_families"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    project_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "projects.id",
+            ondelete="NO ACTION",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "users.id",
+            ondelete="NO ACTION",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    name = db.Column(
+        db.Unicode(255),
+        nullable=False,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    project = db.relationship(
+        "Project",
+        back_populates="document_version_families",
+    )
+
+    user = db.relationship(
+        "User",
+        back_populates="document_version_families",
+    )
+
+    documents = db.relationship(
+        "Document",
+        back_populates="version_family",
+        lazy=True,
+        order_by="Document.version_number",
+    )
+
+    def __repr__(self):
+        return (
+            f"<DocumentVersionFamily id={self.id} "
+            f"name={self.name!r}>"
+        )
+
+
 class Document(db.Model):
     __tablename__ = "documents"
 
@@ -1125,6 +1212,38 @@ class Document(db.Model):
     project_id = db.Column(
         db.Integer,
         db.ForeignKey("projects.id"),
+        nullable=True,
+    )
+
+    version_family_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "document_version_families.id",
+            ondelete="NO ACTION",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    version_number = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    is_current_version = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        index=True,
+    )
+
+    version_change_json = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    superseded_at = db.Column(
+        db.DateTime,
         nullable=True,
     )
 
@@ -1171,6 +1290,45 @@ class Document(db.Model):
     cascade="all, delete-orphan",
     order_by="DocumentChunk.chunk_index",
     )
+
+    version_family = db.relationship(
+        "DocumentVersionFamily",
+        back_populates="documents",
+    )
+
+    @property
+    def is_versioned(self) -> bool:
+        return self.version_family_id is not None
+
+    @property
+    def is_historical_version(self) -> bool:
+        return bool(
+            self.version_family_id is not None
+            and not self.is_current_version
+        )
+
+    @property
+    def version_label(self) -> str:
+        if self.version_number:
+            return f"Version {self.version_number}"
+        return "Current document"
+
+    @property
+    def version_change(self) -> dict:
+        if not self.version_change_json:
+            return {}
+
+        try:
+            parsed = json.loads(
+                self.version_change_json
+            )
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            return {}
+
+        return parsed if isinstance(parsed, dict) else {}
 
     def __repr__(self):
         return f"<Document {self.filename}>"
@@ -1445,6 +1603,7 @@ class DocumentTaskSuggestion(db.Model):
             "Approved": "Created",
             "Linked": "Existing task",
             "Rejected": "Ignored",
+            "Outdated": "Outdated",
         }.get(self.status, self.status or "Suggested")
 
     @property
@@ -1564,6 +1723,155 @@ class ProjectQuestion(db.Model):
         return (
             f"<ProjectQuestion id={self.id} "
             f"project_id={self.project_id} status={self.status}>"
+        )
+
+
+class DocumentComparison(db.Model):
+    """A saved semantic comparison between two owned documents."""
+
+    __tablename__ = "document_comparisons"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    # SQL Server does not allow both document foreign keys to cascade into
+    # the same table. The application explicitly removes comparisons before
+    # deleting a project/document, so both document relationships use
+    # symmetric NO ACTION behavior.
+    document_a_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "documents.id",
+            ondelete="NO ACTION",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    document_b_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "documents.id",
+            ondelete="NO ACTION",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    summary = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    findings_json = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    provider = db.Column(
+        db.Unicode(30),
+        nullable=False,
+    )
+
+    model = db.Column(
+        db.Unicode(100),
+        nullable=False,
+    )
+
+    status = db.Column(
+        db.Unicode(20),
+        nullable=False,
+        default="Pending",
+        index=True,
+    )
+
+    source_fingerprint = db.Column(
+        db.Unicode(64),
+        nullable=True,
+    )
+
+    error_message = db.Column(
+        db.UnicodeText,
+        nullable=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    user = db.relationship(
+        "User",
+        back_populates="document_comparisons",
+    )
+
+    document_a = db.relationship(
+        "Document",
+        foreign_keys=[document_a_id],
+    )
+
+    document_b = db.relationship(
+        "Document",
+        foreign_keys=[document_b_id],
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "document_a_id <> document_b_id",
+            name="ck_document_comparisons_distinct_documents",
+        ),
+        db.Index(
+            "ix_document_comparisons_reuse",
+            "user_id",
+            "document_a_id",
+            "document_b_id",
+            "status",
+            "source_fingerprint",
+        ),
+    )
+
+    @property
+    def findings(self) -> list:
+        """Return saved comparison findings as a safe list."""
+
+        if not self.findings_json:
+            return []
+
+        try:
+            parsed = json.loads(
+                self.findings_json
+            )
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            return []
+
+        return (
+            parsed
+            if isinstance(parsed, list)
+            else []
+        )
+
+    def __repr__(self):
+        return (
+            f"<DocumentComparison id={self.id} "
+            f"document_a_id={self.document_a_id} "
+            f"document_b_id={self.document_b_id} "
+            f"status={self.status}>"
         )
 
 

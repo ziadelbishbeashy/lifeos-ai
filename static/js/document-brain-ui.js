@@ -1373,10 +1373,21 @@
                     ).includes(query)
                 );
 
+                const questionStatus = (
+                    card.dataset.questionStatus
+                    || ""
+                );
+
                 const matchesStatus = (
                     filter === "all"
-                    || card.dataset.questionStatus
-                    === filter
+                    || questionStatus === filter
+                    || (
+                        filter === "completed"
+                        && [
+                            "historical",
+                            "outdated",
+                        ].includes(questionStatus)
+                    )
                 );
 
                 const show = (

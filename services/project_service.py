@@ -15,6 +15,9 @@ from sqlalchemy import case
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
+from services.document_comparison_service import (
+    delete_comparisons_referencing_documents,
+)
 from models import (
     Document,
     DocumentTaskSuggestion,
@@ -231,11 +234,32 @@ def delete_project(project: Project) -> str:
     """Delete a project and return its title for the confirmation message."""
 
     project_title = project.title
+    document_ids = [
+        document.id
+        for document in project.documents
+        if document.id is not None
+    ]
 
     try:
+        # Step 13A: document comparison foreign keys intentionally use
+        # ON DELETE NO ACTION on SQL Server. Remove dependent comparisons
+        # first, in the same transaction, before project.documents cascade.
+        delete_comparisons_referencing_documents(
+            document_ids
+        )
+
+        # Step 14: SQL Server version-family references use NO ACTION.
+        # Detach the project's document rows before ORM cascades remove both
+        # documents and their version-family metadata.
+        for document in project.documents:
+            document.version_family_id = None
+
+        db.session.flush()
+
         db.session.delete(project)
         db.session.commit()
         return project_title
+
     except SQLAlchemyError as error:
         db.session.rollback()
         raise ProjectPersistenceError from error

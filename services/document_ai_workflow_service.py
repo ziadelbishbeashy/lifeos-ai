@@ -78,6 +78,12 @@ def analyse_owned_document(
             "The requested document was not found."
         )
 
+    if document.is_historical_version:
+        raise DocumentAnalysisWorkflowError(
+            "This is a previous document version. Its saved analysis is "
+            "kept as history; open the current version to run a new analysis."
+        )
+
     extracted_text = str(
         document.extracted_text or ""
     ).strip()

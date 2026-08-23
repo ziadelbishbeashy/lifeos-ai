@@ -787,9 +787,18 @@
                             </summary>
 
                             <div class="project-rag-answer-body">
-                                {% if saved_question.status == "Completed" %}
+                                {% if saved_question.status in ["Completed", "Outdated"] %}
+                                    {% if saved_question.status == "Outdated" %}
+                                        <div class="project-rag-alert project-rag-alert-warning">
+                                            <strong>Outdated answer</strong>
+                                            <p>
+                                                A linked document has a newer version. This answer is preserved for history and is not reused as current project knowledge.
+                                            </p>
+                                        </div>
+                                    {% endif %}
+
                                     <div class="project-rag-answer">
-                                        <span>Grounded answer</span>
+                                        <span>{{ "Historical grounded answer" if saved_question.status == "Outdated" else "Grounded answer" }}</span>
                                         <p>{{ saved_question.answer }}</p>
                                     </div>
 

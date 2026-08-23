@@ -91,6 +91,16 @@
                 {% if documents %}
 
                     <a
+                        href="{{ url_for('document_bp.compare_documents') }}"
+                        class="workspace-secondary-button"
+                        data-page-loading
+                        data-loading-title="Opening document comparison"
+                        data-loading-message="Preparing your document comparison workspace..."
+                    >
+                        Compare documents
+                    </a>
+
+                    <a
                         href="#document-library"
                         class="workspace-secondary-button"
                     >
@@ -591,7 +601,10 @@
                         else "No project"
                     %}
 
-                    {% if document.summary %}
+                    {% if document.is_historical_version %}
+                        {% set ui_status = "previous" %}
+                        {% set ui_status_label = "Previous version" %}
+                    {% elif document.summary %}
                         {% set ui_status = "analysed" %}
                         {% set ui_status_label = "Analysed" %}
                     {% elif document.extracted_text %}
@@ -636,6 +649,12 @@
                                 <span class="db-project-pill">
                                     {{ project_name }}
                                 </span>
+
+                                {% if document.is_versioned %}
+                                    <span class="db-version-library-badge {% if document.is_historical_version %}is-previous{% else %}is-current{% endif %}">
+                                        {{ document.version_label }} · {{ "Previous" if document.is_historical_version else "Current" }}
+                                    </span>
+                                {% endif %}
 
                                 <h3 title="{{ document.filename }}">
                                     {{ document.filename }}

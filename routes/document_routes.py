@@ -103,6 +103,24 @@ from services.document_pdf_search_service import (
     DocumentPDFSearchValidationError,
     search_owned_document_for_pdf,
 )
+from services.document_comparison_service import (
+    DocumentComparisonNotFoundError,
+    DocumentComparisonValidationError,
+    list_owned_comparisons,
+    require_owned_comparison,
+)
+from services.document_comparison_workflow_service import (
+    DocumentComparisonPersistenceError,
+    DocumentComparisonWorkflowError,
+    compare_owned_documents,
+)
+from services.document_version_service import (
+    DocumentVersionNotFoundError,
+    DocumentVersionPersistenceError,
+    DocumentVersionValidationError,
+    create_new_document_version,
+    get_owned_document_version_history,
+)
 
 document_bp = Blueprint(
     "document_bp",
@@ -251,6 +269,256 @@ def documents():
         max_upload_mb=max_upload_mb,
     )
 
+
+@document_bp.route(
+    "/compare",
+    methods=["GET", "POST"],
+)
+@login_required
+def compare_documents():
+    """Select two owned PDFs and run an ordered semantic comparison."""
+
+    owned_documents = list_owned_documents(
+        current_user.id
+    )
+
+    if request.method == "POST":
+        document_a_id = request.form.get(
+            "document_a_id",
+            "",
+        )
+
+        document_b_id = request.form.get(
+            "document_b_id",
+            "",
+        )
+
+        force = (
+            request.form.get(
+                "force"
+            )
+            == "1"
+        )
+
+        try:
+            result = compare_owned_documents(
+                owner_id=current_user.id,
+                document_a_id=document_a_id,
+                document_b_id=document_b_id,
+                force=force,
+            )
+
+        except DocumentComparisonValidationError as error:
+            flash(
+                str(error),
+                "warning",
+            )
+
+            return redirect(
+                url_for(
+                    "document_bp.compare_documents",
+                    document_a_id=document_a_id,
+                    document_b_id=document_b_id,
+                )
+            )
+
+        except DocumentComparisonNotFoundError:
+            abort(404)
+
+        except DocumentComparisonPersistenceError as error:
+            current_app.logger.exception(
+                "Document comparison persistence failed for user %s.",
+                current_user.id,
+            )
+
+            flash(
+                str(error),
+                "error",
+            )
+
+            return redirect(
+                url_for(
+                    "document_bp.compare_documents",
+                    document_a_id=document_a_id,
+                    document_b_id=document_b_id,
+                )
+            )
+
+        except DocumentComparisonWorkflowError as error:
+            current_app.logger.exception(
+                "Document comparison failed for user %s.",
+                current_user.id,
+            )
+
+            flash(
+                str(error),
+                "error",
+            )
+
+            return redirect(
+                url_for(
+                    "document_bp.compare_documents",
+                    document_a_id=document_a_id,
+                    document_b_id=document_b_id,
+                )
+            )
+
+        else:
+            if result.reused_existing:
+                flash(
+                    "LifeOS found an up-to-date comparison for these documents.",
+                    "info",
+                )
+
+            elif result.rejected_findings:
+                flash(
+                    "Comparison completed. LifeOS kept only the differences "
+                    "that passed evidence verification.",
+                    "success",
+                )
+
+            else:
+                flash(
+                    "Document comparison completed and verified.",
+                    "success",
+                )
+
+            return redirect(
+                url_for(
+                    "document_bp.document_comparison_details",
+                    comparison_id=result.comparison.id,
+                )
+            )
+
+    selected_a_id = _optional_owned_document_selection(
+        request.args.get(
+            "document_a_id"
+        ),
+        owned_documents=owned_documents,
+    )
+
+    selected_b_id = _optional_owned_document_selection(
+        request.args.get(
+            "document_b_id"
+        ),
+        owned_documents=owned_documents,
+    )
+
+    comparisons = list_owned_comparisons(
+        owner_id=current_user.id,
+        limit=20,
+    )
+
+    return render_template(
+        "document_compare.html",
+        documents=owned_documents,
+        comparisons=comparisons,
+        selected_a_id=selected_a_id,
+        selected_b_id=selected_b_id,
+    )
+
+
+@document_bp.get(
+    "/comparisons/<int:comparison_id>"
+)
+@login_required
+def document_comparison_details(
+    comparison_id,
+):
+    """Display one owned, saved document comparison."""
+
+    try:
+        comparison = require_owned_comparison(
+            comparison_id=comparison_id,
+            owner_id=current_user.id,
+        )
+
+    except DocumentComparisonNotFoundError:
+        abort(404)
+
+    category_counts = _comparison_category_counts(
+        comparison.findings
+    )
+
+    return render_template(
+        "document_comparison_details.html",
+        comparison=comparison,
+        category_counts=category_counts,
+    )
+
+
+@document_bp.post(
+    "/comparisons/<int:comparison_id>/rerun"
+)
+@login_required
+def rerun_document_comparison(
+    comparison_id,
+):
+    """Force a fresh comparison for the same owned ordered document pair."""
+
+    try:
+        comparison = require_owned_comparison(
+            comparison_id=comparison_id,
+            owner_id=current_user.id,
+        )
+
+        result = compare_owned_documents(
+            owner_id=current_user.id,
+            document_a_id=comparison.document_a_id,
+            document_b_id=comparison.document_b_id,
+            force=True,
+        )
+
+    except DocumentComparisonNotFoundError:
+        abort(404)
+
+    except DocumentComparisonValidationError as error:
+        flash(
+            str(error),
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_comparison_details",
+                comparison_id=comparison_id,
+            )
+        )
+
+    except (
+        DocumentComparisonWorkflowError,
+        DocumentComparisonPersistenceError,
+    ) as error:
+        current_app.logger.exception(
+            "Document comparison rerun failed for comparison %s.",
+            comparison_id,
+        )
+
+        flash(
+            str(error),
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_comparison_details",
+                comparison_id=comparison_id,
+            )
+        )
+
+    flash(
+        "LifeOS generated a fresh verified comparison.",
+        "success",
+    )
+
+    return redirect(
+        url_for(
+            "document_bp.document_comparison_details",
+            comparison_id=result.comparison.id,
+        )
+    )
+
+
 @document_bp.get("/<int:document_id>")
 @login_required
 def document_details(document_id):
@@ -268,6 +536,139 @@ def document_details(document_id):
     )
 
 
+@document_bp.post("/<int:document_id>/versions")
+@login_required
+def upload_new_document_version_route(document_id):
+    """Upload and activate an explicit new version of an owned project PDF."""
+
+    configured_limit = current_app.config.get(
+        "MAX_CONTENT_LENGTH"
+    )
+
+    max_upload_bytes = int(
+        configured_limit or 25 * 1024 * 1024
+    )
+
+    upload = request.files.get(
+        "document"
+    )
+
+    try:
+        result = create_new_document_version(
+            upload,
+            source_document_id=document_id,
+            owner_id=current_user.id,
+            max_bytes=max_upload_bytes,
+        )
+
+    except DocumentVersionNotFoundError:
+        abort(404)
+
+    except (
+        PDFValidationError,
+        DocumentValidationError,
+        DocumentVersionValidationError,
+    ) as error:
+        flash(
+            str(error),
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
+
+    except (
+        DocumentPersistenceError,
+        DocumentUploadError,
+        DocumentVersionPersistenceError,
+        StorageError,
+    ) as error:
+        current_app.logger.exception(
+            "Document version upload failed for document %s.",
+            document_id,
+        )
+
+        flash(
+            str(error)
+            or "LifeOS could not save the new document version.",
+            "error",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=document_id,
+            )
+        )
+
+    change = result.change_summary
+
+    changed_count = (
+        int(change.get("changed_page_count") or 0)
+        + int(change.get("added_page_count") or 0)
+        + int(change.get("removed_page_count") or 0)
+    )
+
+    if changed_count:
+        change_message = (
+            f"LifeOS detected page-level changes on {changed_count} page"
+            f"{'s' if changed_count != 1 else ''}."
+        )
+    elif result.change_summary.get("content_changed"):
+        change_message = (
+            "LifeOS detected a file/content fingerprint change even though "
+            "no page-level text difference was available."
+        )
+    else:
+        change_message = (
+            "LifeOS did not detect a material text or file fingerprint change."
+        )
+
+    flash(
+        (
+            f'"{result.current_document.filename}" is now '
+            f'{result.current_document.version_label}. '
+            f"{change_message} Superseded answers and analyses were marked "
+            "outdated."
+        ),
+        "success",
+    )
+
+    if not result.upload_result.extraction_succeeded:
+        flash(
+            "The new version is current, but its text could not be extracted. "
+            "It may require OCR before current project Q&A can use it.",
+            "warning",
+        )
+    elif result.upload_result.pages_with_text == 0:
+        flash(
+            "The new version is current, but no readable text was found. "
+            "It may require OCR before current project Q&A can use it.",
+            "warning",
+        )
+
+    if (
+        result.embedding_message
+        and not result.embeddings_succeeded
+    ):
+        current_app.logger.warning(
+            "Version %s semantic embedding preparation was deferred: %s",
+            result.current_document.id,
+            result.embedding_message,
+        )
+
+    return redirect(
+        url_for(
+            "document_bp.document_details",
+            document_id=result.current_document.id,
+        )
+    )
+
+
 @document_bp.post("/<int:document_id>/detect-type")
 @login_required
 def detect_document_type_route(document_id):
@@ -277,6 +678,32 @@ def detect_document_type_route(document_id):
     The detector does not run the full analysis. The returned page lets
     the user confirm LifeOS's suggestion or select a different type.
     """
+
+    document = _find_owned_document_for_details(
+        document_id
+    )
+
+    if document is None:
+        abort(404)
+
+    if document.is_historical_version:
+        history = get_owned_document_version_history(
+            document_id=document.id,
+            owner_id=current_user.id,
+        )
+
+        flash(
+            "This is a previous document version. Open the current version "
+            "to detect its type or run a new analysis.",
+            "warning",
+        )
+
+        return redirect(
+            url_for(
+                "document_bp.document_details",
+                document_id=history.current_document.id,
+            )
+        )
 
     try:
         result = detect_owned_document_type(
@@ -324,6 +751,64 @@ def detect_document_type_route(document_id):
     )
 
 
+def _optional_owned_document_selection(
+    raw_document_id,
+    *,
+    owned_documents,
+):
+    """Return a selected ID only when it exists in the current owned list."""
+
+    try:
+        document_id = int(
+            raw_document_id
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return None
+
+    owned_ids = {
+        document.id
+        for document in owned_documents
+    }
+
+    return (
+        document_id
+        if document_id in owned_ids
+        else None
+    )
+
+
+def _comparison_category_counts(
+    findings,
+):
+    counts = {
+        "changed": 0,
+        "added": 0,
+        "removed": 0,
+        "potential_conflict": 0,
+    }
+
+    for finding in findings:
+        if not isinstance(
+            finding,
+            dict,
+        ):
+            continue
+
+        category = finding.get(
+            "category"
+        )
+
+        if category in counts:
+            counts[
+                category
+            ] += 1
+
+    return counts
+
+
 def _find_owned_document_for_details(
     document_id: int,
 ) -> Document | None:
@@ -351,19 +836,45 @@ def _render_document_details(
 ):
     """Build all data required by the Document Brain details page."""
 
-    latest_analysis = (
+    analysis_query = (
         DocumentAIAnalysis.query
         .filter_by(
             document_id=document.id,
             user_id=current_user.id,
-            status="Completed",
         )
+    )
+
+    if document.is_historical_version:
+        analysis_query = analysis_query.filter(
+            DocumentAIAnalysis.status.in_(
+                [
+                    "Outdated",
+                    "Historical",
+                    "Completed",
+                ]
+            )
+        )
+    else:
+        analysis_query = analysis_query.filter_by(
+            status="Completed"
+        )
+
+    latest_analysis = (
+        analysis_query
         .order_by(
             DocumentAIAnalysis.created_at.desc(),
             DocumentAIAnalysis.id.desc(),
         )
         .first()
     )
+
+    try:
+        version_history = get_owned_document_version_history(
+            document_id=document.id,
+            owner_id=current_user.id,
+        )
+    except DocumentVersionNotFoundError:
+        version_history = None
 
     try:
         suggestions = list_document_suggestions(
@@ -412,6 +923,7 @@ def _render_document_details(
         document_type_choices=document_type_choices(),
         type_workspace=type_workspace,
         document_search=document_search,
+        version_history=version_history,
     )
 
 

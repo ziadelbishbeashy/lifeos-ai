@@ -17,6 +17,9 @@ from models import (
 from services.document_analysis_service import (
     DOCUMENT_ANALYSIS_SCHEMA_VERSION,
 )
+from services.document_version_service import (
+    current_document_filter,
+)
 
 
 MAX_PROJECT_CONTEXT_TASKS = 150
@@ -697,6 +700,7 @@ def build_project_documents_context(
         .filter(
             Document.project_id == project.id,
             Project.user_id == owner_id,
+            current_document_filter(),
         )
     )
 
@@ -809,6 +813,9 @@ def build_project_documents_context(
             {
                 "id": document.id,
                 "filename": document.filename,
+                "version_family_id": document.version_family_id,
+                "version_number": document.version_number,
+                "is_current_version": bool(document.is_current_version),
 
                 # Backwards-compatible preview fields.
                 "summary": compact_text(

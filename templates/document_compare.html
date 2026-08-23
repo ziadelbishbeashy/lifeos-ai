@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Documents | LifeOS{% endblock %}
+
+{% block content %}
+
+<div class="document-compare-page">
+
+    <header class="document-compare-hero">
+        <div>
+            <span class="workspace-eyebrow">Document Brain · Compare</span>
+            <h1>Compare two documents</h1>
+            <p>
+                Choose a baseline and a second PDF. LifeOS compares meaning,
+                verifies every reported difference against source evidence,
+                and keeps the direction you selected.
+            </p>
+        </div>
+
+        <a
+            href="{{ url_for('document_bp.documents') }}"
+            class="workspace-secondary-button"
+        >
+            Back to documents
+        </a>
+    </header>
+
+
+    {% if documents | length >= 2 %}
+
+        <section class="document-compare-builder workspace-panel">
+
+            <div class="document-compare-builder-heading">
+                <div>
+                    <span class="workspace-eyebrow">New comparison</span>
+                    <h2>A → B</h2>
+                </div>
+
+                <p>
+                    A is the baseline. B is compared against A.
+                    Reversing them changes Added and Removed.
+                </p>
+            </div>
+
+            <form
+                method="POST"
+                action="{{ url_for('document_bp.compare_documents') }}"
+                class="document-compare-form"
+                data-document-comparison-form
+                data-loading-title="Comparing documents"
+                data-loading-message="Preparing evidence, aligning related topics and verifying material differences..."
+            >
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+                <div class="document-compare-selectors">
+
+                    <div class="document-compare-selector">
+                        <span class="document-compare-side">A</span>
+
+                        <div class="form-group">
+                            <label for="documentA">
+                                Baseline document
+                            </label>
+
+                            <select
+                                id="documentA"
+                                name="document_a_id"
+                                required
+                                data-comparison-a
+                            >
+                                <option value="">
+                                    Select Document A
+                                </option>
+
+                                {% for document in documents %}
+                                    <option
+                                        value="{{ document.id }}"
+                                        {% if selected_a_id == document.id %}selected{% endif %}
+                                    >
+                                        {{ document.filename }}
+                                        {% if document.project %}
+                                            — {{ document.project.title }}
+                                        {% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+
+                            <small>
+                                The reference point for Changed, Added and Removed.
+                            </small>
+                        </div>
+                    </div>
+
+
+                    <button
+                        type="button"
+                        class="document-compare-swap"
+                        aria-label="Swap Document A and Document B"
+                        title="Swap documents"
+                        data-comparison-swap
+                    >
+                        ⇄
+                    </button>
+
+
+                    <div class="document-compare-selector">
+                        <span class="document-compare-side">B</span>
+
+                        <div class="form-group">
+                            <label for="documentB">
+                                Compare against
+                            </label>
+
+                            <select
+                                id="documentB"
+                                name="document_b_id"
+                                required
+                                data-comparison-b
+                            >
+                                <option value="">
+                                    Select Document B
+                                </option>
+
+                                {% for document in documents %}
+                                    <option
+                                        value="{{ document.id }}"
+                                        {% if selected_b_id == document.id %}selected{% endif %}
+                                    >
+                                        {{ document.filename }}
+                                        {% if document.project %}
+                                            — {{ document.project.title }}
+                                        {% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+
+                            <small>
+                                LifeOS reports how B materially differs from A.
+                            </small>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div
+                    class="document-compare-form-error"
+                    data-comparison-error
+                    hidden
+                >
+                    Choose two different documents.
+                </div>
+
+                <div class="document-compare-actions">
+                    <button
+                        type="submit"
+                        class="workspace-primary-button"
+                    >
+                        Compare documents
+                    </button>
+                </div>
+
+            </form>
+
+        </section>
+
+    {% else %}
+
+        <section class="db-empty-state document-compare-empty">
+            <span class="db-empty-icon">A/B</span>
+
+            <div>
+                <h2>Two documents are required</h2>
+                <p>
+                    Upload at least two PDFs before starting a comparison.
+                </p>
+
+                <a
+                    href="{{ url_for('document_bp.documents') }}#upload-document"
+                    class="workspace-primary-button"
+                >
+                    Upload PDFs
+                </a>
+            </div>
+        </section>
+
+    {% endif %}
+
+
+    <section class="document-comparison-history">
+
+        <div class="db-section-heading">
+            <div>
+                <span class="db-kicker">History</span>
+                <h2>Recent comparisons</h2>
+                <p>
+                    Completed results are reused only while both source
+                    documents remain unchanged.
+                </p>
+            </div>
+        </div>
+
+        {% if comparisons %}
+
+            <div class="document-comparison-history-list">
+
+                {% for comparison in comparisons %}
+
+                    <article class="document-comparison-history-card">
+
+                        <div class="document-comparison-history-main">
+                            <span
+                                class="document-comparison-status document-comparison-status-{{ comparison.status | lower }}"
+                            >
+                                {{ comparison.status }}
+                            </span>
+
+                            <h3>
+                                {{ comparison.document_a.filename }}
+                                <span aria-hidden="true">→</span>
+                                {{ comparison.document_b.filename }}
+                            </h3>
+
+                            <p>
+                                {% if comparison.status == "Completed" %}
+                                    {{ comparison.summary }}
+                                {% elif comparison.status == "Failed" %}
+                                    This comparison did not complete successfully.
+                                {% else %}
+                                    Comparison is waiting to complete.
+                                {% endif %}
+                            </p>
+
+                            <small>
+                                {{ comparison.created_at.strftime("%b %d, %Y · %H:%M") }}
+                            </small>
+                        </div>
+
+                        <div class="document-comparison-history-actions">
+
+                            {% if comparison.status == "Completed" %}
+                                <a
+                                    href="{{ url_for(
+                                        'document_bp.document_comparison_details',
+                                        comparison_id=comparison.id
+                                    ) }}"
+                                    class="workspace-secondary-button compact"
+                                >
+                                    View comparison
+                                </a>
+                            {% else %}
+                                <a
+                                    href="{{ url_for(
+                                        'document_bp.compare_documents',
+                                        document_a_id=comparison.document_a_id,
+                                        document_b_id=comparison.document_b_id
+                                    ) }}"
+                                    class="workspace-secondary-button compact"
+                                >
+                                    Try again
+                                </a>
+                            {% endif %}
+
+                        </div>
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        {% else %}
+
+            <div class="db-empty-state compact">
+                <span class="db-empty-icon">⇄</span>
+                <div>
+                    <h3>No comparisons yet</h3>
+                    <p>
+                        Your verified two-document comparisons will appear here.
+                    </p>
+                </div>
+            </div>
+
+        {% endif %}
+
+    </section>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script
+    src="{{ url_for(
+        'static',
+        filename='js/document-comparison.js'
+    ) }}?v=step13"
+></script>
+{% endblock %}

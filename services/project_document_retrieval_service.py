@@ -35,6 +35,9 @@ from services.document_retrieval_service import (
 from services.document_semantic_retrieval_service import (
     rank_semantic_document_chunks,
 )
+from services.document_version_service import (
+    current_document_filter,
+)
 
 
 DEFAULT_RESULT_LIMIT = 8
@@ -187,7 +190,10 @@ def retrieve_owned_project_document_chunks(
 
     documents = (
         Document.query
-        .filter_by(project_id=project.id)
+        .filter(
+            Document.project_id == project.id,
+            current_document_filter(),
+        )
         .order_by(
             Document.uploaded_at.desc(),
             Document.id.desc(),
