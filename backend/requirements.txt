@@ -1,0 +1,12 @@
+Flask>=3,<4
+Flask-SQLAlchemy>=3,<4
+Flask-Login>=0.6,<1
+Flask-Migrate>=4,<5
+Flask-WTF>=1.2,<2
+SQLAlchemy>=2,<3
+psycopg[binary]>=3.2,<4
+python-dotenv>=1,<2
+google-genai
+openai
+pypdf>=6,<7
+gunicorn

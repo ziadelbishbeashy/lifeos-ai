@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Edit {{ note.title }} | LifeOS AI
+{% endblock %}
+
+{% block content %}
+
+<div class="projects-page">
+
+    <header class="workspace-page-header">
+        <div>
+            <span class="workspace-eyebrow">
+                AI Notes
+            </span>
+
+            <h1>Edit Note</h1>
+
+            <p>
+                Update the original note content and organization.
+            </p>
+        </div>
+
+        <a
+            href="{{ url_for(
+                'note_bp.note_details',
+                note_id=note.id
+            ) }}"
+            class="workspace-secondary-button"
+        >
+            Cancel
+        </a>
+    </header>
+
+
+    <section class="project-filter-panel">
+
+        <form
+            method="POST"
+            style="width: 100%;"
+        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="noteTitle">
+                    Note title
+                </label>
+
+                <input
+                    type="text"
+                    id="noteTitle"
+                    name="title"
+                    maxlength="255"
+                    required
+                    value="{{ note.title }}"
+                >
+            </div>
+
+
+            <div class="form-row">
+
+                <div class="form-group">
+                    <label for="noteType">
+                        Note type
+                    </label>
+
+                    <select
+                        id="noteType"
+                        name="note_type"
+                    >
+                        {% for note_type in note_types %}
+                            <option
+                                value="{{ note_type }}"
+                                {% if note.note_type == note_type %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ note_type }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+
+                <div class="form-group">
+                    <label for="noteProject">
+                        Related project
+                    </label>
+
+                    <select
+                        id="noteProject"
+                        name="project_id"
+                    >
+                        <option
+                            value=""
+                            {% if note.project_id is none %}
+                                selected
+                            {% endif %}
+                        >
+                            General Workspace
+                        </option>
+
+                        {% for project in projects %}
+                            <option
+                                value="{{ project.id }}"
+                                {% if note.project_id == project.id %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ project.title }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+            </div>
+
+
+            <div class="form-group">
+                <label for="noteContent">
+                    Note content
+                </label>
+
+                <textarea
+                    id="noteContent"
+                    name="content"
+                    rows="14"
+                    required
+                >{{ note.content }}</textarea>
+            </div>
+
+
+            <label>
+                <input
+                    type="checkbox"
+                    name="is_pinned"
+                    {% if note.is_pinned %}
+                        checked
+                    {% endif %}
+                >
+                Pin this note
+            </label>
+
+
+            <div style="margin-top: 24px;">
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    Save Changes
+                </button>
+            </div>
+
+        </form>
+
+    </section>
+
+</div>
+
+{% endblock %}

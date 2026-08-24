@@ -1,0 +1,642 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Projects | LifeOS AI
+{% endblock %}
+
+{% block content %}
+
+<div class="projects-page project-studio-index">
+
+    <header class="workspace-page-header project-studio-index-header">
+        <div>
+            <span class="workspace-eyebrow">Project workspace</span>
+            <h1>Keep every project moving.</h1>
+            <p>
+                See what needs attention, continue the right task, and keep
+                notes and execution connected without opening every project.
+            </p>
+        </div>
+
+        <button
+            type="button"
+            class="workspace-primary-button"
+            data-open-project-modal
+        >
+            + New Project
+        </button>
+    </header>
+
+
+    <section class="project-studio-summary" aria-label="Project summary">
+        <article>
+            <span>Active projects</span>
+            <strong>{{ active_count }}</strong>
+            <small>Currently moving</small>
+        </article>
+
+        <article>
+            <span>Need attention</span>
+            <strong>{{ attention_count }}</strong>
+            <small>Overdue, blocked, or close to deadline</small>
+        </article>
+
+        <article>
+            <span>Completed</span>
+            <strong>{{ completed_count }}</strong>
+            <small>Finished workspaces</small>
+        </article>
+    </section>
+
+
+    {% if project_cards %}
+
+        <section class="project-filter-panel project-studio-filter">
+            <div class="project-search-wrapper">
+                <span class="project-search-icon">⌕</span>
+                <input
+                    type="search"
+                    id="projectSearchInput"
+                    placeholder="Search projects, goals, technologies, or phases..."
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="project-filter-controls">
+                <select id="projectStatusFilter" aria-label="Filter by status">
+                    <option value="all">All statuses</option>
+                    <option value="planning">Planning</option>
+                    <option value="in progress">In Progress</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                </select>
+
+                <select id="projectPriorityFilter" aria-label="Filter by priority">
+                    <option value="all">All priorities</option>
+                    <option value="low">Low Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="high">High Priority</option>
+                    <option value="critical">Critical Priority</option>
+                </select>
+
+                <button
+                    type="button"
+                    class="clear-project-filters"
+                    id="clearProjectFilters"
+                >
+                    Clear
+                </button>
+            </div>
+        </section>
+
+
+        <div class="project-results-header project-studio-results-heading">
+            <div>
+                <span class="workspace-eyebrow">Your workspaces</span>
+                <h2>Projects</h2>
+                <p>
+                    <span id="visibleProjectCount">{{ project_cards|length }}</span>
+                    visible
+                </p>
+            </div>
+        </div>
+
+
+        <section
+            class="project-studio-grid"
+            id="projectsGrid"
+        >
+            {% for card in project_cards %}
+                {% set project = card.project %}
+
+                <article
+                    class="project-studio-card"
+                    data-project-card
+                    data-title="{{ project.title|lower }}"
+                    data-description="{{ (project.description or project.goal or '')|lower }}"
+                    data-type="{{ (project.project_type or '')|lower }}"
+                    data-stack="{{ (project.tech_stack or '')|lower }}"
+                    data-phase="{{ (project.current_phase or '')|lower }}"
+                    data-status="{{ (project.status or 'in progress')|lower }}"
+                    data-priority="{{ (project.priority or 'medium')|lower }}"
+                >
+                    <div class="project-studio-card-topline">
+                        <div class="project-studio-card-identity">
+                            <span class="project-studio-avatar">
+                                {{ project.title[0]|upper }}
+                            </span>
+
+                            <div>
+                                <span class="workspace-eyebrow">
+                                    {{ project.project_type or "Project" }}
+                                </span>
+                                <h3>{{ project.title }}</h3>
+                            </div>
+                        </div>
+
+                        <span class="project-health-pill project-health-{{ card.health.tone }}">
+                            {{ card.health.label }}
+                        </span>
+                    </div>
+
+                    <p class="project-studio-card-summary">
+                        {{
+                            (project.goal or project.description or "No project goal has been added yet.")
+                            | truncate(170)
+                        }}
+                    </p>
+
+                    <div class="project-studio-progress-row">
+                        <div>
+                            <span>Execution progress</span>
+                            <strong>{{ card.progress }}%</strong>
+                        </div>
+
+                        <div class="professional-progress-track">
+                            <div
+                                class="professional-progress-fill"
+                                data-progress="{{ card.progress }}"
+                            ></div>
+                        </div>
+                    </div>
+
+                    <div class="project-studio-signal-row">
+                        <span>
+                            <strong>{{ card.open_tasks }}</strong>
+                            open tasks
+                        </span>
+                        <span>
+                            <strong>{{ card.note_count }}</strong>
+                            notes
+                        </span>
+                        {% if project.deadline %}
+                            <span>
+                                Due {{ project.deadline.strftime("%d %b %Y") }}
+                            </span>
+                        {% else %}
+                            <span>No project deadline</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="project-studio-health-copy">
+                        <span>Current signal</span>
+                        <p>{{ card.health.message }}</p>
+                    </div>
+
+                    <div class="project-studio-next-action">
+                        <span>Next action</span>
+
+                        {% if card.next_task %}
+                            <strong>{{ card.next_task.title }}</strong>
+                            <small>
+                                {{ card.next_task.status }}
+                                · {{ card.next_task.importance or "Medium" }} priority
+                                {% if card.next_task.deadline %}
+                                    · Due {{ card.next_task.deadline.strftime("%d %b") }}
+                                {% endif %}
+                            </small>
+                        {% else %}
+                            <strong>
+                                {% if project.status == "Completed" %}
+                                    Project complete
+                                {% else %}
+                                    Add the first actionable task
+                                {% endif %}
+                            </strong>
+                            <small>
+                                {% if project.status == "Completed" %}
+                                    No unfinished tasks remain.
+                                {% else %}
+                                    Turn the project goal into a clear next step.
+                                {% endif %}
+                            </small>
+                        {% endif %}
+                    </div>
+
+                    <div class="project-studio-card-footer">
+                        <div class="project-studio-badges">
+                            <span class="project-status-badge project-status-{{ project.status|lower|replace(' ', '-') }}">
+                                {{ project.status }}
+                            </span>
+                            <span class="project-priority-badge project-priority-{{ project.priority|lower }}">
+                                {{ project.priority }}
+                            </span>
+                        </div>
+
+                        <a
+                            href="{{ url_for('project_bp.project_details', project_id=project.id) }}"
+                            class="workspace-primary-button project-studio-open-button"
+                            data-page-loading
+                            data-loading-title="Opening project"
+                            data-loading-message="Loading the project workspace..."
+                        >
+                            Open Project
+                        </a>
+                    </div>
+                </article>
+            {% endfor %}
+        </section>
+
+
+        <section
+            class="task-no-results project-studio-no-results"
+            id="projectNoResults"
+            hidden
+        >
+            <div>⌕</div>
+            <h3>No matching projects</h3>
+            <p>Try a different search, status, or priority.</p>
+            <button
+                type="button"
+                class="workspace-secondary-button"
+                id="clearProjectFiltersEmpty"
+            >
+                Clear Filters
+            </button>
+        </section>
+
+    {% else %}
+
+        <section class="professional-task-empty-state project-studio-empty-state">
+            <div class="empty-task-symbol">P</div>
+            <span>Start with one meaningful goal</span>
+            <h2>Create your first project workspace</h2>
+            <p>
+                Connect goals, tasks, notes, and progress in one place.
+            </p>
+            <button
+                type="button"
+                class="workspace-primary-button"
+                data-open-project-modal
+            >
+                + Create First Project
+            </button>
+        </section>
+
+    {% endif %}
+
+</div>
+
+<!-- Create Project Modal -->
+<div
+    class="project-modal-overlay"
+    id="projectModalOverlay"
+    aria-hidden="true"
+>
+
+    <section
+        class="project-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="createProjectTitle"
+    >
+
+        <div class="project-modal-header">
+
+            <div>
+                <span class="workspace-eyebrow">
+                    New Workspace
+                </span>
+
+                <h2 id="createProjectTitle">
+                    Create Project
+                </h2>
+
+                <p>
+                    Add the main information for your new project.
+                </p>
+            </div>
+
+            <button
+                type="button"
+                class="project-modal-close"
+                data-close-project-modal
+                aria-label="Close project form"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <form
+            method="POST"
+            action="{{ url_for('project_bp.projects') }}"
+            class="professional-project-form"
+            data-loading-title="Creating project"
+            data-loading-message="LifeOS is setting up your new workspace project..."
+                        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="project-form-grid">
+
+                <div class="project-form-field">
+                    <label for="projectTitle">
+                        Project title
+                        <span>*</span>
+                    </label>
+
+                    <input
+                        type="text"
+                        id="projectTitle"
+                        name="title"
+                        placeholder="Example: LifeOS AI"
+                        required
+                    >
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectType">
+                        Project type
+                    </label>
+
+                    <select
+                        id="projectType"
+                        name="project_type"
+                    >
+                        <option value="">
+                            Select project type
+                        </option>
+
+                        <option value="Full-Stack AI System">
+                            Full-Stack AI System
+                        </option>
+
+                        <option value="Web Application">
+                            Web Application
+                        </option>
+
+                        <option value="Mobile Application">
+                            Mobile Application
+                        </option>
+
+                        <option value="Machine Learning Project">
+                            Machine Learning Project
+                        </option>
+
+                        <option value="Graduation Project">
+                            Graduation Project
+                        </option>
+
+                        <option value="Portfolio Project">
+                            Portfolio Project
+                        </option>
+
+                        <option value="Research Project">
+                            Research Project
+                        </option>
+
+                        <option value="Job Preparation">
+                            Job Preparation
+                        </option>
+
+                        <option value="Other">
+                            Other
+                        </option>
+                    </select>
+                </div>
+
+
+                <div class="project-form-field project-form-full">
+                    <label for="projectDescription">
+                        Description
+                    </label>
+
+                    <textarea
+                        id="projectDescription"
+                        name="description"
+                        placeholder="Describe the project and its main purpose..."
+                    ></textarea>
+                </div>
+
+
+                <div class="project-form-field project-form-full">
+                    <label for="projectGoal">
+                        Main goal
+                    </label>
+
+                    <textarea
+                        id="projectGoal"
+                        name="goal"
+                        placeholder="What should this project achieve?"
+                    ></textarea>
+                </div>
+
+
+                <div class="project-form-field project-form-full">
+                    <label for="projectStack">
+                        Technology stack
+                    </label>
+
+                    <input
+                        type="text"
+                        id="projectStack"
+                        name="tech_stack"
+                        placeholder="Flask, SQL Server, HTML, CSS, JavaScript"
+                    >
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectStatus">
+                        Status
+                    </label>
+
+                    <select
+                        id="projectStatus"
+                        name="status"
+                    >
+                        <option value="Planning">
+                            Planning
+                        </option>
+
+                        <option value="In Progress" selected>
+                            In Progress
+                        </option>
+
+                        <option value="Paused">
+                            Paused
+                        </option>
+
+                        <option value="Completed">
+                            Completed
+                        </option>
+                    </select>
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectPriority">
+                        Priority
+                    </label>
+
+                    <select
+                        id="projectPriority"
+                        name="priority"
+                    >
+                        <option value="Low">
+                            Low
+                        </option>
+
+                        <option value="Medium" selected>
+                            Medium
+                        </option>
+
+                        <option value="High">
+                            High
+                        </option>
+
+                        <option value="Critical">
+                            Critical
+                        </option>
+                    </select>
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectStartDate">
+                        Start date
+                    </label>
+
+                    <input
+                        type="date"
+                        id="projectStartDate"
+                        name="start_date"
+                    >
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="newProjectDeadline">
+                        Deadline
+                    </label>
+
+                    <input
+                        type="date"
+                        id="newProjectDeadline"
+                        name="deadline"
+                    >
+
+                    <label class="professional-checkbox">
+                        <input
+                            type="checkbox"
+                            name="no_deadline"
+                            data-no-deadline
+                            data-deadline-target="newProjectDeadline"
+                        >
+
+                        <span>No deadline</span>
+                    </label>
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectPhase">
+                        Current phase
+                    </label>
+
+                    <input
+                        type="text"
+                        id="projectPhase"
+                        name="current_phase"
+                        placeholder="Example: Backend development"
+                    >
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectProgress">
+                        Progress
+                    </label>
+
+                    <div class="progress-input-wrapper">
+                        <input
+                            type="number"
+                            id="projectProgress"
+                            name="progress"
+                            min="0"
+                            max="100"
+                            value="0"
+                        >
+
+                        <span>%</span>
+                    </div>
+                </div>
+
+
+                <div class="project-form-divider project-form-full">
+                    <span>External Resources</span>
+                </div>
+
+
+                <div class="project-form-field project-form-full">
+                    <label for="projectFolder">
+                        Local project folder
+                    </label>
+
+                    <input
+                        type="text"
+                        id="projectFolder"
+                        name="project_folder"
+                        placeholder="C:\Users\Name\Desktop\project"
+                    >
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectGithub">
+                        GitHub repository
+                    </label>
+
+                    <input
+                        type="url"
+                        id="projectGithub"
+                        name="github_link"
+                        placeholder="https://github.com/username/project"
+                    >
+                </div>
+
+
+                <div class="project-form-field">
+                    <label for="projectDemo">
+                        Live demo
+                    </label>
+
+                    <input
+                        type="url"
+                        id="projectDemo"
+                        name="demo_link"
+                        placeholder="https://project-demo.com"
+                    >
+                </div>
+
+            </div>
+
+
+            <div class="project-modal-actions">
+
+                <button
+                    type="button"
+                    class="workspace-secondary-button"
+                    data-close-project-modal
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    Create Project
+                </button>
+
+            </div>
+
+        </form>
+
+    </section>
+
+</div>
+
+{% endblock %}

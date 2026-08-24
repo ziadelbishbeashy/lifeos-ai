@@ -1,0 +1,640 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Edit Task | LifeOS AI
+<script>
+(function () {
+    const reminderType = document.getElementById("editTaskReminderType");
+    const reminderDate = document.getElementById("editTaskReminderDate");
+    const reminderDateLabel = document.getElementById("editTaskReminderDateLabel");
+    const reminderDateHint = document.getElementById("editTaskReminderDateHint");
+
+    function updateReminderDateState() {
+        if (!reminderType || !reminderDate) {
+            return;
+        }
+
+        const isCustom = reminderType.value === "custom";
+        reminderDate.disabled = !isCustom;
+        reminderDate.required = isCustom;
+
+        if (!isCustom) {
+            reminderDate.value = "";
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Deadline-based reminders use the task deadline date. Only the time is customized here.";
+            }
+        } else {
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Choose the exact reminder date for this custom reminder.";
+            }
+        }
+
+        if (reminderDateLabel) {
+            reminderDateLabel.textContent = "Custom reminder date";
+        }
+    }
+
+    if (reminderType) {
+        reminderType.addEventListener("change", updateReminderDateState);
+        updateReminderDateState();
+    }
+})();
+</script>
+
+{% endblock %}
+
+{% block content %}
+
+<div class="edit-task-page">
+
+    {% if task.project_id %}
+        <a
+            href="{{ url_for('project_bp.project_details', project_id=task.project_id) }}#tasks"
+            class="workspace-back-link"
+            data-page-loading
+            data-loading-title="Opening project workspace"
+            data-loading-message="Loading project details and tasks..."
+        >
+            ← Back to Project Tasks
+        </a>
+    {% else %}
+        <a
+            href="{{ url_for('task_bp.all_tasks') }}"
+            class="workspace-back-link"
+            data-page-loading
+            data-loading-title="Opening task center"
+            data-loading-message="Loading your general workspace tasks..."
+        >
+            ← Back to Task Center
+        </a>
+    {% endif %}
+
+    <header class="workspace-page-header">
+        <div>
+            <span class="workspace-eyebrow">
+                Task Settings
+            </span>
+
+            <h1>Edit Task</h1>
+
+            <p>
+                Update the task information, execution status,
+                priority, deadline, and whether it belongs to a project
+                or your general workspace.
+            </p>
+        </div>
+
+        <span
+            class="task-status-label
+            task-status-{{ task.status|lower|replace(' ', '-') }}"
+        >
+            {{ task.status }}
+        </span>
+    </header>
+
+    <div class="edit-task-layout">
+
+        <section class="edit-task-form-card">
+
+            <form
+                method="POST"
+                class="professional-task-form"
+                data-loading-title="Updating task"
+                data-loading-message="Saving your task changes..."
+            >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="task-form-section-heading">
+                    <span>01</span>
+
+                    <div>
+                        <h2>Task Scope</h2>
+
+                        <p>
+                            Decide whether this is a general workspace task
+                            or a task connected to a specific project.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="task-scope-options task-form-full">
+                    <label class="task-scope-option">
+                        <input
+                            type="radio"
+                            name="task_scope"
+                            value="general"
+                            data-task-scope-control
+                            {% if not task.project_id %}checked{% endif %}
+                        >
+
+                        <span>
+                            <strong>General Workspace Task</strong>
+                            <small>For study, job search, emails, reminders, and actions not tied to a project.</small>
+                        </span>
+                    </label>
+
+                    <label class="task-scope-option">
+                        <input
+                            type="radio"
+                            name="task_scope"
+                            value="project"
+                            data-task-scope-control
+                            {% if task.project_id %}checked{% endif %}
+                        >
+
+                        <span>
+                            <strong>Project Task</strong>
+                            <small>Attach this action to one of your project workspaces.</small>
+                        </span>
+                    </label>
+                </div>
+
+                <div
+                    class="task-form-field task-form-full task-project-field"
+                    data-task-project-field
+                >
+                    <label for="editTaskProject">
+                        Project
+                    </label>
+
+                    <select
+                        id="editTaskProject"
+                        name="project_id"
+                    >
+                        <option value="">
+                            Select a project
+                        </option>
+
+                        {% for project in projects %}
+                            <option
+                                value="{{ project.id }}"
+                                {% if task.project_id == project.id %}selected{% endif %}
+                            >
+                                {{ project.title }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="task-form-section-heading">
+                    <span>02</span>
+
+                    <div>
+                        <h2>Task Information</h2>
+
+                        <p>
+                            Define the task and the module it belongs to.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="task-form-grid">
+
+                    <div class="task-form-field task-form-full">
+                        <label for="editTaskTitle">
+                            Task Title
+                            <span>*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            id="editTaskTitle"
+                            name="title"
+                            value="{{ task.title }}"
+                            required
+                        >
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskModule">
+                            Module / Area
+                        </label>
+
+                        <input
+                            type="text"
+                            id="editTaskModule"
+                            name="module"
+                            list="editTaskModuleOptions"
+                            value="{{ task.module or '' }}"
+                            placeholder="Example: Backend, Career, Study"
+                        >
+
+                        <datalist id="editTaskModuleOptions">
+                            <option value="Database">
+                            <option value="Backend">
+                            <option value="Frontend">
+                            <option value="Authentication">
+                            <option value="Dashboard">
+                            <option value="AI">
+                            <option value="Career">
+                            <option value="Study">
+                            <option value="Communication">
+                            <option value="Testing">
+                            <option value="Deployment">
+                            <option value="Documentation">
+                        </datalist>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskTags">
+                            Tags
+                        </label>
+
+                        <input
+                            type="text"
+                            id="editTaskTags"
+                            name="tags"
+                            value="{{ task.tags or '' }}"
+                            placeholder="Example: backend, testing"
+                        >
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskStatus">
+                            Status
+                        </label>
+
+                        <select id="editTaskStatus" name="status">
+                            {% for status in ["Pending", "In Progress", "Blocked", "Completed"] %}
+                                <option
+                                    value="{{ status }}"
+                                    {% if task.status == status %}selected{% endif %}
+                                >
+                                    {{ status }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="task-form-field task-form-full">
+                        <label for="editTaskDescription">
+                            Description
+                        </label>
+
+                        <textarea
+                            id="editTaskDescription"
+                            name="description"
+                        >{{ task.description or "" }}</textarea>
+                    </div>
+                </div>
+
+                <div class="task-form-section-heading">
+                    <span>03</span>
+
+                    <div>
+                        <h2>Execution Priority</h2>
+
+                        <p>
+                            Set the importance, difficulty and deadline.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="task-form-grid">
+                    <div class="task-form-field">
+                        <label for="editTaskImportance">
+                            Importance
+                        </label>
+
+                        <select id="editTaskImportance" name="importance">
+                            {% for importance in ["Low", "Medium", "High", "Critical"] %}
+                                <option
+                                    value="{{ importance }}"
+                                    {% if task.importance == importance %}selected{% endif %}
+                                >
+                                    {{ importance }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskDifficulty">
+                            Difficulty
+                        </label>
+
+                        <select id="editTaskDifficulty" name="difficulty">
+                            {% for difficulty in ["Easy", "Medium", "Hard"] %}
+                                <option
+                                    value="{{ difficulty }}"
+                                    {% if task.difficulty == difficulty %}selected{% endif %}
+                                >
+                                    {{ difficulty }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="task-form-field task-form-full">
+                        <label for="editTaskDeadline">
+                            Deadline
+                        </label>
+
+                        <input
+                            type="date"
+                            id="editTaskDeadline"
+                            name="deadline"
+                            value="{% if task.deadline %}{{ task.deadline.strftime('%Y-%m-%d') }}{% endif %}"
+                            {% if not task.deadline %}disabled{% endif %}
+                        >
+
+                        <label class="professional-checkbox">
+                            <input
+                                type="checkbox"
+                                data-no-deadline
+                                data-deadline-target="editTaskDeadline"
+                                {% if not task.deadline %}checked{% endif %}
+                            >
+
+                            <span>No deadline</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="task-form-section-heading">
+                    <span>04</span>
+                    <div>
+                        <h2>Recurring Task</h2>
+                        <p>Automatically create the next occurrence after completion.</p>
+                    </div>
+                </div>
+
+                <div class="task-form-grid recurrence-form-grid">
+                    <div class="task-form-field task-form-full">
+                        <label class="professional-checkbox">
+                            <input type="checkbox" name="is_recurring" {% if task.is_recurring %}checked{% endif %}>
+                            <span>Repeat this task</span>
+                        </label>
+                    </div>
+                    <div class="task-form-field">
+                        <label for="editRecurrenceType">Repeat pattern</label>
+                        <select id="editRecurrenceType" name="recurrence_type">
+                            {% for value, label in [('daily','Daily'),('weekly','Weekly'),('monthly','Monthly'),('custom_days','Custom number of days')] %}
+                                <option value="{{ value }}" {% if task.recurrence_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="task-form-field">
+                        <label for="editRecurrenceInterval">Repeat every</label>
+                        <input type="number" id="editRecurrenceInterval" name="recurrence_interval" min="1" max="365" value="{{ task.recurrence_interval or 1 }}">
+                    </div>
+                    <div class="task-form-field">
+                        <label for="editRecurrenceEnd">End date (optional)</label>
+                        <input type="date" id="editRecurrenceEnd" name="recurrence_end_date" value="{% if task.recurrence_end_date %}{{ task.recurrence_end_date.strftime('%Y-%m-%d') }}{% endif %}">
+                    </div>
+                </div>
+
+                <div class="task-form-section-heading">
+                    <span>05</span>
+
+                    <div>
+                        <h2>Email Reminder</h2>
+
+                        <p>
+                            Set an exact email reminder time for this task. The reminder will only be sent
+                            if custom task reminders are enabled in notification settings.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="task-form-grid reminder-form-grid">
+                    <div class="task-form-field task-form-full">
+                        <label class="professional-checkbox reminder-master-checkbox">
+                            <input
+                                type="checkbox"
+                                name="reminder_enabled"
+                                {% if task.reminder_enabled %}checked{% endif %}
+                            >
+                            <span>Enable email reminder for this task</span>
+                        </label>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskReminderType">Reminder type</label>
+                        <select id="editTaskReminderType" name="reminder_type">
+                            {% set reminder_options = [
+                                ('custom', 'Custom date and time'),
+                                ('due_time', 'On deadline day at chosen time'),
+                                ('one_day_before', '1 day before deadline at chosen time'),
+                                ('three_days_before', '3 days before deadline at chosen time'),
+                                ('one_hour_before', '1 hour before chosen deadline time')
+                            ] %}
+                            {% for value, label in reminder_options %}
+                                <option
+                                    value="{{ value }}"
+                                    {% if task.reminder_type == value or (value == 'due_time' and task.reminder_type == 'due_morning') %}selected{% endif %}
+                                >
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskReminderDate" id="editTaskReminderDateLabel">Custom reminder date</label>
+                        <input
+                            type="date"
+                            id="editTaskReminderDate"
+                            name="reminder_date"
+                            value="{% if task.reminder_type == 'custom' and task.reminder_datetime %}{{ task.reminder_datetime.strftime('%Y-%m-%d') }}{% endif %}"
+                        >
+                        <small id="editTaskReminderDateHint">Used only when reminder type is custom.</small>
+                    </div>
+
+                    <div class="task-form-field">
+                        <label for="editTaskReminderTime">Reminder time</label>
+                        <input
+                            type="time"
+                            id="editTaskReminderTime"
+                            name="reminder_time"
+                            value="{% if task.reminder_datetime %}{{ task.reminder_datetime.strftime('%H:%M') }}{% endif %}"
+                        >
+                        <small>Choose the exact time. LifeOS will not force 9:00 AM anymore.</small>
+                    </div>
+                </div>
+
+                <div class="edit-task-actions">
+                    {% if task.project_id %}
+                        <a
+                            href="{{ url_for('project_bp.project_details', project_id=task.project_id) }}#tasks"
+                            class="workspace-secondary-button"
+                            data-page-loading
+                            data-loading-title="Opening project workspace"
+                            data-loading-message="Loading project details and tasks..."
+                        >
+                            Cancel
+                        </a>
+                    {% else %}
+                        <a
+                            href="{{ url_for('task_bp.all_tasks') }}"
+                            class="workspace-secondary-button"
+                            data-page-loading
+                            data-loading-title="Opening task center"
+                            data-loading-message="Loading your general workspace tasks..."
+                        >
+                            Cancel
+                        </a>
+                    {% endif %}
+
+                    <button
+                        type="submit"
+                        class="workspace-primary-button"
+                    >
+                        Save Task Changes
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <aside class="edit-task-sidebar">
+            <section class="task-preview-card">
+                <span class="workspace-eyebrow">
+                    Task Summary
+                </span>
+
+                <div class="task-preview-icon">
+                    ✓
+                </div>
+
+                <h2>{{ task.title }}</h2>
+
+                <p>
+                    {% if task.project_id %}
+                        {{ task.project.title }} · {{ task.module or "Project Task" }}
+                    {% else %}
+                        General Workspace Task · {{ task.module or "General" }}
+                    {% endif %}
+                </p>
+
+                <div class="task-preview-labels">
+                    <span
+                        class="task-scope-badge {% if task.project_id %}task-scope-project{% else %}task-scope-general{% endif %}"
+                    >
+                        {% if task.project_id %}
+                            Project Task
+                        {% else %}
+                            General Task
+                        {% endif %}
+                    </span>
+
+                    <span
+                        class="task-importance-label task-importance-{{ task.importance|lower }}"
+                    >
+                        {{ task.importance }}
+                    </span>
+
+                    <span
+                        class="task-status-label task-status-{{ task.status|lower|replace(' ', '-') }}"
+                    >
+                        {{ task.status }}
+                    </span>
+                </div>
+
+                <div class="task-preview-details">
+                    <div>
+                        <span>Scope</span>
+                        <strong>
+                            {% if task.project_id %}
+                                {{ task.project.title }}
+                            {% else %}
+                                General Workspace
+                            {% endif %}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>Difficulty</span>
+                        <strong>{{ task.difficulty }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Deadline</span>
+                        <strong>
+                            {% if task.deadline %}
+                                {{ task.deadline.strftime("%d %b %Y") }}
+                            {% else %}
+                                No deadline
+                            {% endif %}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>Created</span>
+                        <strong>
+                            {{ task.created_at.strftime("%d %b %Y") }}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>Reminder</span>
+                        <strong>
+                            {% if task.reminder_enabled and task.reminder_datetime %}
+                                {{ task.reminder_datetime.strftime("%d %b %Y %H:%M") }}
+                            {% else %}
+                                Disabled
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="task-edit-help-card">
+                <span>Priority Preparation</span>
+
+                <h3>Why these fields matter</h3>
+
+                <p>
+                    Importance, difficulty, deadline and status will
+                    later be used by the Smart Priority Engine.
+                </p>
+
+                <ul>
+                    <li>General tasks stay in your main workspace.</li>
+                    <li>Project tasks affect only their project workspace.</li>
+                    <li>Deadlines power reminders and scheduled notifications.</li>
+                </ul>
+            </section>
+        </aside>
+    </div>
+</div>
+
+<script>
+(function () {
+    const reminderType = document.getElementById("editTaskReminderType");
+    const reminderDate = document.getElementById("editTaskReminderDate");
+    const reminderDateLabel = document.getElementById("editTaskReminderDateLabel");
+    const reminderDateHint = document.getElementById("editTaskReminderDateHint");
+
+    function updateReminderDateState() {
+        if (!reminderType || !reminderDate) {
+            return;
+        }
+
+        const isCustom = reminderType.value === "custom";
+        reminderDate.disabled = !isCustom;
+        reminderDate.required = isCustom;
+
+        if (!isCustom) {
+            reminderDate.value = "";
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Deadline-based reminders use the task deadline date. Only the time is customized here.";
+            }
+        } else {
+            if (reminderDateHint) {
+                reminderDateHint.textContent = "Choose the exact reminder date for this custom reminder.";
+            }
+        }
+
+        if (reminderDateLabel) {
+            reminderDateLabel.textContent = "Custom reminder date";
+        }
+    }
+
+    if (reminderType) {
+        reminderType.addEventListener("change", updateReminderDateState);
+        updateReminderDateState();
+    }
+})();
+</script>
+
+{% endblock %}

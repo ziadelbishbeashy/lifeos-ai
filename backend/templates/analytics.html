@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics | LifeOS AI{% endblock %}
+{% block page_kicker %}Performance intelligence{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+
+{% block content %}
+{% set summary = analytics.summary %}
+{% set range = analytics.range %}
+
+<section class="analytics-page" data-analytics-page>
+    <header class="analytics-hero">
+        <div>
+            <span class="analytics-eyebrow">Workspace analytics</span>
+            <h1>See where your time and effort are going.</h1>
+            <p>
+                Review task throughput, focus activity and project execution without
+                leaving your LifeOS workspace.
+            </p>
+        </div>
+
+        <div class="analytics-header-actions">
+            <a
+                href="{{ url_for('analytics_bp.export_tasks_csv') }}"
+                class="analytics-action-button secondary"
+            >
+                Export tasks CSV
+            </a>
+            <a
+                href="{{ url_for('analytics_bp.export_focus_csv') }}"
+                class="analytics-action-button secondary"
+            >
+                Export focus CSV
+            </a>
+            <button
+                type="button"
+                class="analytics-action-button primary"
+                data-analytics-print
+            >
+                Print / Save PDF
+            </button>
+        </div>
+    </header>
+
+    <form method="GET" class="analytics-filter-bar" data-analytics-filter>
+        <div class="analytics-filter-copy">
+            <strong>{{ range.label }}</strong>
+            <span>
+                {{ range.start_date.strftime('%d %b %Y') }} –
+                {{ range.end_date.strftime('%d %b %Y') }}
+            </span>
+        </div>
+
+        <label>
+            <span>Range</span>
+            <select name="period" data-period-select>
+                <option value="today" {% if selected_period == 'today' %}selected{% endif %}>Today</option>
+                <option value="week" {% if selected_period == 'week' %}selected{% endif %}>This week</option>
+                <option value="month" {% if selected_period == 'month' %}selected{% endif %}>This month</option>
+                <option value="30d" {% if selected_period == '30d' %}selected{% endif %}>Last 30 days</option>
+                <option value="90d" {% if selected_period == '90d' %}selected{% endif %}>Last 90 days</option>
+                <option value="custom" {% if selected_period == 'custom' %}selected{% endif %}>Custom</option>
+            </select>
+        </label>
+
+        <div class="analytics-custom-dates{% if selected_period != 'custom' %} is-hidden{% endif %}" data-custom-dates>
+            <label>
+                <span>From</span>
+                <input type="date" name="start" value="{{ custom_start }}">
+            </label>
+            <label>
+                <span>To</span>
+                <input type="date" name="end" value="{{ custom_end }}">
+            </label>
+        </div>
+
+        <button type="submit" class="analytics-filter-submit">Apply</button>
+    </form>
+
+    <section class="analytics-summary-grid" aria-label="Analytics summary">
+        <article class="analytics-summary-card accent-green">
+            <span>Completed in range</span>
+            <strong>{{ summary.completed_in_period }}</strong>
+            <small class="analytics-change {{ analytics.comparisons.completed.direction }}">
+                {{ analytics.comparisons.completed.label }} vs previous period
+            </small>
+        </article>
+
+        <article class="analytics-summary-card accent-purple">
+            <span>Overall completion</span>
+            <strong>{{ summary.completion_rate }}%</strong>
+            <small>{{ summary.open_tasks }} open of {{ summary.total_tasks }} total tasks</small>
+        </article>
+
+        <article class="analytics-summary-card accent-cyan">
+            <span>Focused time</span>
+            <strong>{{ summary.focus_label }}</strong>
+            <small class="analytics-change {{ analytics.comparisons.focus.direction }}">
+                {{ analytics.comparisons.focus.label }} vs previous period
+            </small>
+        </article>
+
+        <article class="analytics-summary-card accent-yellow">
+            <span>Average session</span>
+            <strong>{{ summary.average_session_label }}</strong>
+            <small>{{ summary.focus_sessions }} completed focus session{% if summary.focus_sessions != 1 %}s{% endif %}</small>
+        </article>
+
+        <article class="analytics-summary-card accent-red">
+            <span>Overdue now</span>
+            <strong>{{ summary.overdue_tasks }}</strong>
+            <small>{{ summary.blocked_tasks }} blocked task{% if summary.blocked_tasks != 1 %}s{% endif %}</small>
+        </article>
+
+        <article class="analytics-summary-card accent-blue">
+            <span>Active projects</span>
+            <strong>{{ summary.active_projects }}</strong>
+            <small>{{ summary.recurring_tasks }} recurring task{% if summary.recurring_tasks != 1 %}s{% endif %}</small>
+        </article>
+    </section>
+
+    <section class="analytics-grid analytics-grid-primary">
+        <article class="analytics-panel analytics-panel-wide">
+            <div class="analytics-panel-heading">
+                <div>
+                    <span>Task activity</span>
+                    <h2>Created vs completed</h2>
+                </div>
+                <div class="analytics-legend">
+                    <span><i class="legend-created"></i>Created</span>
+                    <span><i class="legend-completed"></i>Completed</span>
+                </div>
+            </div>
+
+            {% if analytics.task_series %}
+                <div class="analytics-column-chart" role="img" aria-label="Tasks created and completed across the selected range">
+                    {% for point in analytics.task_series %}
+                        <div class="analytics-column-group" title="{{ point.title }}: {{ point.created }} created, {{ point.completed }} completed">
+                            <div class="analytics-column-values">
+                                <div class="analytics-column created" style="--bar-height: {{ point.created_height }}%">
+                                    <span>{{ point.created }}</span>
+                                </div>
+                                <div class="analytics-column completed" style="--bar-height: {{ point.completed_height }}%">
+                                    <span>{{ point.completed }}</span>
+                                </div>
+                            </div>
+                            <small>{{ point.label }}</small>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="analytics-empty">No task activity has been recorded for this range.</div>
+            {% endif %}
+        </article>
+
+        <article class="analytics-panel analytics-status-panel">
+            <div class="analytics-panel-heading">
+                <div>
+                    <span>Current workload</span>
+                    <h2>Task status</h2>
+                </div>
+            </div>
+
+            <div class="analytics-donut-layout">
+                <div
+                    class="analytics-donut"
+                    style="--donut-gradient: {{ analytics.status_data.gradient }}"
+                    aria-label="{{ analytics.status_data.total }} total tasks"
+                >
+                    <div>
+                        <strong>{{ analytics.status_data.total }}</strong>
+                        <span>Total tasks</span>
+                    </div>
+                </div>
+
+                <div class="analytics-donut-legend">
+                    {% for segment in analytics.status_data.segments %}
+                        <div>
+                            <i style="--legend-color: {{ segment.color }}"></i>
+                            <span>{{ segment.name }}</span>
+                            <strong>{{ segment.count }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <section class="analytics-grid analytics-grid-secondary">
+        <article class="analytics-panel">
+            <div class="analytics-panel-heading">
+                <div>
+                    <span>Deep work</span>
+                    <h2>Focus trend</h2>
+                </div>
+                <strong class="analytics-panel-total">{{ summary.focus_label }}</strong>
+            </div>
+
+            <div class="analytics-focus-chart">
+                {% for point in analytics.focus_series %}
+                    <div class="analytics-focus-column" title="{{ point.title }}: {{ point.formatted }} across {{ point.sessions }} session(s)">
+                        <span>{{ point.formatted if point.minutes else '' }}</span>
+                        <div style="--bar-height: {{ point.height }}%"></div>
+                        <small>{{ point.label }}</small>
+                    </div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="analytics-panel">
+            <div class="analytics-panel-heading">
+                <div>
+                    <span>Open workload</span>
+                    <h2>Priority mix</h2>
+                </div>
+            </div>
+
+            <div class="analytics-horizontal-list">
+                {% for item in analytics.priority_data %}
+                    <div class="analytics-horizontal-row">
+                        <div>
+                            <span>{{ item.name }}</span>
+                            <strong>{{ item.count }}</strong>
+                        </div>
+                        <div class="analytics-horizontal-track">
+                            <span style="--bar-width: {{ item.width }}%; --bar-color: {{ item.color }}"></span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="analytics-scope-summary">
+                <span><strong>{{ analytics.scope_data.general }}</strong> General tasks</span>
+                <span><strong>{{ analytics.scope_data.project }}</strong> Project tasks</span>
+            </div>
+        </article>
+
+        <article class="analytics-panel">
+            <div class="analytics-panel-heading">
+                <div>
+                    <span>Attention allocation</span>
+                    <h2>Focus by project</h2>
+                </div>
+            </div>
+
+            {% if analytics.focus_by_project %}
+                <div class="analytics-horizontal-list">
+                    {% for item in analytics.focus_by_project %}
+                        <div class="analytics-horizontal-row project-focus-row">
+                            <div>
+                                <span>{{ item.name }}</span>
+                                <strong>{{ item.formatted }}</strong>
+                            </div>
+                            <div class="analytics-horizontal-track">
+                                <span style="--bar-width: {{ item.width }}%; --bar-color: var(--app-primary)"></span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="analytics-empty compact">Complete a focus session to see where your attention goes.</div>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="analytics-panel analytics-project-panel">
+        <div class="analytics-panel-heading">
+            <div>
+                <span>Project execution</span>
+                <h2>Performance overview</h2>
+            </div>
+            <small>Focus time reflects {{ range.label|lower }}.</small>
+        </div>
+
+        {% if analytics.projects %}
+            <div class="analytics-table-wrap">
+                <table class="analytics-project-table">
+                    <thead>
+                        <tr>
+                            <th>Project</th>
+                            <th>Progress</th>
+                            <th>Tasks</th>
+                            <th>Overdue</th>
+                            <th>Focus</th>
+                            <th>Deadline</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in analytics.projects %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('project_bp.project_details', project_id=project.id) }}">
+                                        <strong>{{ project.title }}</strong>
+                                        <span>{{ project.status }} · {{ project.priority }} priority</span>
+                                    </a>
+                                </td>
+                                <td>
+                                    <div class="analytics-progress-cell">
+                                        <span><i style="--progress: {{ project.progress }}%"></i></span>
+                                        <strong>{{ project.progress }}%</strong>
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong>{{ project.completed_tasks }}/{{ project.total_tasks }}</strong>
+                                    <span>{{ project.open_tasks }} open</span>
+                                </td>
+                                <td>
+                                    <strong class="{% if project.overdue_tasks %}analytics-danger-text{% endif %}">
+                                        {{ project.overdue_tasks }}
+                                    </strong>
+                                    <span>{{ project.blocked_tasks }} blocked</span>
+                                </td>
+                                <td>
+                                    <strong>{{ project.focus_label }}</strong>
+                                </td>
+                                <td>
+                                    <span class="analytics-deadline analytics-deadline-{{ project.deadline_tone }}">
+                                        {{ project.deadline_label }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="analytics-empty">Create a project to unlock project performance analytics.</div>
+        {% endif %}
+    </section>
+
+    <section class="analytics-panel analytics-insights-panel">
+        <div class="analytics-panel-heading">
+            <div>
+                <span>Rule-based insights</span>
+                <h2>What deserves attention</h2>
+            </div>
+            <small>Generated {{ analytics.generated_at.strftime('%d %b %Y, %H:%M') }}</small>
+        </div>
+
+        <div class="analytics-insight-grid">
+            {% for insight in analytics.insights %}
+                <article class="analytics-insight analytics-insight-{{ insight.tone }}">
+                    <i></i>
+                    <div>
+                        <strong>{{ insight.title }}</strong>
+                        <p>{{ insight.text }}</p>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script src="{{ url_for('static', filename='js/analytics.js') }}?v=phase5-4-1"></script>
+{% endblock %}

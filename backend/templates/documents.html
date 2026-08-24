@@ -1,0 +1,857 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Document Brain | LifeOS AI
+{% endblock %}
+
+{% block page_kicker %}
+    Knowledge workspace
+{% endblock %}
+
+{% block page_title %}
+    Document Brain
+{% endblock %}
+
+{% block content %}
+
+{% set stats = namespace(
+    text_ready=0,
+    analysed=0,
+    questions=0,
+    chunks=0
+) %}
+
+{% for item in documents %}
+    {% if item.extracted_text %}
+        {% set stats.text_ready = stats.text_ready + 1 %}
+    {% endif %}
+
+    {% if item.summary %}
+        {% set stats.analysed = stats.analysed + 1 %}
+    {% endif %}
+
+    {% set stats.questions =
+        stats.questions + (item.questions | length)
+    %}
+
+    {% set stats.chunks =
+        stats.chunks + (item.chunks | length)
+    %}
+{% endfor %}
+
+
+<div
+    class="db-library"
+    data-db-library
+>
+
+    <section class="db-library-hero">
+
+        <div class="db-library-hero-copy">
+
+            <span class="db-kicker">
+                Private project knowledge
+            </span>
+
+            <h1>
+                Turn every PDF into a searchable,
+                actionable workspace.
+            </h1>
+
+            <p>
+                Upload project documents, extract their readable text,
+                analyse requirements and risks, create tasks from
+                detected actions, and ask grounded questions with
+                page-level evidence.
+            </p>
+
+
+            <div class="db-hero-actions">
+
+                {% if projects %}
+
+                    <a
+                        href="#upload-document"
+                        class="workspace-primary-button"
+                    >
+                        Upload a PDF
+                    </a>
+
+                {% else %}
+
+                    <a
+                        href="{{ url_for('project_bp.projects') }}"
+                        class="workspace-primary-button"
+                    >
+                        Create a project
+                    </a>
+
+                {% endif %}
+
+                {% if documents %}
+
+                    <a
+                        href="{{ url_for('document_bp.compare_documents') }}"
+                        class="workspace-secondary-button"
+                        data-page-loading
+                        data-loading-title="Opening document comparison"
+                        data-loading-message="Preparing your document comparison workspace..."
+                    >
+                        Compare documents
+                    </a>
+
+                    <a
+                        href="#document-library"
+                        class="workspace-secondary-button"
+                    >
+                        Browse documents
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div
+            class="db-hero-visual"
+            aria-hidden="true"
+        >
+
+            <div class="db-hero-document">
+
+                <span class="db-hero-document-type">
+                    PDF
+                </span>
+
+                <div>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+            </div>
+
+
+            <div class="db-hero-orbit db-hero-orbit-analysis">
+                <strong>AI</strong>
+                <small>Analysis</small>
+            </div>
+
+            <div class="db-hero-orbit db-hero-orbit-search">
+                <strong>{{ stats.chunks }}</strong>
+                <small>Chunks</small>
+            </div>
+
+            <div class="db-hero-orbit db-hero-orbit-answer">
+                <strong>{{ stats.questions }}</strong>
+                <small>Answers</small>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section
+        class="db-library-metrics"
+        aria-label="Document Brain overview"
+    >
+
+        <article>
+            <span class="db-metric-icon db-metric-purple">
+                D
+            </span>
+
+            <div>
+                <strong>{{ documents | length }}</strong>
+                <span>Total documents</span>
+            </div>
+        </article>
+
+
+        <article>
+            <span class="db-metric-icon db-metric-mint">
+                T
+            </span>
+
+            <div>
+                <strong>{{ stats.text_ready }}</strong>
+                <span>Text ready</span>
+            </div>
+        </article>
+
+
+        <article>
+            <span class="db-metric-icon db-metric-amber">
+                A
+            </span>
+
+            <div>
+                <strong>{{ stats.analysed }}</strong>
+                <span>Analysed</span>
+            </div>
+        </article>
+
+
+        <article>
+            <span class="db-metric-icon db-metric-blue">
+                Q
+            </span>
+
+            <div>
+                <strong>{{ stats.questions }}</strong>
+                <span>Saved questions</span>
+            </div>
+        </article>
+
+    </section>
+
+
+    {% if projects %}
+
+        <section
+            id="upload-document"
+            class="db-upload-section"
+        >
+
+            <div class="db-section-heading">
+
+                <div>
+                    <span class="db-kicker">
+                        Add knowledge
+                    </span>
+
+                    <h2>
+                        Upload a project PDF
+                    </h2>
+
+                    <p>
+                        LifeOS stores the file privately, extracts
+                        readable text, creates searchable chunks and
+                        prepares it for analysis.
+                    </p>
+                </div>
+
+
+                <span class="db-section-step">
+                    PDF only · Up to {{ max_upload_mb | default(25) }} MB
+                </span>
+
+            </div>
+
+
+            <form
+                method="POST"
+                action="{{ url_for('document_bp.documents') }}"
+                enctype="multipart/form-data"
+                class="db-upload-form"
+                data-db-upload-form
+                data-loading-title="Uploading document"
+                data-loading-message="Validating, storing, extracting and indexing your PDF..."
+            >
+
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+
+                <div class="db-upload-grid">
+
+                    <div class="form-group db-upload-project">
+
+                        <label for="documentProject">
+                            Connect to project
+                        </label>
+
+                        <select
+                            id="documentProject"
+                            name="project_id"
+                            required
+                            data-db-project-select
+                        >
+                            <option value="">
+                                Select a project
+                            </option>
+
+                            {% for project in projects %}
+                                <option value="{{ project.id }}">
+                                    {{ project.title }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <small>
+                            Documents inherit the selected project's
+                            ownership and access rules.
+                        </small>
+
+                    </div>
+
+
+                    <div class="db-upload-file-column">
+
+                        <label
+                            class="db-dropzone"
+                            for="documentFile"
+                            data-db-dropzone
+                            data-max-bytes="{{ max_upload_bytes | default(26214400) }}"
+                        >
+
+                            <input
+                                type="file"
+                                id="documentFile"
+                                name="document"
+                                accept=".pdf,application/pdf"
+                                required
+                                data-db-file-input
+                            >
+
+                            <span class="db-dropzone-icon">
+                                PDF
+                            </span>
+
+                            <span class="db-dropzone-copy">
+
+                                <strong data-db-dropzone-title>
+                                    Drop a PDF here or browse
+                                </strong>
+
+                                <small data-db-dropzone-message>
+                                    The original filename is shown in
+                                    LifeOS while storage uses a private,
+                                    unique key.
+                                </small>
+
+                            </span>
+
+                            <span class="db-dropzone-browse">
+                                Choose file
+                            </span>
+
+                        </label>
+
+
+                        <div
+                            class="db-selected-file"
+                            data-db-selected-file
+                            hidden
+                        >
+
+                            <div>
+                                <strong data-db-selected-name></strong>
+                                <span data-db-selected-size></span>
+                            </div>
+
+                            <button
+                                type="button"
+                                data-db-clear-file
+                            >
+                                Remove
+                            </button>
+
+                        </div>
+
+                        <p
+                            class="db-upload-error"
+                            data-db-upload-error
+                            role="alert"
+                            hidden
+                        ></p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="db-upload-footer">
+
+                    <div class="db-upload-guidance">
+
+                        <span>
+                            <b>1</b>
+                            Private storage
+                        </span>
+
+                        <span>
+                            <b>2</b>
+                            Automatic text extraction
+                        </span>
+
+                        <span>
+                            <b>3</b>
+                            Searchable hybrid index
+                        </span>
+
+                    </div>
+
+
+                    <button
+                        type="submit"
+                        class="workspace-primary-button"
+                        data-db-upload-submit
+                    >
+                        Upload and prepare
+                    </button>
+
+                </div>
+
+            </form>
+
+        </section>
+
+    {% else %}
+
+        <section class="db-empty-state db-project-required">
+
+            <span class="db-empty-icon">
+                P
+            </span>
+
+            <div>
+                <h2>Create a project first</h2>
+
+                <p>
+                    Every document must belong to one of your projects
+                    so LifeOS can enforce ownership and connect
+                    detected actions to the correct workspace.
+                </p>
+
+                <a
+                    href="{{ url_for('project_bp.projects') }}"
+                    class="workspace-primary-button"
+                >
+                    Create project
+                </a>
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    <section
+        id="document-library"
+        class="db-library-section"
+    >
+
+        <div class="db-section-heading">
+
+            <div>
+                <span class="db-kicker">
+                    Project knowledge
+                </span>
+
+                <h2>Your document library</h2>
+
+                <p>
+                    Search, filter and open any PDF to view its analysis,
+                    actions and grounded question history.
+                </p>
+            </div>
+
+
+            {% if documents %}
+
+                <span class="db-visible-count">
+                    <strong data-db-visible-count>
+                        {{ documents | length }}
+                    </strong>
+                    shown
+                </span>
+
+            {% endif %}
+
+        </div>
+
+
+        {% if documents %}
+
+            <div class="db-library-toolbar">
+
+                <label class="db-search-field">
+
+                    <span class="db-search-icon" aria-hidden="true">
+                        ⌕
+                    </span>
+
+                    <input
+                        type="search"
+                        placeholder="Search documents or projects"
+                        aria-label="Search documents"
+                        data-db-document-search
+                    >
+
+                </label>
+
+
+                <div class="db-library-filters">
+
+                    <label>
+                        <span class="sr-only">
+                            Filter by project
+                        </span>
+
+                        <select data-db-project-filter>
+                            <option value="all">
+                                All projects
+                            </option>
+
+                            {% for project in projects %}
+                                <option
+                                    value="{{ project.title | lower }}"
+                                >
+                                    {{ project.title }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+
+                    <label>
+                        <span class="sr-only">
+                            Filter by status
+                        </span>
+
+                        <select data-db-status-filter>
+                            <option value="all">
+                                All statuses
+                            </option>
+                            <option value="analysed">
+                                Analysed
+                            </option>
+                            <option value="ready">
+                                Ready to analyse
+                            </option>
+                            <option value="needs-text">
+                                Needs OCR
+                            </option>
+                        </select>
+                    </label>
+
+
+                    <label>
+                        <span class="sr-only">
+                            Sort documents
+                        </span>
+
+                        <select data-db-sort>
+                            <option value="newest">
+                                Newest first
+                            </option>
+                            <option value="oldest">
+                                Oldest first
+                            </option>
+                            <option value="name">
+                                Name A–Z
+                            </option>
+                            <option value="project">
+                                Project A–Z
+                            </option>
+                        </select>
+                    </label>
+
+
+                    <div
+                        class="db-view-toggle"
+                        role="group"
+                        aria-label="Document view"
+                    >
+
+                        <button
+                            type="button"
+                            class="is-active"
+                            data-db-view="grid"
+                            aria-pressed="true"
+                            title="Grid view"
+                        >
+                            ▦
+                        </button>
+
+                        <button
+                            type="button"
+                            data-db-view="list"
+                            aria-pressed="false"
+                            title="List view"
+                        >
+                            ☰
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div
+                class="db-document-grid"
+                data-db-document-container
+                data-view="grid"
+            >
+
+                {% for document in documents %}
+
+                    {% set project_name =
+                        document.project.title
+                        if document.project
+                        else "No project"
+                    %}
+
+                    {% if document.is_historical_version %}
+                        {% set ui_status = "previous" %}
+                        {% set ui_status_label = "Previous version" %}
+                    {% elif document.summary %}
+                        {% set ui_status = "analysed" %}
+                        {% set ui_status_label = "Analysed" %}
+                    {% elif document.extracted_text %}
+                        {% set ui_status = "ready" %}
+                        {% set ui_status_label = "Ready to analyse" %}
+                    {% else %}
+                        {% set ui_status = "needs-text" %}
+                        {% set ui_status_label = "Needs OCR" %}
+                    {% endif %}
+
+                    <article
+                        class="db-document-card"
+                        data-db-document-card
+                        data-search="{{
+                            (
+                                document.filename
+                                ~ ' '
+                                ~ project_name
+                                ~ ' '
+                                ~ (document.summary or '')
+                            ) | lower
+                        }}"
+                        data-project="{{ project_name | lower }}"
+                        data-status="{{ ui_status }}"
+                        data-name="{{ document.filename | lower }}"
+                        data-date="{{
+                            document.uploaded_at.isoformat()
+                            if document.uploaded_at
+                            else ''
+                        }}"
+                    >
+
+                        <div class="db-document-card-top">
+
+                            <div class="db-file-mark">
+                                PDF
+                            </div>
+
+
+                            <div class="db-document-card-heading">
+
+                                <span class="db-project-pill">
+                                    {{ project_name }}
+                                </span>
+
+                                {% if document.is_versioned %}
+                                    <span class="db-version-library-badge {% if document.is_historical_version %}is-previous{% else %}is-current{% endif %}">
+                                        {{ document.version_label }} · {{ "Previous" if document.is_historical_version else "Current" }}
+                                    </span>
+                                {% endif %}
+
+                                <h3 title="{{ document.filename }}">
+                                    {{ document.filename }}
+                                </h3>
+
+                            </div>
+
+
+                            <span
+                                class="
+                                    db-status-badge
+                                    db-status-{{ ui_status }}
+                                "
+                            >
+                                {{ ui_status_label }}
+                            </span>
+
+                        </div>
+
+
+                        <p class="db-document-preview">
+
+                            {% if document.summary %}
+
+                                {{ document.summary }}
+
+                            {% elif document.extracted_text %}
+
+                                {{
+                                    document.extracted_text[:240]
+                                }}
+
+                                {% if document.extracted_text | length > 240 %}
+                                    …
+                                {% endif %}
+
+                            {% else %}
+
+                                This PDF is stored safely, but no readable
+                                embedded text was found. OCR support is
+                                required before analysis or questions.
+
+                            {% endif %}
+
+                        </p>
+
+
+                        <div class="db-document-facts">
+
+                            <span>
+                                <strong>{{ document.chunks | length }}</strong>
+                                chunks
+                            </span>
+
+                            <span>
+                                <strong>{{ document.questions | length }}</strong>
+                                questions
+                            </span>
+
+                            <span>
+                                <strong>{{ document.analyses | length }}</strong>
+                                analyses
+                            </span>
+
+                        </div>
+
+
+                        <div class="db-document-card-footer">
+
+                            <span class="db-document-date">
+                                {{
+                                    document.uploaded_at.strftime(
+                                        "%d %b %Y"
+                                    )
+                                    if document.uploaded_at
+                                    else "Date unavailable"
+                                }}
+                            </span>
+
+
+                            <div class="db-document-actions">
+
+                                <a
+                                    href="{{ url_for(
+                                        'document_bp.document_details',
+                                        document_id=document.id
+                                    ) }}"
+                                    class="workspace-primary-button"
+                                    data-page-loading
+                                    data-loading-title="Opening Document Brain"
+                                    data-loading-message="Loading document intelligence..."
+                                >
+                                    Open
+                                </a>
+
+                                {% if document.project %}
+
+                                    <a
+                                        href="{{ url_for(
+                                            'project_bp.project_details',
+                                            project_id=document.project_id
+                                        ) }}"
+                                        class="workspace-secondary-button"
+                                        data-page-loading
+                                        data-loading-title="Opening project"
+                                        data-loading-message="Loading the connected project..."
+                                    >
+                                        Project
+                                    </a>
+
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+
+            <div
+                class="db-empty-state db-filter-empty"
+                data-db-filter-empty
+                hidden
+            >
+
+                <span class="db-empty-icon">
+                    ⌕
+                </span>
+
+                <div>
+                    <h3>No matching documents</h3>
+
+                    <p>
+                        Try another search term or reset the filters.
+                    </p>
+
+                    <button
+                        type="button"
+                        class="workspace-secondary-button"
+                        data-db-reset-filters
+                    >
+                        Reset filters
+                    </button>
+                </div>
+
+            </div>
+
+        {% else %}
+
+            <div class="db-empty-state">
+
+                <span class="db-empty-icon">
+                    PDF
+                </span>
+
+                <div>
+                    <h2>No documents yet</h2>
+
+                    <p>
+                        Upload your first project PDF to create a
+                        searchable knowledge source.
+                    </p>
+
+                    {% if projects %}
+
+                        <a
+                            href="#upload-document"
+                            class="workspace-primary-button"
+                        >
+                            Upload first PDF
+                        </a>
+
+                    {% endif %}
+                </div>
+
+            </div>
+
+        {% endif %}
+
+    </section>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/document-brain-ui.js'
+        ) }}?v=phase2-document-brain"
+    ></script>
+
+{% endblock %}

@@ -1,0 +1,998 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {{ note.title }} | LifeOS AI
+{% endblock %}
+
+{% block content %}
+
+<div class="note-action-page" data-note-action-center>
+
+    <header class="note-action-header">
+        <div class="note-action-heading">
+            <a
+                href="{{ url_for('note_bp.notes') }}"
+                class="note-action-back"
+            >
+                <span aria-hidden="true">←</span>
+                Notes
+            </a>
+
+            <div class="note-action-title-line">
+                <div>
+                    <h1>{{ note.title }}</h1>
+
+                    <div class="note-action-meta">
+                        <span>{{ note.note_type }}</span>
+
+                        <span aria-hidden="true">·</span>
+
+                        <span>
+                            {% if note.project %}
+                                {{ note.project.title }}
+                            {% else %}
+                                General Workspace
+                            {% endif %}
+                        </span>
+
+                        <span aria-hidden="true">·</span>
+
+                        <span>
+                            Updated {{ note.updated_at.strftime("%d %b %Y") }}
+                        </span>
+
+                        {% if note.is_pinned %}
+                            <span class="note-action-pin-label">Pinned</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note-action-header-buttons">
+            <a
+                href="{{ url_for(
+                    'note_bp.edit_note',
+                    note_id=note.id
+                ) }}"
+                class="workspace-secondary-button"
+            >
+                Edit
+            </a>
+
+            <form
+                method="POST"
+                action="{{ url_for(
+                    'note_bp.analyze_note_action',
+                    note_id=note.id
+                ) }}"
+                data-loading-title="Understanding your note"
+                data-loading-message="LifeOS is reviewing the note and its project context..."
+            >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    {% if latest_analysis %}
+                        Analyze Again
+                    {% else %}
+                        Analyze Note
+                    {% endif %}
+                </button>
+            </form>
+        </div>
+    </header>
+
+
+    {% if latest_analysis %}
+
+        {% if analysis_is_stale %}
+            <div class="note-action-alert" role="status">
+                <div>
+                    <strong>This insight is out of date.</strong>
+                    <p>
+                        {% if note.project %}
+                            The note or linked project changed after the last analysis.
+                        {% else %}
+                            The note changed after the last analysis.
+                        {% endif %}
+                        Analyze it again before relying on the recommendations.
+                    </p>
+                </div>
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'note_bp.analyze_note_action',
+                        note_id=note.id
+                    ) }}"
+                    data-loading-title="Refreshing insight"
+                    data-loading-message="LifeOS is rebuilding the analysis with the latest information..."
+                >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="workspace-secondary-button">
+                        Refresh
+                    </button>
+                </form>
+            </div>
+        {% endif %}
+
+
+        <section id="lifeos-insight" class="note-insight-hero">
+            <div class="note-insight-main">
+                <div class="note-insight-label-row">
+                    <span class="note-insight-label">LifeOS Insight</span>
+
+                    {% if insights.get("analysis_mode") == "project_aware" %}
+                        <span class="note-context-label">
+                            Project-aware
+                        </span>
+                    {% endif %}
+                </div>
+
+                <h2>
+                    {{
+                        insights.get(
+                            "headline",
+                            "LifeOS understood this note"
+                        )
+                    }}
+                </h2>
+
+                <p class="note-insight-overview">
+                    {{
+                        (
+                            insights.get("overview")
+                            or latest_analysis.summary
+                            or "No overview was generated."
+                        )|truncate(360, True)
+                    }}
+                </p>
+
+                <div class="note-signal-row" aria-label="Insight summary">
+                    <span
+                        class="note-signal note-signal-attention-{{ insights.get('attention_level', 'Low')|lower }}"
+                    >
+                        {{ insights.get("attention_level", "Low") }} attention
+                    </span>
+
+                    {% if insights.get("deadlines") %}
+                        <span class="note-signal">
+                            {{ insights.get("deadlines", [])|length }}
+                            deadline{% if insights.get("deadlines", [])|length != 1 %}s{% endif %}
+                        </span>
+                    {% endif %}
+
+                    {% if insights.get("risks_or_blockers") %}
+                        <span class="note-signal">
+                            {{ insights.get("risks_or_blockers", [])|length }}
+                            blocker{% if insights.get("risks_or_blockers", [])|length != 1 %}s{% endif %}
+                        </span>
+                    {% endif %}
+
+                    {% if insights.get("existing_task_matches") %}
+                        <span class="note-signal">
+                            {{ insights.get("existing_task_matches", [])|length }}
+                            existing task match{% if insights.get("existing_task_matches", [])|length != 1 %}es{% endif %}
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if note.project and project_context %}
+                <aside class="note-context-summary">
+                    <span>Context used</span>
+                    <strong>{{ note.project.title }}</strong>
+
+                    <div>
+                        <span>
+                            {{
+                                project_context.get(
+                                    "context_counts",
+                                    {}
+                                ).get("tasks_considered", 0)
+                            }} tasks
+                        </span>
+
+                        <span>
+                            {{
+                                project_context.get(
+                                    "context_counts",
+                                    {}
+                                ).get("related_notes_considered", 0)
+                            }} related notes
+                        </span>
+                    </div>
+                </aside>
+            {% endif %}
+        </section>
+
+
+        {% set recommended = insights.get("recommended_next_step") %}
+        {% if recommended %}
+            <section class="note-next-step">
+                <div class="note-next-step-number" aria-hidden="true">1</div>
+
+                <div class="note-next-step-copy">
+                    <span>Best next step</span>
+                    <h3>{{ recommended.get("title") }}</h3>
+
+                    {% if recommended.get("reason") %}
+                        <p>{{ recommended.get("reason")|truncate(260, True) }}</p>
+                    {% endif %}
+                </div>
+
+                <button
+                    type="button"
+                    class="workspace-secondary-button"
+                    data-open-note-tab="tasks"
+                >
+                    Review Tasks
+                </button>
+            </section>
+        {% endif %}
+
+    {% else %}
+
+        <section class="note-analysis-empty">
+            <div class="note-analysis-empty-icon" aria-hidden="true">✦</div>
+
+            <div>
+                <span>LifeOS Insight</span>
+                <h2>Turn this note into clear next steps</h2>
+                <p>
+                    {% if note.project %}
+                        LifeOS will compare the note with the linked project,
+                        its current tasks, progress, and recent notes.
+                    {% else %}
+                        LifeOS will summarize what matters, identify decisions,
+                        deadlines, blockers, and useful actions.
+                    {% endif %}
+                </p>
+            </div>
+
+            <form
+                method="POST"
+                action="{{ url_for(
+                    'note_bp.analyze_note_action',
+                    note_id=note.id
+                ) }}"
+                data-loading-title="Understanding your note"
+                data-loading-message="LifeOS is finding the meaning and next actions..."
+            >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="workspace-primary-button">
+                    Analyze Note
+                </button>
+            </form>
+        </section>
+
+        {% if latest_failed_analysis %}
+            <div class="note-action-error" role="alert">
+                <strong>The last analysis failed.</strong>
+                <p>
+                    {{
+                        latest_failed_analysis.error_message
+                        or "LifeOS could not complete the analysis."
+                    }}
+                </p>
+            </div>
+        {% endif %}
+
+    {% endif %}
+
+
+    <section class="note-action-center">
+        <div class="note-tabs" role="tablist" aria-label="Note workspace sections">
+            <button
+                type="button"
+                class="note-tab is-active"
+                id="noteTabOverview"
+                role="tab"
+                aria-selected="true"
+                aria-controls="notePanelOverview"
+                data-note-tab="overview"
+            >
+                Overview
+            </button>
+
+            <button
+                type="button"
+                class="note-tab"
+                id="noteTabTasks"
+                role="tab"
+                aria-selected="false"
+                aria-controls="notePanelTasks"
+                data-note-tab="tasks"
+            >
+                Tasks
+
+                {% if task_suggestions %}
+                    <span>{{ task_suggestions|length }}</span>
+                {% endif %}
+            </button>
+
+            <button
+                type="button"
+                class="note-tab"
+                id="noteTabAsk"
+                role="tab"
+                aria-selected="false"
+                aria-controls="notePanelAsk"
+                data-note-tab="ask"
+            >
+                Ask LifeOS
+
+                {% if question_history %}
+                    <span>{{ question_history|length }}</span>
+                {% endif %}
+            </button>
+
+            <button
+                type="button"
+                class="note-tab"
+                id="noteTabOriginal"
+                role="tab"
+                aria-selected="false"
+                aria-controls="notePanelOriginal"
+                data-note-tab="original"
+            >
+                Original Note
+            </button>
+        </div>
+
+
+        <div
+            class="note-tab-panel is-active"
+            id="notePanelOverview"
+            role="tabpanel"
+            aria-labelledby="noteTabOverview"
+            data-note-panel="overview"
+        >
+            {% if latest_analysis %}
+
+                {% if insights.get("analysis_mode") == "project_aware" %}
+                    <div class="note-project-position">
+                        {% set alignment = insights.get("project_alignment") %}
+                        {% set situation = insights.get("current_project_situation") %}
+
+                        <div>
+                            <span>Project alignment</span>
+                            <strong>
+                                {% if alignment %}
+                                    {{ alignment.get("level", "Unclear") }}
+                                {% else %}
+                                    Unclear
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                        <p>
+                            {% if situation and situation.get("summary") %}
+                                {{ situation.get("summary")|truncate(280, True) }}
+                            {% elif alignment and alignment.get("summary") %}
+                                {{ alignment.get("summary")|truncate(280, True) }}
+                            {% else %}
+                                This note was reviewed with its linked project context.
+                            {% endif %}
+                        </p>
+                    </div>
+                {% endif %}
+
+
+                {% if
+                    insights.get("decisions")
+                    or insights.get("deadlines")
+                    or insights.get("risks_or_blockers")
+                    or insights.get("missing_information")
+                %}
+                    <div class="note-important-list">
+
+                        {% for decision in insights.get("decisions", []) %}
+                            <article class="note-important-row note-important-decision">
+                                <span class="note-important-icon" aria-hidden="true">✓</span>
+
+                                <div>
+                                    <small>Decision</small>
+                                    <strong>{{ decision.get("decision") }}</strong>
+
+                                    {% if decision.get("evidence") %}
+                                        <details>
+                                            <summary>View source</summary>
+                                            <blockquote>“{{ decision.get("evidence") }}”</blockquote>
+                                        </details>
+                                    {% endif %}
+                                </div>
+                            </article>
+                        {% endfor %}
+
+
+                        {% for deadline in insights.get("deadlines", []) %}
+                            <article class="note-important-row note-important-deadline">
+                                <span class="note-important-icon" aria-hidden="true">◷</span>
+
+                                <div>
+                                    <small>Deadline · {{ deadline.get("date") }}</small>
+                                    <strong>{{ deadline.get("description") }}</strong>
+
+                                    {% if deadline.get("evidence") %}
+                                        <details>
+                                            <summary>View source</summary>
+                                            <blockquote>“{{ deadline.get("evidence") }}”</blockquote>
+                                        </details>
+                                    {% endif %}
+                                </div>
+                            </article>
+                        {% endfor %}
+
+
+                        {% for risk in insights.get("risks_or_blockers", []) %}
+                            <article class="note-important-row note-important-risk">
+                                <span class="note-important-icon" aria-hidden="true">!</span>
+
+                                <div>
+                                    <small>Risk or blocker</small>
+                                    <strong>{{ risk.get("item") }}</strong>
+
+                                    {% if risk.get("impact") %}
+                                        <p>{{ risk.get("impact") }}</p>
+                                    {% endif %}
+                                </div>
+                            </article>
+                        {% endfor %}
+
+
+                        {% for missing in insights.get("missing_information", []) %}
+                            <article class="note-important-row note-important-question">
+                                <span class="note-important-icon" aria-hidden="true">?</span>
+
+                                <div>
+                                    <small>Needs your input</small>
+                                    <strong>{{ missing.get("question") }}</strong>
+
+                                    {% if missing.get("why_it_matters") %}
+                                        <p>{{ missing.get("why_it_matters") }}</p>
+                                    {% endif %}
+
+                                    <button
+                                        type="button"
+                                        class="note-inline-action"
+                                        data-note-question="{{ missing.get('question') }}"
+                                        data-open-note-tab="ask"
+                                    >
+                                        Ask LifeOS about this
+                                    </button>
+                                </div>
+                            </article>
+                        {% endfor %}
+
+                    </div>
+                {% else %}
+                    <div class="note-simple-empty">
+                        <strong>No urgent details were detected.</strong>
+                        <p>The note has no confirmed deadline, blocker, decision, or missing detail.</p>
+                    </div>
+                {% endif %}
+
+
+                <details class="note-supporting-details">
+                    <summary>
+                        <span>
+                            <strong>Supporting analysis</strong>
+                            <small>Key points, action plan, tags, and analysis details</small>
+                        </span>
+                    </summary>
+
+                    <div class="note-supporting-content">
+                        {% if insights.get("key_points") %}
+                            <section>
+                                <h3>Key points</h3>
+                                <div class="note-compact-list">
+                                    {% for point in insights.get("key_points", []) %}
+                                        <div>
+                                            <strong>{{ point.get("title") }}</strong>
+                                            {% if point.get("detail") %}
+                                                <p>{{ point.get("detail") }}</p>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </section>
+                        {% endif %}
+
+                        {% if insights.get("action_plan") %}
+                            <section>
+                                <h3>Action plan</h3>
+                                <ol class="note-plan-list">
+                                    {% for step in insights.get("action_plan", []) %}
+                                        <li>
+                                            <div>
+                                                <strong>{{ step.get("title") }}</strong>
+                                                {% if step.get("reason") %}
+                                                    <p>{{ step.get("reason") }}</p>
+                                                {% endif %}
+                                            </div>
+
+                                            <span>{{ step.get("priority", "Medium") }}</span>
+                                        </li>
+                                    {% endfor %}
+                                </ol>
+                            </section>
+                        {% endif %}
+
+                        <section>
+                            <h3>Analysis details</h3>
+                            <div class="note-analysis-details">
+                                <span>
+                                    {{ latest_analysis.provider|title }}
+                                    · {{ latest_analysis.model }}
+                                </span>
+                                <span>
+                                    {{ latest_analysis.created_at.strftime("%d %b %Y, %H:%M") }}
+                                </span>
+                            </div>
+
+                            {% if insights.get("tags") %}
+                                <div class="note-tag-list">
+                                    {% for tag in insights.get("tags", []) %}
+                                        <span>{{ tag }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </section>
+                    </div>
+                </details>
+
+            {% else %}
+                <div class="note-simple-empty note-simple-empty-large">
+                    <strong>No analysis yet</strong>
+                    <p>Analyze the note to see what matters and what to do next.</p>
+                </div>
+            {% endif %}
+        </div>
+
+
+        <div
+            class="note-tab-panel"
+            id="notePanelTasks"
+            role="tabpanel"
+            aria-labelledby="noteTabTasks"
+            data-note-panel="tasks"
+            hidden
+        >
+            <div id="action-plan" class="note-panel-heading">
+                <div>
+                    <span>Action review</span>
+                    <h2>Tasks connected to this note</h2>
+                    <p>
+                        Continue existing work first. Create a new task only when
+                        the work is not already tracked.
+                    </p>
+                </div>
+            </div>
+
+            {% if latest_analysis %}
+                <section class="note-task-section">
+                    <div class="note-task-section-title">
+                        <h3>Already tracked</h3>
+                        <span>{{ insights.get("existing_task_matches", [])|length }}</span>
+                    </div>
+
+                    {% if insights.get("existing_task_matches") %}
+                        <div class="note-task-rows">
+                            {% for match in insights.get("existing_task_matches", []) %}
+                                {% set matched_task = project_task_lookup.get(
+                                    match.get("matched_task_id")
+                                ) %}
+
+                                <article class="note-task-row">
+                                    <div class="note-task-row-main">
+                                        <div class="note-task-status-dot"></div>
+
+                                        <div>
+                                            <h4>
+                                                {{
+                                                    match.get("matched_task_title")
+                                                    or match.get("note_item")
+                                                }}
+                                            </h4>
+
+                                            <p>
+                                                {{
+                                                    match.get("recommendation")
+                                                    or match.get("reason")
+                                                }}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="note-task-row-actions">
+                                        <span class="note-task-status">
+                                            {{ match.get("matched_task_status", "Existing") }}
+                                        </span>
+
+                                        {% if matched_task %}
+                                            <a
+                                                href="{{ url_for(
+                                                    'task_bp.edit_task',
+                                                    task_id=matched_task.id
+                                                ) }}"
+                                                class="workspace-secondary-button"
+                                            >
+                                                Open
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="note-simple-empty">
+                            <strong>No existing task matches</strong>
+                            <p>LifeOS did not find related work already tracked in this project.</p>
+                        </div>
+                    {% endif %}
+                </section>
+
+
+                <section class="note-task-section">
+                    <div class="note-task-section-title">
+                        <h3>New work detected</h3>
+                        <span>
+                            {{
+                                task_suggestions
+                                | rejectattr("status", "equalto", "Rejected")
+                                | list
+                                | length
+                            }}
+                        </span>
+                    </div>
+
+                    {% set visible_suggestions = task_suggestions
+                        | rejectattr("status", "equalto", "Rejected")
+                        | list
+                    %}
+
+                    {% if visible_suggestions %}
+                        <div class="note-task-rows">
+                            {% for suggestion in visible_suggestions %}
+                                <article class="note-task-row note-task-row-new">
+                                    <div class="note-task-row-main">
+                                        <div class="note-task-new-icon" aria-hidden="true">+</div>
+
+                                        <div>
+                                            <h4>{{ suggestion.title }}</h4>
+
+                                            {% if suggestion.description %}
+                                                <div class="note-task-description js-readable-text">
+                                                    {{ suggestion.description }}
+                                                </div>
+                                            {% endif %}
+
+                                            <div class="note-task-meta">
+                                                <span>{{ suggestion.priority }} priority</span>
+
+                                                {% if suggestion.deadline %}
+                                                    <span>
+                                                        Due {{ suggestion.deadline.strftime("%d %b %Y") }}
+                                                    </span>
+                                                {% else %}
+                                                    <span>No confirmed deadline</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="note-task-row-actions">
+                                        {% if suggestion.status == "Pending" %}
+                                            <form
+                                                method="POST"
+                                                action="{{ url_for(
+                                                    'note_bp.approve_task_suggestion',
+                                                    note_id=note.id,
+                                                    suggestion_id=suggestion.id
+                                                ) }}"
+                                                data-loading-title="Creating task"
+                                                data-loading-message="Adding the approved action to your workspace..."
+                                            >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button
+                                                    type="submit"
+                                                    class="workspace-primary-button"
+                                                >
+                                                    Create Task
+                                                </button>
+                                            </form>
+
+                                            <form
+                                                method="POST"
+                                                action="{{ url_for(
+                                                    'note_bp.reject_task_suggestion',
+                                                    note_id=note.id,
+                                                    suggestion_id=suggestion.id
+                                                ) }}"
+                                            >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button
+                                                    type="submit"
+                                                    class="workspace-secondary-button"
+                                                >
+                                                    Dismiss
+                                                </button>
+                                            </form>
+                                        {% elif suggestion.status == "Approved" and suggestion.created_task %}
+                                            <span class="note-task-created-label">Created</span>
+
+                                            <a
+                                                href="{{ url_for(
+                                                    'task_bp.edit_task',
+                                                    task_id=suggestion.created_task.id
+                                                ) }}"
+                                                class="workspace-secondary-button"
+                                            >
+                                                Open Task
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="note-simple-empty">
+                            <strong>No new task is needed</strong>
+                            <p>
+                                {% if insights.get("existing_task_matches") %}
+                                    The relevant work is already represented by existing tasks.
+                                {% else %}
+                                    The note did not contain a clear, actionable task.
+                                {% endif %}
+                            </p>
+                        </div>
+                    {% endif %}
+                </section>
+            {% else %}
+                <div class="note-simple-empty note-simple-empty-large">
+                    <strong>Analyze the note first</strong>
+                    <p>Task matches and suggestions appear after analysis.</p>
+                </div>
+            {% endif %}
+        </div>
+
+
+        <div
+            class="note-tab-panel"
+            id="notePanelAsk"
+            role="tabpanel"
+            aria-labelledby="noteTabAsk"
+            data-note-panel="ask"
+            hidden
+        >
+            <div id="ask-lifeos" class="note-panel-heading">
+                <div>
+                    <span>Follow-up intelligence</span>
+                    <h2>Ask about this note{% if note.project %} and project{% endif %}</h2>
+                    <p>
+                        Ask for a priority, an explanation, missing work, or a practical plan.
+                    </p>
+                </div>
+            </div>
+
+            {% if latest_analysis and not analysis_is_stale %}
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'note_bp.ask_note_question',
+                        note_id=note.id
+                    ) }}"
+                    data-loading-title="Thinking about your note"
+                    data-loading-message="LifeOS is reviewing the note and its latest insight..."
+                    class="note-ask-form"
+                >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label for="noteQuestion">What would you like to know?</label>
+
+                    <textarea
+                        id="noteQuestion"
+                        name="question"
+                        rows="4"
+                        maxlength="2000"
+                        required
+                        placeholder="Example: What should I focus on this week?"
+                    ></textarea>
+
+                    <div class="note-ask-toolbar">
+                        <div class="note-prompt-chips">
+                            {% if note.project %}
+                                <button
+                                    type="button"
+                                    data-note-question="What should I work on next based on this note and the current project status?"
+                                >
+                                    Next priority
+                                </button>
+
+                                <button
+                                    type="button"
+                                    data-note-question="Which work mentioned in this note already exists as a project task?"
+                                >
+                                    Existing tasks
+                                </button>
+
+                                <button
+                                    type="button"
+                                    data-note-question="What important project work is still missing?"
+                                >
+                                    Missing work
+                                </button>
+                            {% else %}
+                                <button
+                                    type="button"
+                                    data-note-question="What is the most important next action from this note?"
+                                >
+                                    Next priority
+                                </button>
+
+                                <button
+                                    type="button"
+                                    data-note-question="Explain this note in a simpler way."
+                                >
+                                    Explain simply
+                                </button>
+
+                                <button
+                                    type="button"
+                                    data-note-question="What important information is missing from this note?"
+                                >
+                                    Missing information
+                                </button>
+                            {% endif %}
+                        </div>
+
+                        <div class="note-ask-submit">
+                            <span><span id="noteQuestionCount">0</span>/2000</span>
+
+                            <button
+                                type="submit"
+                                class="workspace-primary-button"
+                            >
+                                Ask LifeOS
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            {% elif analysis_is_stale %}
+                <div class="note-simple-empty">
+                    <strong>Refresh the insight first</strong>
+                    <p>The note or project changed after the last analysis.</p>
+                </div>
+            {% else %}
+                <div class="note-simple-empty">
+                    <strong>Analyze the note first</strong>
+                    <p>LifeOS needs a current insight before answering grounded questions.</p>
+                </div>
+            {% endif %}
+
+
+            {% if question_history %}
+                <section class="note-conversation">
+                    <div class="note-conversation-heading">
+                        <h3>Conversation</h3>
+                        <span>{{ question_history|length }} saved</span>
+                    </div>
+
+                    <div class="note-message-list">
+                        {% for item in question_history|reverse %}
+                            <article class="note-message note-message-user">
+                                <span>You</span>
+                                <div class="js-readable-text">{{ item.question }}</div>
+                            </article>
+
+                            <article class="note-message note-message-ai">
+                                <span>LifeOS</span>
+
+                                {% if item.status == "Completed" %}
+                                    <div class="js-readable-text">{{ item.answer }}</div>
+                                {% else %}
+                                    <div>
+                                        {{
+                                            item.error_message
+                                            or "The question could not be answered."
+                                        }}
+                                    </div>
+                                {% endif %}
+
+                                <small>
+                                    {{ item.created_at.strftime("%d %b %Y, %H:%M") }}
+                                </small>
+                            </article>
+                        {% endfor %}
+                    </div>
+                </section>
+            {% endif %}
+        </div>
+
+
+        <div
+            class="note-tab-panel"
+            id="notePanelOriginal"
+            role="tabpanel"
+            aria-labelledby="noteTabOriginal"
+            data-note-panel="original"
+            hidden
+        >
+            <div id="original-note" class="note-panel-heading note-original-heading">
+                <div>
+                    <span>Source</span>
+                    <h2>Original note</h2>
+                    <p>Your content stays separate from the AI analysis.</p>
+                </div>
+
+                <a
+                    href="{{ url_for(
+                        'note_bp.edit_note',
+                        note_id=note.id
+                    ) }}"
+                    class="workspace-secondary-button"
+                >
+                    Edit Note
+                </a>
+            </div>
+
+            <article class="note-original-content js-readable-text">
+                {{ note.content }}
+            </article>
+
+            <div class="note-original-actions">
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'note_bp.toggle_pin',
+                        note_id=note.id
+                    ) }}"
+                >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="workspace-secondary-button">
+                        {% if note.is_pinned %}
+                            Unpin Note
+                        {% else %}
+                            Pin Note
+                        {% endif %}
+                    </button>
+                </form>
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'note_bp.delete_note',
+                        note_id=note.id
+                    ) }}"
+                    data-confirm
+                    data-confirm-title="Delete this note?"
+                    data-confirm-message="The note, its AI analyses, suggestions, and question history will be removed. Approved workspace tasks will remain."
+                    data-confirm-text="Delete note"
+                    data-confirm-cancel="Keep note"
+                    data-confirm-variant="danger"
+                    data-confirm-icon="!"
+                >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="workspace-danger-button">
+                        Delete Note
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </section>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/note-action-center.js'
+        ) }}?v=note-action-center-e3"
+    ></script>
+{% endblock %}

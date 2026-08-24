@@ -1,0 +1,293 @@
+{% macro render_document_task_suggestions(
+    suggestions,
+    bulk_action_url,
+    bulk_form_id,
+    show_document=true
+) %}
+    {% set stats = namespace(suggested=0, created=0, ignored=0, selectable=0) %}
+
+    {% for suggestion in suggestions %}
+        {% if suggestion.status == "Pending" %}
+            {% set stats.suggested = stats.suggested + 1 %}
+            {% if not suggestion.matched_task %}
+                {% set stats.selectable = stats.selectable + 1 %}
+            {% endif %}
+        {% elif suggestion.status in ["Approved", "Linked"] %}
+            {% set stats.created = stats.created + 1 %}
+        {% elif suggestion.status == "Rejected" %}
+            {% set stats.ignored = stats.ignored + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    <section class="document-task-suggestion-workspace" data-document-suggestion-workspace>
+        <div class="document-task-suggestion-summary">
+            <article>
+                <strong>{{ stats.suggested }}</strong>
+                <span>Suggested</span>
+            </article>
+            <article>
+                <strong>{{ stats.created }}</strong>
+                <span>Created</span>
+            </article>
+            <article>
+                <strong>{{ stats.ignored }}</strong>
+                <span>Ignored</span>
+            </article>
+        </div>
+
+        {% if stats.selectable %}
+            <form
+                id="{{ bulk_form_id }}"
+                method="POST"
+                action="{{ bulk_action_url }}"
+                class="document-suggestion-bulk-bar"
+                data-document-suggestion-bulk-form
+                data-loading-title="Creating selected tasks"
+                data-loading-message="Adding the approved document actions to your projects..."
+            >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <label>
+                    <input
+                        type="checkbox"
+                        data-document-suggestion-select-all
+                        data-form-id="{{ bulk_form_id }}"
+                    >
+                    <span>Select available</span>
+                </label>
+
+                <span>
+                    <strong data-document-suggestion-selected-count>0</strong>
+                    selected
+                </span>
+
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                    data-document-suggestion-bulk-submit
+                    disabled
+                >
+                    Create selected
+                </button>
+            </form>
+        {% endif %}
+
+        <div class="document-task-suggestion-list">
+            {% for suggestion in suggestions %}
+                {% set source = suggestion.source %}
+
+                <article
+                    class="document-task-suggestion-card"
+                    data-document-suggestion-card
+                    data-suggestion-status="{{ suggestion.status|lower }}"
+                >
+                    <div class="document-task-suggestion-card-head">
+                        <div class="document-task-suggestion-title-wrap">
+                            {% if suggestion.status == "Pending" and not suggestion.matched_task %}
+                                <input
+                                    type="checkbox"
+                                    name="suggestion_ids"
+                                    value="{{ suggestion.id }}"
+                                    form="{{ bulk_form_id }}"
+                                    aria-label="Select {{ suggestion.title }}"
+                                    data-document-suggestion-checkbox
+                                >
+                            {% endif %}
+
+                            <div>
+                                <div class="document-task-suggestion-labels">
+                                    <span class="document-suggestion-state document-suggestion-state-{{ suggestion.status|lower }}">
+                                        {{ suggestion.lifecycle_label }}
+                                    </span>
+                                    <span class="db-priority-chip db-priority-{{ suggestion.priority|lower }}">
+                                        {{ suggestion.priority }}
+                                    </span>
+                                </div>
+                                <h3>{{ suggestion.title }}</h3>
+                            </div>
+                        </div>
+
+                        {% if suggestion.deadline %}
+                            <span class="document-suggestion-due">
+                                Due {{ suggestion.deadline.strftime("%d %b %Y") }}
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    {% if suggestion.description %}
+                        <p>{{ suggestion.description }}</p>
+                    {% endif %}
+
+                    {% if suggestion.tags_list %}
+                        <div class="document-suggestion-tags">
+                            {% for tag in suggestion.tags_list %}
+                                <span>{{ tag }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="document-suggestion-provenance">
+                        {% if suggestion.document.project %}
+                            <span>Project: {{ suggestion.document.project.title }}</span>
+                        {% endif %}
+                        {% if show_document %}
+                            <span>{{ suggestion.document.filename }}</span>
+                        {% endif %}
+                        {% if source.get("page") %}
+                            <span>Page {{ source.get("page") }}</span>
+                        {% endif %}
+                        {% if source.get("section") %}
+                            <span>{{ source.get("section") }}</span>
+                        {% endif %}
+                    </div>
+
+                    {% if suggestion.status == "Pending" and suggestion.matched_task %}
+                        {% set duplicate_status = suggestion.matched_task.status or "Pending" %}
+                        {% if duplicate_status in ["Pending", "In Progress", "Blocked"] %}
+                            {% set duplicate_recommendation = "Continue existing task" %}
+                            {% set duplicate_explanation = "This action appears to describe work that is already actively tracked." %}
+                        {% elif duplicate_status == "Completed" %}
+                            {% set duplicate_recommendation = "Review and update existing task" %}
+                            {% set duplicate_explanation = "Very similar work was already completed. Check whether the document adds new scope before creating it again." %}
+                        {% else %}
+                            {% set duplicate_recommendation = "Review and update existing task" %}
+                            {% set duplicate_explanation = "The new document action overlaps with work already in this project." %}
+                        {% endif %}
+
+                        <div class="document-suggestion-duplicate-review compact">
+                            <div class="document-duplicate-heading">
+                                <div>
+                                    <span class="workspace-eyebrow">Possible existing task</span>
+                                    <strong>{{ suggestion.matched_task.title }}</strong>
+                                </div>
+
+                                <span class="document-duplicate-status">
+                                    {{ duplicate_status }}
+                                </span>
+                            </div>
+
+                            <div class="document-duplicate-recommendation">
+                                <span>LifeOS recommends</span>
+                                <strong>{{ duplicate_recommendation }}</strong>
+                                <p>{{ duplicate_explanation }}</p>
+                            </div>
+
+                            <div class="document-suggestion-inline-actions">
+                                <a
+                                    class="workspace-secondary-button"
+                                    href="{{ url_for('task_bp.edit_task', task_id=suggestion.matched_task.id) }}"
+                                >
+                                    View existing
+                                </a>
+
+                                <form
+                                    method="POST"
+                                    action="{{ url_for(
+                                        'document_bp.approve_suggestion_route',
+                                        document_id=suggestion.document_id,
+                                        suggestion_id=suggestion.id
+                                    ) }}"
+                                    data-confirm
+                                    data-confirm-title="Create possible duplicate"
+                                    data-confirm-message="A similar task exists. Create a separate task anyway?"
+                                    data-confirm-text="Create anyway"
+                                    data-confirm-variant="warning"
+                                >
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="allow_possible_duplicate" value="1">
+                                    <button type="submit" class="workspace-primary-button">
+                                        Create anyway
+                                    </button>
+                                </form>
+
+                                <form
+                                    method="POST"
+                                    action="{{ url_for(
+                                        'document_bp.reject_suggestion_route',
+                                        document_id=suggestion.document_id,
+                                        suggestion_id=suggestion.id
+                                    ) }}"
+                                >
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="db-danger-text-button">
+                                        Ignore
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                    {% elif suggestion.status == "Pending" %}
+                        <div class="document-suggestion-inline-actions">
+                            <form
+                                method="POST"
+                                action="{{ url_for(
+                                    'document_bp.approve_suggestion_route',
+                                    document_id=suggestion.document_id,
+                                    suggestion_id=suggestion.id
+                                ) }}"
+                            >
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="workspace-primary-button">
+                                    Create
+                                </button>
+                            </form>
+
+                            <a
+                                class="workspace-secondary-button"
+                                href="{{ url_for(
+                                    'document_bp.edit_create_suggestion_route',
+                                    document_id=suggestion.document_id,
+                                    suggestion_id=suggestion.id
+                                ) }}"
+                            >
+                                Edit first
+                            </a>
+
+                            <form
+                                method="POST"
+                                action="{{ url_for(
+                                    'document_bp.reject_suggestion_route',
+                                    document_id=suggestion.document_id,
+                                    suggestion_id=suggestion.id
+                                ) }}"
+                            >
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="db-danger-text-button">
+                                    Ignore
+                                </button>
+                            </form>
+                        </div>
+
+                    {% elif suggestion.status == "Approved" %}
+                        <div class="document-suggestion-result success">
+                            <strong>✓ Created</strong>
+                            {% if suggestion.created_task %}
+                                <a href="{{ url_for('task_bp.edit_task', task_id=suggestion.created_task.id) }}">
+                                    {{ suggestion.created_task.title }}
+                                </a>
+                            {% else %}
+                                <span>The task was later removed. This suggestion can be reviewed again after refresh.</span>
+                            {% endif %}
+                        </div>
+
+                    {% elif suggestion.status == "Linked" %}
+                        <div class="document-suggestion-result">
+                            <strong>Existing task used</strong>
+                            {% if suggestion.created_task %}
+                                <a href="{{ url_for('task_bp.edit_task', task_id=suggestion.created_task.id) }}">
+                                    {{ suggestion.created_task.title }}
+                                </a>
+                            {% endif %}
+                        </div>
+
+                    {% elif suggestion.status == "Rejected" %}
+                        <div class="document-suggestion-result muted">
+                            <strong>Ignored</strong>
+                            <span>No task was created.</span>
+                        </div>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    </section>
+{% endmacro %}
