@@ -38,7 +38,7 @@ def load_user(user_id):
 
 
 def register_legacy_web_blueprints(app: Flask) -> None:
-    """Keep the proven Jinja UI working while React migrates incrementally."""
+    """Register proven web controllers used by the React UI parity bridge."""
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(project_bp)

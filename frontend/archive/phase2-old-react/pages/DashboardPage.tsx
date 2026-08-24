@@ -149,7 +149,7 @@ export function DashboardPage() {
           {data.latest_projects.length ? (
             <div className="project-list">
               {data.latest_projects.map((project) => (
-                <Link to="/projects" className="project-row" key={project.id}>
+                <Link to={`/projects/${project.id}`} className="project-row" key={project.id}>
                   <span className="project-avatar">{project.title[0]?.toUpperCase()}</span>
                   <div className="project-main">
                     <div className="project-heading">

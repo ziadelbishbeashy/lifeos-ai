@@ -1,21 +1,19 @@
-"""Versioned JSON API boundary used by the React frontend.
+"""Core versioned JSON API boundary used by the React frontend.
 
-Phase 1 exposes authentication/session state and the dashboard while keeping
-all business rules in existing services. The legacy Jinja UI remains available
-as a reference implementation until React reaches feature parity.
+Feature-specific endpoints live in sibling modules (projects.py, tasks.py,
+documents.py). This file intentionally keeps session/auth/dashboard concerns
+small so feature routes do not become another monolith.
 """
 
 from __future__ import annotations
 
-from functools import wraps
-
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify
 from flask_login import current_user, login_user, logout_user
 from flask_wtf.csrf import generate_csrf
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import Project
-from services.auth_service import (
+from lifeos.api.v1.common import api_auth_required, json_body
+from lifeos.domains.auth.facade import (
     AccountCreationError,
     DuplicateEmailError,
     authenticate_user,
@@ -25,36 +23,13 @@ from services.auth_service import (
     normalize_email,
     validate_registration,
 )
-from services.dashboard_service import (
+from lifeos.domains.dashboard.facade import (
     build_dashboard_context,
     serialize_dashboard_context,
 )
-from services.document_access_service import list_owned_documents
 
 
 api_v1_bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
-
-
-def api_auth_required(view):
-    """Return JSON 401s instead of Flask-Login redirects for API requests."""
-
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return jsonify(
-                {
-                    "error": "authentication_required",
-                    "message": "Please log in to continue.",
-                }
-            ), 401
-        return view(*args, **kwargs)
-
-    return wrapped
-
-
-def _json_body() -> dict:
-    payload = request.get_json(silent=True)
-    return payload if isinstance(payload, dict) else {}
 
 
 def _user_payload(user) -> dict:
@@ -79,7 +54,8 @@ def meta():
             "api_version": "v1",
             "preferred_database": "postgresql",
             "legacy_web_enabled": True,
-            "frontend_migration": "phase-1-auth-dashboard",
+            "frontend_migration": "react-ui-parity-complete",
+            "native_frontend_slices": ["projects"],
         }
     )
 
@@ -114,7 +90,7 @@ def login():
             }
         )
 
-    payload = _json_body()
+    payload = json_body()
     email = normalize_email(payload.get("email"))
     password = str(payload.get("password") or "")
     remember = payload.get("remember") is True
@@ -155,7 +131,7 @@ def register():
             }
         )
 
-    payload = _json_body()
+    payload = json_body()
     registration = build_registration_input(
         name=payload.get("name"),
         email=payload.get("email"),
@@ -214,58 +190,3 @@ def logout():
 def dashboard():
     context = build_dashboard_context(current_user.id)
     return jsonify(serialize_dashboard_context(context))
-
-
-@api_v1_bp.get("/projects")
-@api_auth_required
-def projects():
-    rows = (
-        Project.query
-        .filter_by(user_id=current_user.id)
-        .order_by(Project.updated_at.desc(), Project.id.desc())
-        .all()
-    )
-    return jsonify(
-        {
-            "items": [
-                {
-                    "id": row.id,
-                    "title": row.title,
-                    "status": row.status,
-                    "priority": row.priority,
-                    "progress": row.progress,
-                    "deadline": (
-                        row.deadline.isoformat()
-                        if row.deadline
-                        else None
-                    ),
-                }
-                for row in rows
-            ]
-        }
-    )
-
-
-@api_v1_bp.get("/documents")
-@api_auth_required
-def documents():
-    rows = list_owned_documents(current_user.id)
-    return jsonify(
-        {
-            "items": [
-                {
-                    "id": row.id,
-                    "project_id": row.project_id,
-                    "filename": row.filename,
-                    "version_label": row.version_label,
-                    "is_current_version": bool(row.is_current_version),
-                    "uploaded_at": (
-                        row.uploaded_at.isoformat()
-                        if row.uploaded_at
-                        else None
-                    ),
-                }
-                for row in rows
-            ]
-        }
-    )

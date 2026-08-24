@@ -110,3 +110,11 @@ async function apiUnsafe<T>(
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return apiUnsafe<T>(path, "POST", body);
 }
+
+export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  return apiUnsafe<T>(path, "PATCH", body);
+}
+
+export function apiDelete<T>(path: string, body?: unknown): Promise<T> {
+  return apiUnsafe<T>(path, "DELETE", body);
+}

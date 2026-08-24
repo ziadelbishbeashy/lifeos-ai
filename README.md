@@ -1,16 +1,22 @@
-# LifeOS — Foundation V2
+# LifeOS — Foundation V2 + React UI Parity
 
-This folder is the safe architecture migration of the latest LifeOS project.
+This repository keeps the proven LifeOS backend workflows intact while making React + TypeScript + Vite the browser host for the **entire current website**.
 
-## New direction
+## Architecture
 
-- **Backend:** Flask modular monolith
+- **Browser host:** React + TypeScript + Vite
+- **Backend:** Flask modular monolith / application factory
 - **API:** versioned `/api/v1`
-- **Frontend:** React + TypeScript + Vite, migrated incrementally
-- **Database:** PostgreSQL, with Neon as the future hosted target
-- **Legacy UI:** preserved until each React replacement has parity
+- **UI parity bridge:** restricted `/api/v1/legacy-proxy`
+- **Database:** SQLAlchemy with PostgreSQL as the preferred target
+- **Document Brain:** existing trusted services remain unchanged
+- **Old visual design:** preserved exactly through the existing CSS/JS assets
 
-## Start the current backend
+The active React app has no migration placeholders. Projects, Tasks, Notes, Focus Mode, Analytics, Notifications and the existing Document Brain screens can all be opened through the React host while continuing to use the proven Flask workflow/controller logic.
+
+See `docs/architecture/REACT_UI_PARITY.md` for the migration design and safety rules.
+
+## Backend
 
 ```powershell
 cd backend
@@ -18,35 +24,27 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 copy .env.example .env
+python -m pytest tests\test_react_ui_parity_bridge.py -v
+python -m pytest
+python -m flask --app app db current
 python app.py
 ```
 
-If your existing local database is still SQL Server during the transition, keep
-its old environment variables, set `DB_BACKEND=legacy_sqlserver`, and install:
+If the current local database is still SQL Server during the transition, keep the existing legacy database environment values and follow the repository's SQL Server compatibility requirements.
 
-```powershell
-pip install -r requirements-legacy-sqlserver.txt
-```
-
-## Start local PostgreSQL
-
-From the repository root:
-
-```powershell
-docker compose up postgres -d
-```
-
-Then set `DATABASE_URL` in `backend/.env`.
-
-## Start React migration frontend
+## Frontend
 
 ```powershell
 cd frontend
 npm install
+npm run build
 npm run dev
 ```
 
-The React shell is intentionally not a big-bang replacement. The existing UI is
-still the canonical interface until each domain has been migrated safely.
+Open `http://localhost:5173`.
 
-Read `docs/architecture/FOUNDATION_V2.md` before adding new features.
+`npm run dev` and `npm run build` automatically synchronize the proven backend CSS/JS into `frontend/public/static`, preventing the React host from visually drifting from the existing UI.
+
+## Database migrations
+
+This UI architecture change does not alter the database schema, so it intentionally contains no new Alembic migration.

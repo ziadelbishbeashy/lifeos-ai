@@ -60,7 +60,7 @@ export function AppShell() {
         <div className="sidebar-bottom">
           <div className="migration-badge">
             <strong>React migration</strong>
-            <span>Phase 1 · Auth + Dashboard</span>
+            <span>Phase 2 · Projects + Tasks</span>
           </div>
 
           <div className="user-card">
