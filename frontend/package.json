@@ -4,10 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "sync:legacy-ui": "node scripts/sync-legacy-assets.mjs",
-    "predev": "npm run sync:legacy-ui",
     "dev": "vite",
-    "prebuild": "npm run sync:legacy-ui",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

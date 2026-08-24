@@ -118,3 +118,17 @@ export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 export function apiDelete<T>(path: string, body?: unknown): Promise<T> {
   return apiUnsafe<T>(path, "DELETE", body);
 }
+
+export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
+  const token = await fetchCsrfToken();
+  const response = await fetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      "X-CSRFToken": token,
+    },
+    body: form,
+  });
+  return readJson<T>(response);
+}

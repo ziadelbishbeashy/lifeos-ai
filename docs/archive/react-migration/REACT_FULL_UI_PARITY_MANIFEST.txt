@@ -1,0 +1,34 @@
+LifeOS React Full UI Parity Migration
+=====================================
+
+Architecture files
+- backend/lifeos/api/v1/legacy_ui.py
+- backend/lifeos/api/v1/__init__.py
+- backend/lifeos/api/v1/routes.py
+- backend/lifeos/application.py
+- frontend/src/App.tsx
+- frontend/src/main.tsx
+- frontend/src/legacy/LegacyScreen.tsx
+- frontend/src/legacy/legacyBridge.ts
+- frontend/src/legacy/legacyScreen.css
+- frontend/index.html
+- frontend/vite.config.ts
+- frontend/scripts/sync-legacy-assets.mjs
+- frontend/package.json
+
+Parity assets
+- frontend/public/static/css/* (synced from backend/static/css)
+- frontend/public/static/js/*  (synced from backend/static/js)
+
+Tests / documentation
+- backend/tests/test_react_ui_parity_bridge.py
+- docs/architecture/REACT_UI_PARITY.md
+- APPLY_REACT_FULL_UI_PARITY.md
+- scripts/check-react-parity.ps1
+- README.md
+- frontend/README.md
+
+No database schema was changed.
+Existing Flask routes/services/templates remain intentionally preserved as the
+compatibility implementation so the architecture move cannot remove current
+features or silently change the old UI.

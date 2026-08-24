@@ -57,6 +57,9 @@ from services.document_task_action_service import (
 from services.document_overview_service import (
     build_structured_document_overview,
 )
+from services.document_analysis_experience_service import (
+    build_document_analysis_experience,
+)
 from services.document_type_detection_service import (
     ALLOWED_DETECTION_CONFIDENCE,
 )
@@ -892,6 +895,12 @@ def _render_document_details(
         latest_analysis
     )
 
+    analysis_experience = build_document_analysis_experience(
+        overview=overview,
+        type_workspace=type_workspace,
+        suggestions=suggestions,
+    )
+
     question_history = list_owned_document_questions(
         document_id=document.id,
         user_id=current_user.id,
@@ -922,6 +931,7 @@ def _render_document_details(
         type_detection=type_detection,
         document_type_choices=document_type_choices(),
         type_workspace=type_workspace,
+        analysis_experience=analysis_experience,
         document_search=document_search,
         version_history=version_history,
     )

@@ -129,15 +129,15 @@ def test_research_analysis_renders_specialized_workspace(
         as_text=True
     )
 
-    assert "Type-aware analysis" in page
-    assert "Research Paper workspace" in page
-    assert "Detected and confirmed" in page
+    assert "Research at a glance" in page
+    assert "Research Paper" in page
+    assert "Type confirmed" in page
     assert "Research Problem" in page
     assert "Methodology" in page
-    assert "Research Gaps" in page
+    assert "BM25 and semantic retrieval are compared." in page
     assert "Grounding failures reduce answer reliability." in page
     assert "Hybrid retrieval evaluation" in page
-    assert "Adaptive workspace" in page
+    assert "Document-specific details" in page
 
 
 def test_user_override_message_is_rendered(
@@ -211,6 +211,6 @@ def test_user_override_message_is_rendered(
         as_text=True
     )
 
-    assert "User override applied." in page
+    assert "Type adjusted" in page
     assert "Technical Documentation" in page
     assert "Research Paper" in page

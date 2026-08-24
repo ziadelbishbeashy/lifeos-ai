@@ -166,6 +166,33 @@ export type DocumentSummary = {
   summary: string | null;
 };
 
+
+export type ProjectQuestion = {
+  id: number;
+  project_id: number;
+  question: string;
+  answer: string | null;
+  sources: Array<Record<string, unknown>>;
+  status: string;
+  error_message: string | null;
+  created_at: string | null;
+};
+
+
+export type DocumentSuggestion = {
+  id: number;
+  document_id: number;
+  title: string;
+  description: string | null;
+  priority: string;
+  deadline: string | null;
+  source: Record<string, unknown> | null;
+  status: string;
+  lifecycle_label: string;
+  matched_task_id: number | null;
+  created_task_id: number | null;
+};
+
 export type ProjectWorkspaceData = {
   project: Project;
   tasks: Task[];
@@ -187,6 +214,9 @@ export type ProjectWorkspaceData = {
   project_health: { label?: string; tone?: string; message?: string } | null;
   days_to_deadline: number | null;
   next_task: Task | null;
+  project_question_history: ProjectQuestion[];
+  document_suggestions: DocumentSuggestion[];
+  pending_document_suggestion_count: number;
 };
 
 export type ProjectInput = {

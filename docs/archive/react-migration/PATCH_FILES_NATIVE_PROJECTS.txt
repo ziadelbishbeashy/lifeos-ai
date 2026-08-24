@@ -1,0 +1,11 @@
+backend/lifeos/api/v1/routes.py
+backend/lifeos/api/v1/serializers.py
+backend/tests/test_api_v1_react_phase2.py
+frontend/src/App.tsx
+frontend/src/api/types.ts
+frontend/src/main.tsx
+frontend/src/native/NativeWorkspaceShell.tsx
+frontend/src/native/useNativeLegacyAssets.ts
+frontend/src/pages/ProjectsPage.tsx
+APPLY_REACT_NATIVE_PROJECTS.md
+PATCH_FILES_NATIVE_PROJECTS.txt

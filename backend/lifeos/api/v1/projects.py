@@ -18,7 +18,26 @@ from lifeos.api.v1.serializers import (
     serialize_project,
     serialize_project_card,
     serialize_task,
+    serialize_project_question,
+    serialize_document_suggestion,
 )
+
+
+from services.document_task_action_service import (
+    DocumentSuggestionNotFoundError,
+    DocumentSuggestionPersistenceError,
+    DocumentSuggestionWorkflowError,
+    bulk_create_document_suggestions,
+)
+
+from services.project_question_workflow_service import (
+    ProjectQuestionNotFoundError,
+    ProjectQuestionNotReadyError,
+    ProjectQuestionWorkflowError,
+    ask_owned_project_documents,
+    list_owned_project_questions,
+)
+
 from lifeos.domains.projects.facade import (
     ProjectNotFoundError,
     ProjectPersistenceError,
@@ -156,6 +175,19 @@ def project_details_route(project_id: int):
                 if workspace["next_task"] is not None
                 else None
             ),
+            "project_question_history": [
+                serialize_project_question(item)
+                for item in list_owned_project_questions(
+                    project_id=project_id,
+                    user_id=current_user.id,
+                    limit=50,
+                )
+            ],
+            "document_suggestions": [
+                serialize_document_suggestion(item)
+                for item in workspace.get("document_suggestions", [])
+            ],
+            "pending_document_suggestion_count": workspace.get("pending_document_suggestion_count", 0),
         }
     )
 
@@ -201,3 +233,67 @@ def delete_project_route(project_id: int):
         return persistence_error("The project could not be deleted.")
 
     return jsonify({"deleted": True, "title": title})
+
+
+@projects_api_bp.post("/<int:project_id>/questions")
+@api_auth_required
+def ask_project_documents_route(project_id: int):
+    payload = json_body()
+    try:
+        result = ask_owned_project_documents(
+            project_id=project_id,
+            user_id=current_user.id,
+            question_text=payload.get("question"),
+            force=bool(payload.get("force")),
+        )
+    except ProjectQuestionNotFoundError:
+        return not_found("Project not found.")
+    except ProjectQuestionNotReadyError as error:
+        return validation_error(str(error))
+    except ProjectQuestionWorkflowError as error:
+        return jsonify({"error": "question_failed", "message": str(error)}), 503
+    return jsonify({
+        "item": serialize_project_question(result.question),
+        "reused_existing": result.reused_existing,
+    })
+
+
+@projects_api_bp.get("/<int:project_id>/questions")
+@api_auth_required
+def project_questions_route(project_id: int):
+    try:
+        rows = list_owned_project_questions(
+            project_id=project_id,
+            user_id=current_user.id,
+            limit=50,
+        )
+    except ProjectQuestionNotFoundError:
+        return not_found("Project not found.")
+    return jsonify({"items": [serialize_project_question(item) for item in rows]})
+
+
+@projects_api_bp.post("/<int:project_id>/document-suggestions/bulk-create")
+@api_auth_required
+def bulk_create_project_document_suggestions(project_id: int):
+    payload = json_body()
+    try:
+        require_owned_project(project_id, current_user.id)
+        result = bulk_create_document_suggestions(
+            suggestion_ids=payload.get("suggestion_ids") or [],
+            user_id=current_user.id,
+            project_id=project_id,
+        )
+    except ProjectNotFoundError:
+        return not_found("Project not found.")
+    except DocumentSuggestionNotFoundError:
+        return not_found("Suggestion not found.")
+    except DocumentSuggestionWorkflowError as error:
+        return validation_error(str(error))
+    except DocumentSuggestionPersistenceError as error:
+        return persistence_error(str(error))
+    return jsonify({
+        "created_count": result.created_count,
+        "duplicate_count": result.duplicate_count,
+        "skipped_count": result.skipped_count,
+        "created_tasks": [serialize_task(task) for task in result.created_tasks],
+    })

@@ -1,33 +1,44 @@
-# LifeOS React Frontend — Full UI Parity Host
+# LifeOS React Frontend
 
-The active frontend now uses React as the browser host for the full existing LifeOS website while preserving the proven UI and interactions exactly.
+This folder is the **only active UI source of truth** for LifeOS.
 
-## Active path
+## Architecture
 
-`src/App.tsx` renders `src/legacy/LegacyScreen.tsx`.
+```text
+Browser
+  -> React + TypeScript + Vite (this folder)
+  -> /api/v1/* JSON/file endpoints
+  -> Flask backend services
+  -> SQLAlchemy / SQL Server / AI / RAG
+```
 
-The parity screen:
+UI/layout/style changes belong in `frontend/` only. The React application does not render Flask/Jinja pages, does not call `/api/v1/legacy-proxy`, and does not copy `backend/static` during dev/build.
 
-1. requests the current browser path through `/api/v1/legacy-proxy`;
-2. receives the existing trusted Flask controller output;
-3. mounts the exact page markup in React;
-4. loads the exact existing styles/scripts from `public/static`;
-5. bridges forms, PDF/file responses and legacy JavaScript requests back through the API boundary.
+### UI source
 
-There are no active migration placeholder pages.
+- `src/pages/` — route-level React screens
+- `src/components/` — shared UI controls, including the compact Verify evidence control
+- `src/features/` — project/task forms and API helpers
+- `src/styles/lifeos/` — the established LifeOS visual foundation, now frontend-owned
+- `src/styles/separated.css` — React-native/separation-specific styles
+- `src/api/` — JSON API client and types
+- `src/core/navigation.ts` — small same-origin navigation helper
 
-## Why the old typed React pages are still present
-
-The Phase 1/2 native React pages and typed API clients are intentionally retained as reference code for later component-by-component native conversion. They are not currently routed because the requirement for this migration is **no visible UI or workflow regression**.
+`archive/pre-separation/` contains old migration references only. It is outside `src`, is not built, and is not required by the application.
 
 ## Development
 
 ```powershell
 npm install
-npm run build
 npm run dev
 ```
 
-Run Flask on `127.0.0.1:5000`; Vite proxies `/api` to it.
+The Vite dev server proxies `/api/*` to `http://127.0.0.1:5000`.
 
-See `../docs/architecture/REACT_UI_PARITY.md` for the architecture and migration gates.
+## Build
+
+```powershell
+npm run build
+```
+
+No legacy asset synchronization step exists anymore.

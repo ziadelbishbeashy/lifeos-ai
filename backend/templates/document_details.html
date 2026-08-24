@@ -14,6 +14,62 @@
 {% endblock %}
 
 
+{% macro verify_source(source, label="Verify") %}
+
+    {% if source %}
+        {% set source_id = source.get("source_id") %}
+        {% set page = source.get("page") %}
+        {% set section = source.get("section") %}
+        {% set evidence = source.get("evidence") %}
+
+        {% if source_id or page or section or evidence %}
+            <details class="db-verify-control">
+                <summary
+                    title="Verify against document"
+                    aria-label="Verify against document"
+                >
+                    <span class="db-verify-icon" aria-hidden="true">✓</span>
+                    <span>{{ label }}</span>
+                </summary>
+
+                <div class="db-verify-panel">
+                    <div class="db-verify-heading">
+                        <strong>Source</strong>
+                        <span>Grounded in this document</span>
+                    </div>
+
+                    {% if source_id or page or section %}
+                        <div class="db-verify-location">
+                            {% if source_id %}<span>Source {{ source_id }}</span>{% endif %}
+                            {% if page %}<span>Page {{ page }}</span>{% endif %}
+                            {% if section %}<span>{{ section }}</span>{% endif %}
+                        </div>
+                    {% endif %}
+
+                    {% if evidence %}
+                        <blockquote>{{ evidence }}</blockquote>
+                    {% else %}
+                        <p class="db-verify-no-excerpt">Open the source to review the supporting context.</p>
+                    {% endif %}
+
+                    {% if page %}
+                        <button
+                            type="button"
+                            class="db-verify-open"
+                            data-db-open-pdf
+                            data-db-pdf-page="{{ page }}"
+                        >
+                            Open in PDF
+                        </button>
+                    {% endif %}
+                </div>
+            </details>
+        {% endif %}
+    {% endif %}
+
+{% endmacro %}
+
+
 {% macro source_reference(source, compact=false) %}
 
     {% if source %}
@@ -24,83 +80,70 @@
         {% set evidence = source.get("evidence") %}
         {% set preview_type = source.get("preview_type") %}
 
-        {% if page or section or evidence %}
+        {% if source_id or page or section or evidence %}
 
-            <article
-                class="
-                    db-source-card
-                    {% if compact %}db-source-card-compact{% endif %}
-                "
-            >
+            {% if compact %}
 
-                <div class="db-source-card-heading">
-
-                    <div class="db-source-location">
-
-                        {% if source_id %}
-                            <span class="db-source-number">
-                                Source {{ source_id }}
-                            </span>
-                        {% endif %}
-
-                        {% if page %}
-                            <span class="db-source-page">
-                                Page {{ page }}
-                            </span>
-                        {% endif %}
-
-                        {% if section %}
-                            <span class="db-source-section">
-                                {{ section }}
-                            </span>
-                        {% endif %}
-
-                    </div>
-
+                <div class="db-source-compact-row">
+                    {{ verify_source(source) }}
 
                     {% if preview_type == "focused" %}
-
-                        <span class="db-source-focus">
-                            Focused excerpt
-                        </span>
-
+                        <span class="db-source-focus">Focused excerpt</span>
                     {% endif %}
-
                 </div>
 
+            {% else %}
 
-                {% if evidence %}
+                <article class="db-source-card">
 
-                    <blockquote class="db-source-evidence">
-                        {{ evidence }}
-                    </blockquote>
+                    <div class="db-source-card-heading">
+                        <div class="db-source-location">
+                            {% if source_id %}
+                                <span class="db-source-number">Source {{ source_id }}</span>
+                            {% endif %}
+                            {% if page %}
+                                <span class="db-source-page">Page {{ page }}</span>
+                            {% endif %}
+                            {% if section %}
+                                <span class="db-source-section">{{ section }}</span>
+                            {% endif %}
+                        </div>
 
-                {% endif %}
-
-
-                {% if page and not compact %}
-
-                    <div class="db-source-navigation-actions">
-
-                        <button
-                            type="button"
-                            class="db-source-action-button"
-                            data-db-open-pdf
-                            data-db-pdf-page="{{ page }}"
-                        >
-                            View in PDF
-                        </button>
-
+                        {% if preview_type == "focused" %}
+                            <span class="db-source-focus">Focused excerpt</span>
+                        {% endif %}
                     </div>
 
-                {% endif %}
+                    {% if evidence %}
+                        <blockquote class="db-source-evidence">{{ evidence }}</blockquote>
+                    {% endif %}
 
-            </article>
+                    {% if page %}
+                        <div class="db-source-navigation-actions">
+                            <button
+                                type="button"
+                                class="db-source-action-button"
+                                data-db-open-pdf
+                                data-db-pdf-page="{{ page }}"
+                            >
+                                View in PDF
+                            </button>
+                        </div>
+                    {% endif %}
+
+                </article>
+
+            {% endif %}
 
         {% endif %}
 
     {% endif %}
 
+{% endmacro %}
+
+
+{% macro overview_source(source) %}
+    {{ verify_source(source) }}
 {% endmacro %}
 
 
@@ -129,6 +172,8 @@
 
 {% block content %}
 
+
+
 {% set overview = overview | default({}, true) %}
 {% set insights = overview.get("analysis", analysis.insights if analysis else {}) %}
 {% set section_counts = overview.get("section_counts", {}) %}
@@ -137,6 +182,7 @@
 {% set type_detection = type_detection | default(none) %}
 {% set document_type_choices = document_type_choices | default([], true) %}
 {% set type_workspace = type_workspace | default({}, true) %}
+{% set analysis_experience = analysis_experience | default({}, true) %}
 {% set type_sections = type_workspace.get("sections", []) %}
 {% set populated_type_sections = type_workspace.get("populated_sections", []) %}
 {% set document_search = document_search | default(none) %}
@@ -924,7 +970,7 @@
                 data-db-tab="insights"
                 data-db-hash="insights"
             >
-                <span>Insights</span>
+                <span>Details</span>
 
                 {% if analysis %}
                     <b>
@@ -1001,7 +1047,7 @@
                 data-db-tab="ask"
                 data-db-hash="ask-document"
             >
-                <span>Ask document</span>
+                <span>Ask AI</span>
 
                 {% if question_history %}
                     <b>{{ question_history | length }}</b>
@@ -1022,557 +1068,359 @@
 
                 {% if analysis %}
 
-                    <article class="db-summary-card">
-
-                        <div class="db-summary-heading">
-
-                            <div>
-                                <span class="db-kicker">
-                                    {{
-                                        analysis.document_type
-                                        or "General Reference"
-                                    }}
+                    <section class="db-command-hero">
+                        <div class="db-command-hero-main">
+                            <div class="db-command-eyebrow-row">
+                                <span class="db-command-type">
+                                    {{ analysis_experience.get("type_label") or analysis.document_type or "Document" }}
                                 </span>
 
-                                <h2>Executive summary</h2>
+                                <span class="db-command-status">
+                                    {{ analysis_experience.get("status_label") or "Saved analysis" }}
+                                    {% if analysis_experience.get("confidence") %}
+                                        · {{ analysis_experience.get("confidence") | title }} confidence
+                                    {% endif %}
+                                    {% if analysis_experience.get("type_adjusted") and analysis_experience.get("detected_type") %}
+                                        · {{ analysis_experience.get("detected_type") }} → {{ analysis_experience.get("confirmed_type") }}
+                                    {% endif %}
+                                </span>
                             </div>
 
+                            <h2>{{ analysis_experience.get("overview_title") or "Document at a glance" }}</h2>
 
-                            <span class="db-ai-meta">
-                                {{ analysis.provider }}
-                                ·
-                                {{ analysis.model }}
-                            </span>
+                            <p class="db-command-summary">
+                                {{ analysis.summary }}
+                            </p>
 
+                            {% if analysis_experience.get("focus") %}
+                                <div class="db-current-focus">
+                                    <span>Focus now</span>
+                                    <div class="db-current-focus-row">
+                                        <strong>{{ analysis_experience.get("focus") }}</strong>
+                                        {{ overview_source(analysis_experience.get("focus_source")) }}
+                                    </div>
+                                </div>
+                            {% endif %}
                         </div>
 
+                        <div class="db-command-actions">
+                            <button
+                                type="button"
+                                class="workspace-primary-button"
+                                data-db-tab-jump="ask"
+                            >
+                                Ask AI
+                            </button>
 
-                        <p class="db-summary-text">
-                            {{ analysis.summary }}
-                        </p>
-
-
-                        {% if insights.get("purpose") %}
-
-                            <div class="db-purpose-block">
-
-                                <span>Document purpose</span>
-
-                                <p>
-                                    {{ insights.get("purpose") }}
-                                </p>
-
-                            </div>
-
-                        {% endif %}
-
-                    </article>
-
-
-                    <section
-                        class="db-overview-status"
-                        aria-label="Structured overview status"
-                    >
-
-                        <div>
-                            <span>Structured sections</span>
-                            <strong>
-                                {{ overview.get("populated_section_count", 0) }}
-                                /
-                                {{ overview.get("total_section_count", 8) }}
-                            </strong>
-                            <small>
-                                Sections containing supported findings
-                            </small>
+                            <button
+                                type="button"
+                                class="workspace-secondary-button"
+                                data-db-open-pdf
+                            >
+                                Open PDF
+                            </button>
                         </div>
-
-                        <div>
-                            <span>Total findings</span>
-                            <strong>
-                                {{ overview.get("total_items", 0) }}
-                            </strong>
-                            <small>
-                                Across key points, requirements and more
-                            </small>
-                        </div>
-
-                        <div>
-                            <span>Needs attention</span>
-                            <strong>
-                                {{ overview.get("attention_items", 0) }}
-                            </strong>
-                            <small>
-                                Risks, deadlines and unclear information
-                            </small>
-                        </div>
-
-                        <div>
-                            <span>Analysis mode</span>
-                            <strong>
-                                {% if type_workspace.get("active") %}
-                                    Type-aware
-                                {% else %}
-                                    Structured
-                                {% endif %}
-                            </strong>
-                            <small>
-                                {% if type_workspace.get("active") %}
-                                    Specialized for
-                                    {{ type_workspace.get("type_label") }}
-                                {% else %}
-                                    Structured document overview
-                                {% endif %}
-                            </small>
-                        </div>
-
                     </section>
 
+                    <section class="db-signal-strip" aria-label="Document analysis status">
+                        <article class="db-signal-card db-signal-attention">
+                            <span>Needs attention</span>
+                            <strong>{{ analysis_experience.get("attention_count", 0) }}</strong>
+                            <small>Risks, gaps and deadlines worth reviewing</small>
+                        </article>
 
-                    {% if type_workspace.get("active") %}
+                        <article class="db-signal-card db-signal-action">
+                            <span>Next actions</span>
+                            <strong>{{ analysis_experience.get("action_count", 0) }}</strong>
+                            <small>Grounded work you can review before creating tasks</small>
+                        </article>
 
-                        <section class="db-type-aware-overview">
+                        <article class="db-signal-card db-signal-trust">
+                            <span>Verification</span>
+                            <strong>On demand</strong>
+                            <small>Use Verify only when you want to inspect the supporting source</small>
+                        </article>
+                    </section>
 
-                            <div class="db-type-aware-heading">
+                    <section class="db-priority-section">
+                        <div class="db-section-title-row">
+                            <div>
+                                <span class="db-kicker">What matters now</span>
+                                <h2>Needs your attention</h2>
+                                <p>Start with the issues that could change a decision, deadline, or next step.</p>
+                            </div>
 
+                            {% if analysis_experience.get("attention_count", 0) > 4 %}
+                                <button
+                                    type="button"
+                                    class="db-text-button"
+                                    data-db-tab-jump="insights"
+                                    data-db-scroll-target="risks"
+                                >
+                                    See all details
+                                </button>
+                            {% endif %}
+                        </div>
+
+                        {% if analysis_experience.get("attention") %}
+                            <div class="db-attention-list">
+                                {% for item in analysis_experience.get("attention", []) %}
+                                    <article class="db-attention-item db-attention-{{ item.get('tone', 'info') }}">
+                                        <div class="db-attention-marker" aria-hidden="true"></div>
+
+                                        <div class="db-attention-copy">
+                                            <span class="db-attention-label">{{ item.get("label") }}</span>
+                                            <h3>{{ item.get("title") }}</h3>
+
+                                            {% if item.get("detail") %}
+                                                <p>{{ item.get("detail") }}</p>
+                                            {% endif %}
+
+                                            <div class="db-attention-footer">
+                                                {{ overview_source(item.get("source")) }}
+
+                                                <button
+                                                    type="button"
+                                                    class="db-text-button"
+                                                    data-db-tab-jump="insights"
+                                                    data-db-scroll-target="{{ item.get('target') }}"
+                                                >
+                                                    Review detail
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </article>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="db-calm-state">
+                                <span>✓</span>
                                 <div>
-                                    <span class="db-kicker">
-                                        Type-aware analysis
-                                    </span>
+                                    <strong>No major attention items found</strong>
+                                    <p>The current analysis did not identify explicit risks, information gaps, or deadlines.</p>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </section>
 
-                                    <h2>
-                                        {{ type_workspace.get("type_label") }} workspace
-                                    </h2>
+                    <section class="db-overview-two-column">
+                        <article class="db-action-board">
+                            <div class="db-section-title-row db-section-title-row-compact">
+                                <div>
+                                    <span class="db-kicker">Move forward</span>
+                                    <h2>Recommended next actions</h2>
+                                    <p>Review AI-suggested work before it becomes a LifeOS task.</p>
+                                </div>
+                            </div>
 
-                                    <p>
-                                        {{ type_workspace.get("description") }}
-                                    </p>
+                            {% if analysis_experience.get("actions") %}
+                                <div class="db-action-preview-list">
+                                    {% for item in analysis_experience.get("actions", []) %}
+                                        <article class="db-action-preview">
+                                            <button
+                                                type="button"
+                                                class="db-action-preview-main"
+                                                data-db-tab-jump="actions"
+                                            >
+                                                <span class="db-priority-chip db-priority-{{ item.get('priority', 'Medium') | lower }}">
+                                                    {{ item.get("priority", "Medium") }}
+                                                </span>
+                                                <span class="db-action-preview-copy">
+                                                    <strong>{{ item.get("title") }}</strong>
+                                                    {% if item.get("detail") %}
+                                                        <small>{{ item.get("detail") }}</small>
+                                                    {% endif %}
+                                                </span>
+                                                <em>Review →</em>
+                                            </button>
+
+                                            {{ overview_source(item.get("source")) }}
+                                        </article>
+                                    {% endfor %}
                                 </div>
 
-                                <div class="db-type-aware-status">
-                                    <span>
-                                        {{ type_workspace.get("metadata", {}).get("status_label") }}
-                                    </span>
+                                <button
+                                    type="button"
+                                    class="workspace-primary-button db-action-board-cta"
+                                    data-db-tab-jump="actions"
+                                >
+                                    Review all actions
+                                </button>
+                            {% else %}
+                                <div class="db-calm-state db-calm-state-compact">
+                                    <span>✓</span>
+                                    <div>
+                                        <strong>No action suggestions yet</strong>
+                                        <p>The analysis did not produce grounded work to turn into tasks.</p>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </article>
 
-                                    {% if type_workspace.get("metadata", {}).get("confidence") %}
-                                        <small>
-                                            {{ type_workspace.get("metadata", {}).get("confidence") | title }}
-                                            detection confidence
-                                        </small>
-                                    {% endif %}
+                        <article class="db-question-board">
+                            <div class="db-section-title-row db-section-title-row-compact">
+                                <div>
+                                    <span class="db-kicker">Ask better questions</span>
+                                    <h2>Explore this document</h2>
+                                    <p>Use one of these grounded prompts or ask your own question.</p>
+                                </div>
+                            </div>
+
+                            {% if analysis_experience.get("questions") %}
+                                <div class="db-question-chip-list">
+                                    {% for item in analysis_experience.get("questions", []) %}
+                                        <button
+                                            type="button"
+                                            data-db-tab-jump="ask"
+                                            data-db-question-suggestion="{{ item.get('question') }}"
+                                        >
+                                            <span>Ask</span>
+                                            <strong>{{ item.get("question") }}</strong>
+                                        </button>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="db-question-chip-list">
+                                    <button type="button" data-db-tab-jump="ask" data-db-question-suggestion="What matters most in this document right now?">
+                                        <span>Ask</span><strong>What matters most right now?</strong>
+                                    </button>
+                                    <button type="button" data-db-tab-jump="ask" data-db-question-suggestion="What could block progress or success?">
+                                        <span>Ask</span><strong>What could block progress?</strong>
+                                    </button>
+                                    <button type="button" data-db-tab-jump="ask" data-db-question-suggestion="What should I do next based on this document?">
+                                        <span>Ask</span><strong>What should I do next?</strong>
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </article>
+                    </section>
+
+                    {% if analysis_experience.get("plan_sections") %}
+                        <section class="db-document-map">
+                            <div class="db-section-title-row">
+                                <div>
+                                    <span class="db-kicker">{{ analysis_experience.get("type_label") }}</span>
+                                    <h2>{{ analysis_experience.get("overview_title") }}</h2>
+                                    <p>Scan the document structure without reading every extracted item.</p>
                                 </div>
 
+                                <button
+                                    type="button"
+                                    class="db-text-button"
+                                    data-db-tab-jump="insights"
+                                >
+                                    Open full details
+                                </button>
                             </div>
 
                             {% if type_workspace.get("metadata", {}).get("source") == "user_override" %}
-
-                                <div class="db-type-override-note">
-                                    <strong>User override applied.</strong>
-                                    LifeOS originally detected
-                                    {{ type_workspace.get("metadata", {}).get("detected_type") or "another type" }},
-                                    then analysed the PDF as
-                                    {{ type_workspace.get("type_label") }}.
-                                </div>
-
-                            {% endif %}
-
-                            <div class="db-type-section-summary">
-
-                                {% for section in type_sections %}
-
-                                    <button
-                                        type="button"
-                                        class="{% if section.get('populated') %}has-content{% endif %}"
-                                        data-db-tab-jump="insights"
-                                        data-db-scroll-target="type-{{ section.get('key') | replace('_', '-') }}"
-                                        {% if not section.get('populated') %}disabled{% endif %}
-                                    >
-                                        <strong>
-                                            {{ section.get("count", 0) }}
-                                        </strong>
-
-                                        <span>
-                                            {{ section.get("label") }}
-                                        </span>
-                                    </button>
-
-                                {% endfor %}
-
-                            </div>
-
-                            {% if populated_type_sections %}
-
-                                <div class="db-type-spotlight-grid">
-
-                                    {% for section in type_workspace.get("spotlight_sections", []) %}
-
-                                        <article>
-                                            <span>
-                                                {{ section.get("label") }}
-                                            </span>
-
-                                            <p>
-                                                {{ section.get("preview") }}
-                                            </p>
-
-                                            <button
-                                                type="button"
-                                                class="db-text-button"
-                                                data-db-tab-jump="insights"
-                                                data-db-scroll-target="type-{{ section.get('key') | replace('_', '-') }}"
-                                            >
-                                                Review section
-                                            </button>
-                                        </article>
-
-                                    {% endfor %}
-
-                                </div>
-
-                            {% else %}
-
-                                <div class="db-type-empty-note">
-                                    <strong>No type-specific findings were supported.</strong>
+                                <div class="db-type-override-note db-type-override-note-clean">
+                                    <strong>Document type changed by you.</strong>
                                     <span>
-                                        The common structured analysis is still available below.
-                                        LifeOS did not invent content just to fill
-                                        {{ type_workspace.get("type_label") }} sections.
+                                        LifeOS analysed this file as {{ type_workspace.get("type_label") }} after your confirmation.
                                     </span>
                                 </div>
-
                             {% endif %}
 
-                        </section>
+                            <div class="db-document-map-grid">
+                                {% for section in analysis_experience.get("plan_sections", []) %}
+                                    <article class="db-document-map-card">
+                                        <button
+                                            type="button"
+                                            class="db-document-map-main"
+                                            data-db-tab-jump="insights"
+                                            data-db-scroll-target="type-{{ section.get('key') | replace('_', '-') }}"
+                                        >
+                                            <span>{{ section.get("label") }}</span>
+                                            <strong>{{ section.get("preview") }}</strong>
+                                            {% if section.get("count", 0) > 1 %}
+                                                <small>{{ section.get("count") - 1 }} more in details</small>
+                                            {% else %}
+                                                <small>Open details</small>
+                                            {% endif %}
+                                        </button>
 
+                                        <div class="db-document-map-verify">
+                                            {{ overview_source(section.get("source")) }}
+                                        </div>
+                                    </article>
+                                {% endfor %}
+                            </div>
+                        </section>
                     {% endif %}
 
-
-                    <div class="db-analysis-counts">
-
-                        <button
-                            type="button"
-                            data-db-tab-jump="insights"
-                            data-db-scroll-target="requirements"
-                        >
-                            <strong>
-                                {{
-                                    insights.get(
-                                        "requirements",
-                                        []
-                                    ) | length
-                                }}
-                            </strong>
-                            <span>Requirements</span>
-                            <small>View extracted needs →</small>
-                        </button>
-
-
-                        <button
-                            type="button"
-                            data-db-tab-jump="insights"
-                            data-db-scroll-target="decisions"
-                        >
-                            <strong>
-                                {{
-                                    insights.get(
-                                        "decisions",
-                                        []
-                                    ) | length
-                                }}
-                            </strong>
-                            <span>Decisions</span>
-                            <small>Review commitments →</small>
-                        </button>
-
-
-                        <button
-                            type="button"
-                            data-db-tab-jump="insights"
-                            data-db-scroll-target="risks"
-                        >
-                            <strong>
-                                {{
-                                    insights.get(
-                                        "risks",
-                                        []
-                                    ) | length
-                                }}
-                            </strong>
-                            <span>Risks</span>
-                            <small>Inspect blockers →</small>
-                        </button>
-
-
-                        <button
-                            type="button"
-                            data-db-tab-jump="actions"
-                        >
-                            <strong>
-                                {% if suggestions %}
-                                    {{ suggestions | length }}
-                                {% else %}
-                                    {{
-                                        insights.get(
-                                            "action_items",
-                                            []
-                                        ) | length
-                                    }}
-                                {% endif %}
-                            </strong>
-                            <span>Suggested actions</span>
-                            <small>Review project work →</small>
-                        </button>
-
-                    </div>
-
-
-                    <div class="db-overview-grid">
-
-                        <article class="db-overview-card">
-
-                            <div class="db-overview-card-heading">
-                                <span class="db-overview-icon">
-                                    K
-                                </span>
-
+                    {% if analysis_experience.get("key_points") %}
+                        <section class="db-takeaway-section">
+                            <div class="db-section-title-row">
                                 <div>
-                                    <h3>Key points</h3>
-                                    <p>
-                                        The most important ideas detected
-                                        across the document.
-                                    </p>
+                                    <span class="db-kicker">Keep in mind</span>
+                                    <h2>Key takeaways</h2>
                                 </div>
-                            </div>
-
-
-                            {% if insights.get("key_points") %}
-
-                                <ul class="db-overview-list">
-
-                                    {% for item in
-                                        insights.get(
-                                            "key_points",
-                                            []
-                                        )[:4]
-                                    %}
-
-                                        <li>
-                                            {{ item.get("title") }}
-                                        </li>
-
-                                    {% endfor %}
-
-                                </ul>
-
                                 <button
                                     type="button"
                                     class="db-text-button"
                                     data-db-tab-jump="insights"
                                     data-db-scroll-target="key-points"
                                 >
-                                    View all key points
+                                    View all details
                                 </button>
-
-                            {% else %}
-
-                                <p class="db-muted-copy">
-                                    No key points were returned in the
-                                    current analysis.
-                                </p>
-
-                            {% endif %}
-
-                        </article>
-
-
-                        <article class="db-overview-card">
-
-                            <div class="db-overview-card-heading">
-                                <span class="db-overview-icon">
-                                    ?
-                                </span>
-
-                                <div>
-                                    <h3>Missing information</h3>
-                                    <p>
-                                        Questions that may need clarification
-                                        before work continues.
-                                    </p>
-                                </div>
                             </div>
 
-
-                            {% if insights.get("missing_information") %}
-
-                                <ul class="db-overview-list">
-
-                                    {% for item in
-                                        insights.get(
-                                            "missing_information",
-                                            []
-                                        )[:4]
-                                    %}
-
-                                        <li>
-                                            {{ item.get("question") }}
-                                        </li>
-
-                                    {% endfor %}
-
-                                </ul>
-
-                                <button
-                                    type="button"
-                                    class="db-text-button"
-                                    data-db-tab-jump="insights"
-                                    data-db-scroll-target="missing-information"
-                                >
-                                    Review open questions
-                                </button>
-
-                            {% else %}
-
-                                <p class="db-muted-copy">
-                                    LifeOS did not identify major missing
-                                    information in this analysis.
-                                </p>
-
-                            {% endif %}
-
-                        </article>
-
-
-                        <article class="db-overview-card">
-
-                            <div class="db-overview-card-heading">
-                                <span class="db-overview-icon">
-                                    Q
-                                </span>
-
-                                <div>
-                                    <h3>Questions to explore</h3>
-                                    <p>
-                                        Grounded questions that can help you
-                                        inspect the document in more detail.
-                                    </p>
-                                </div>
+                            <div class="db-takeaway-grid">
+                                {% for item in analysis_experience.get("key_points", []) %}
+                                    <article>
+                                        <span>{{ loop.index }}</span>
+                                        <div class="db-takeaway-copy">
+                                            <strong>{{ item.get("title") }}</strong>
+                                            {% if item.get("detail") %}<p>{{ item.get("detail") }}</p>{% endif %}
+                                            {{ overview_source(item.get("source")) }}
+                                        </div>
+                                    </article>
+                                {% endfor %}
                             </div>
-
-
-                            {% if insights.get("questions") %}
-
-                                <ul class="db-overview-list">
-
-                                    {% for item in
-                                        insights.get(
-                                            "questions",
-                                            []
-                                        )[:4]
-                                    %}
-
-                                        <li>
-                                            {{ item.get("question") }}
-                                        </li>
-
-                                    {% endfor %}
-
-                                </ul>
-
-                                <button
-                                    type="button"
-                                    class="db-text-button"
-                                    data-db-tab-jump="insights"
-                                    data-db-scroll-target="questions-to-explore"
-                                >
-                                    View exploration questions
-                                </button>
-
-                            {% else %}
-
-                                <p class="db-muted-copy">
-                                    No grounded exploration questions were
-                                    returned in the current analysis.
-                                </p>
-
-                            {% endif %}
-
-                        </article>
-
-                    </div>
+                        </section>
+                    {% endif %}
 
                 {% else %}
 
                     <div class="db-empty-state db-analysis-empty">
-
-                        <span class="db-empty-icon">
-                            AI
-                        </span>
-
+                        <span class="db-empty-icon">AI</span>
                         <div>
                             <h2>
                                 {% if document.extracted_text %}
-                                    This PDF is ready for analysis
+                                    Understand this document
                                 {% else %}
-                                    Readable text is required
+                                    Readable PDF text is required
                                 {% endif %}
                             </h2>
 
                             <p>
                                 {% if document.extracted_text %}
-                                    First let LifeOS identify the document
-                                    type. You can confirm or change it before
-                                    the full structured analysis begins.
+                                    First let LifeOS identify the document type. You can confirm or change it before the full structured analysis begins.
                                 {% else %}
-                                    LifeOS stored the document safely, but
-                                    could not extract readable embedded text.
-                                    A scanned PDF may require OCR.
+                                    LifeOS stored the document safely, but could not extract readable embedded text. A scanned PDF may require OCR.
                                 {% endif %}
                             </p>
 
                             {% if document.extracted_text %}
-
                                 {% if type_detection %}
-
-                                    <button
-                                        type="button"
-                                        class="workspace-primary-button"
-                                        data-db-type-review
-                                    >
+                                    <button type="button" class="workspace-primary-button" data-db-type-review>
                                         Review detected type
                                     </button>
-
                                 {% else %}
-
                                     <form
                                         method="POST"
-                                        action="{{ url_for(
-                                            'document_bp.detect_document_type_route',
-                                            document_id=document.id
-                                        ) }}"
+                                        action="{{ url_for('document_bp.detect_document_type_route', document_id=document.id) }}"
                                         data-loading-title="Detecting document type"
                                         data-loading-message="LifeOS is identifying the document purpose..."
                                         data-db-inline-loading
                                     >
-
-                                        <input
-                                            type="hidden"
-                                            name="csrf_token"
-                                            value="{{ csrf_token() }}"
-                                        >
-
-                                        <button
-                                            type="submit"
-                                            class="workspace-primary-button"
-                                        >
-                                            Detect document type
-                                        </button>
-
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="workspace-primary-button">Detect document type</button>
                                     </form>
-
                                 {% endif %}
-
                             {% endif %}
                         </div>
-
                     </div>
 
                 {% endif %}
@@ -1591,14 +1439,13 @@
 
                     <div>
                         <span class="db-kicker">
-                            Structured understanding
+                            Grounded details
                         </span>
 
-                        <h2>Document insights</h2>
+                        <h2>Full analysis</h2>
 
                         <p>
-                            Each insight remains linked to the page and
-                            evidence supplied by the analysis.
+                            Everything extracted by the analysis stays here with its supporting source.
                         </p>
                     </div>
 
@@ -1636,21 +1483,17 @@
 
                             <div class="db-type-insights-banner">
                                 <div>
-                                    <span class="db-kicker">Adaptive workspace</span>
+                                    <span class="db-kicker">Document-specific details</span>
                                     <h3>
-                                        {{ type_workspace.get("type_label") }} analysis
+                                        {{ type_workspace.get("type_label") }} details
                                     </h3>
                                     <p>
-                                        These sections are specific to this document type.
-                                        Common LifeOS insights continue underneath.
+                                        These sections match the structure of this document type. Open only what you need.
                                     </p>
                                 </div>
 
                                 <span>
-                                    {{ type_workspace.get("populated_section_count", 0) }}
-                                    of
-                                    {{ type_workspace.get("total_section_count", 0) }}
-                                    specialized sections populated
+                                    Source-backed sections
                                 </span>
                             </div>
 

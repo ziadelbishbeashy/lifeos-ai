@@ -218,7 +218,10 @@ def test_document_details_renders_tabs_and_grounded_history(
     assert "data-db-copy-target" in page
     assert "Focused excerpt" in page
     assert "Project data remains private." in page
-    assert "Structured sections" in page
+    assert "Needs your attention" in page
+    assert "Recommended next actions" in page
+    assert "Verify" in page
+    assert "Verify against document" in page
     assert "Questions to explore" in page
     assert "Which privacy controls are required?" in page
 

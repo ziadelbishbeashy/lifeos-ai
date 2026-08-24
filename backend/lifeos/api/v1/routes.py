@@ -54,8 +54,14 @@ def meta():
             "api_version": "v1",
             "preferred_database": "postgresql",
             "legacy_web_enabled": True,
+            "legacy_web_role": "compatibility-only-not-used-by-react",
             "frontend_migration": "react-ui-parity-complete",
-            "native_frontend_slices": ["projects"],
+            "frontend_architecture": "react-native-full-separation",
+            "native_frontend_slices": [
+                "auth", "dashboard", "projects", "tasks", "notes", "focus",
+                "analytics", "notifications", "documents", "document-analysis",
+                "document-qa", "project-rag", "comparisons", "versions"
+            ],
         }
     )
 
