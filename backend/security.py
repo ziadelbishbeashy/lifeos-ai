@@ -48,6 +48,7 @@ def init_security(app) -> None:
         # Avoid storing private workspace pages in shared browser caches.
         if request.path.startswith(
             (
+                "/api/",
                 "/dashboard",
                 "/projects",
                 "/tasks",

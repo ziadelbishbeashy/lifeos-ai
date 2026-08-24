@@ -1,18 +1,34 @@
-"""Versioned JSON API boundary for the React migration.
+"""Versioned JSON API boundary used by the React frontend.
 
-Foundation V2 deliberately starts with read-only endpoints. Mutating endpoints
-should be added domain-by-domain with explicit validation, CSRF/auth strategy,
-and contract tests instead of exposing legacy route internals directly.
+Phase 1 exposes authentication/session state and the dashboard while keeping
+all business rules in existing services. The legacy Jinja UI remains available
+as a reference implementation until React reaches feature parity.
 """
 
 from __future__ import annotations
 
 from functools import wraps
 
-from flask import Blueprint, jsonify
-from flask_login import current_user
+from flask import Blueprint, current_app, jsonify, request
+from flask_login import current_user, login_user, logout_user
+from flask_wtf.csrf import generate_csrf
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import Project
+from services.auth_service import (
+    AccountCreationError,
+    DuplicateEmailError,
+    authenticate_user,
+    build_registration_input,
+    claim_legacy_projects,
+    create_user,
+    normalize_email,
+    validate_registration,
+)
+from services.dashboard_service import (
+    build_dashboard_context,
+    serialize_dashboard_context,
+)
 from services.document_access_service import list_owned_documents
 
 
@@ -20,12 +36,33 @@ api_v1_bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
 
 def api_auth_required(view):
+    """Return JSON 401s instead of Flask-Login redirects for API requests."""
+
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not current_user.is_authenticated:
-            return jsonify({"error": "authentication_required"}), 401
+            return jsonify(
+                {
+                    "error": "authentication_required",
+                    "message": "Please log in to continue.",
+                }
+            ), 401
         return view(*args, **kwargs)
+
     return wrapped
+
+
+def _json_body() -> dict:
+    payload = request.get_json(silent=True)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _user_payload(user) -> dict:
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+    }
 
 
 @api_v1_bp.get("/health")
@@ -42,9 +79,16 @@ def meta():
             "api_version": "v1",
             "preferred_database": "postgresql",
             "legacy_web_enabled": True,
-            "frontend_migration": "incremental",
+            "frontend_migration": "phase-1-auth-dashboard",
         }
     )
+
+
+@api_v1_bp.get("/csrf")
+def csrf_token():
+    """Issue the CSRF token React must send with unsafe API requests."""
+
+    return jsonify({"csrf_token": generate_csrf()})
 
 
 @api_v1_bp.get("/session")
@@ -55,13 +99,121 @@ def session_state():
     return jsonify(
         {
             "authenticated": True,
-            "user": {
-                "id": current_user.id,
-                "name": current_user.name,
-                "email": current_user.email,
-            },
+            "user": _user_payload(current_user),
         }
     )
+
+
+@api_v1_bp.post("/auth/login")
+def login():
+    if current_user.is_authenticated:
+        return jsonify(
+            {
+                "authenticated": True,
+                "user": _user_payload(current_user),
+            }
+        )
+
+    payload = _json_body()
+    email = normalize_email(payload.get("email"))
+    password = str(payload.get("password") or "")
+    remember = payload.get("remember") is True
+
+    user = authenticate_user(email, password)
+    if user is None:
+        return jsonify(
+            {
+                "error": "invalid_credentials",
+                "message": "Incorrect email or password.",
+            }
+        ), 401
+
+    try:
+        claim_legacy_projects(user)
+    except SQLAlchemyError:
+        current_app.logger.exception(
+            "LifeOS could not claim legacy projects during API login."
+        )
+
+    login_user(user, remember=remember)
+
+    return jsonify(
+        {
+            "authenticated": True,
+            "user": _user_payload(user),
+        }
+    )
+
+
+@api_v1_bp.post("/auth/register")
+def register():
+    if current_user.is_authenticated:
+        return jsonify(
+            {
+                "authenticated": True,
+                "user": _user_payload(current_user),
+            }
+        )
+
+    payload = _json_body()
+    registration = build_registration_input(
+        name=payload.get("name"),
+        email=payload.get("email"),
+        password=payload.get("password"),
+        confirm_password=payload.get("confirm_password"),
+    )
+
+    validation_message = validate_registration(registration)
+    if validation_message:
+        return jsonify(
+            {
+                "error": "validation_error",
+                "message": validation_message,
+            }
+        ), 400
+
+    try:
+        user = create_user(registration)
+    except DuplicateEmailError:
+        return jsonify(
+            {
+                "error": "duplicate_email",
+                "message": "An account with this email already exists.",
+            }
+        ), 409
+    except AccountCreationError:
+        current_app.logger.exception(
+            "LifeOS could not create a user account through API v1."
+        )
+        return jsonify(
+            {
+                "error": "account_creation_failed",
+                "message": "The account could not be created.",
+            }
+        ), 500
+
+    login_user(user)
+
+    return jsonify(
+        {
+            "authenticated": True,
+            "user": _user_payload(user),
+        }
+    ), 201
+
+
+@api_v1_bp.post("/auth/logout")
+@api_auth_required
+def logout():
+    logout_user()
+    return jsonify({"authenticated": False, "user": None})
+
+
+@api_v1_bp.get("/dashboard")
+@api_auth_required
+def dashboard():
+    context = build_dashboard_context(current_user.id)
+    return jsonify(serialize_dashboard_context(context))
 
 
 @api_v1_bp.get("/projects")
@@ -82,7 +234,11 @@ def projects():
                     "status": row.status,
                     "priority": row.priority,
                     "progress": row.progress,
-                    "deadline": row.deadline.isoformat() if row.deadline else None,
+                    "deadline": (
+                        row.deadline.isoformat()
+                        if row.deadline
+                        else None
+                    ),
                 }
                 for row in rows
             ]
@@ -103,7 +259,11 @@ def documents():
                     "filename": row.filename,
                     "version_label": row.version_label,
                     "is_current_version": bool(row.is_current_version),
-                    "uploaded_at": row.uploaded_at.isoformat() if row.uploaded_at else None,
+                    "uploaded_at": (
+                        row.uploaded_at.isoformat()
+                        if row.uploaded_at
+                        else None
+                    ),
                 }
                 for row in rows
             ]
