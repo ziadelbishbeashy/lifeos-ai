@@ -1,0 +1,477 @@
+/*
+ * Small React-only component rules that used to live in the obsolete
+ * Phase-2 global.css.  They intentionally do NOT define the application
+ * shell, dashboard grid, public shell, or any legacy page-level layout.
+ */
+.studio-theme {
+    --react-muted: var(--studio-text-soft);
+    --react-soft: var(--studio-text);
+    --react-accent: var(--studio-primary);
+    --react-green: var(--studio-mint);
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.progress-block {
+    display: grid;
+    gap: 8px;
+}
+
+.progress-block > div:first-child {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.progress-block span {
+    color: var(--react-muted);
+    font-size: 11px;
+}
+
+.progress-block strong {
+    font-size: 12px;
+}
+
+.mini-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.mini-metric-grid.two-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mini-metric-grid > div {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--studio-border);
+    border-radius: 11px;
+    background: var(--studio-surface-soft);
+    display: grid;
+    gap: 4px;
+}
+
+.mini-metric-grid span {
+    color: var(--react-muted);
+    font-size: 10px;
+}
+
+.mini-metric-grid strong {
+    font-size: 15px;
+}
+
+.next-action {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(124, 114, 242, 0.18);
+    border-radius: 11px;
+    background: var(--studio-primary-soft);
+}
+
+.next-action span {
+    color: var(--studio-primary);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.next-action strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+}
+
+.next-action.muted {
+    border-color: var(--studio-border);
+    background: var(--studio-surface-soft);
+}
+
+.empty-workspace {
+    min-height: 120px;
+    padding: 24px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 6px;
+    text-align: center;
+    color: var(--react-muted);
+}
+
+.empty-workspace strong {
+    color: var(--react-soft);
+}
+
+.compact-empty {
+    min-height: 90px;
+    padding: 14px;
+}
+
+.workspace-editor {
+    padding: 20px;
+}
+
+.form-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.form-grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-grid.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.filter-bar {
+    padding: 12px;
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.filter-bar label {
+    min-width: 180px;
+    display: grid;
+    gap: 5px;
+}
+
+.filter-bar label span,
+.filter-count,
+.task-deadline,
+.breadcrumbs,
+.signal-copy {
+    color: var(--react-muted);
+}
+
+.filter-bar label span {
+    font-size: 10px;
+}
+
+.filter-bar select {
+    padding: 9px 10px;
+}
+
+.filter-count {
+    margin-left: auto;
+    padding: 8px;
+    font-size: 11px;
+}
+
+.task-table {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.task-table.embedded {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.task-line {
+    display: grid;
+    grid-template-columns: auto minmax(210px, 1fr) auto auto auto auto;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 66px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--studio-border);
+}
+
+.task-line:last-child {
+    border-bottom: 0;
+}
+
+.task-line.completed {
+    opacity: 0.62;
+}
+
+.task-line.completed .task-line-main strong {
+    text-decoration: line-through;
+}
+
+.complete-button {
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--studio-border);
+    border-radius: 9px;
+    background: var(--studio-surface-soft);
+    color: var(--react-green);
+    cursor: pointer;
+    font-weight: 900;
+}
+
+.task-line-main {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.task-line-main strong,
+.task-line-main span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-line-main strong {
+    font-size: 13px;
+}
+
+.task-line-main span,
+.task-deadline {
+    font-size: 11px;
+}
+
+.task-line-main a,
+.breadcrumbs a {
+    color: var(--studio-primary);
+}
+
+.row-actions,
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.breadcrumbs {
+    flex-wrap: wrap;
+    font-size: 11px;
+}
+
+.breadcrumbs a,
+.breadcrumbs strong {
+    font-weight: 800;
+}
+
+.breadcrumbs strong {
+    color: var(--react-soft);
+}
+
+.project-detail-header {
+    align-items: center;
+}
+
+.project-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.project-info-panel,
+.project-section {
+    min-width: 0;
+    padding: 20px;
+}
+
+.detail-list {
+    margin: 0;
+    display: grid;
+    gap: 0;
+}
+
+.detail-list > div {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 12px;
+    min-width: 0;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--studio-border);
+}
+
+.detail-list dt {
+    color: var(--react-muted);
+    font-size: 11px;
+}
+
+.detail-list dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+}
+
+.signal-copy {
+    margin: 14px 0 0;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.nested-editor {
+    min-width: 0;
+    margin: 0 0 16px;
+    padding: 14px;
+    border: 1px solid var(--studio-border);
+    border-radius: 13px;
+    background: var(--studio-surface-soft);
+}
+
+.simple-resource-list {
+    min-width: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.simple-resource-list > div {
+    min-width: 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--studio-border);
+}
+
+.simple-resource-list > div:last-child {
+    border-bottom: 0;
+}
+
+.simple-resource-list strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.simple-resource-list span {
+    flex: 0 0 auto;
+    color: var(--react-muted);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.advanced-task-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.advanced-task-box {
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    display: grid;
+    gap: 12px;
+    border: 1px solid var(--studio-border);
+    border-radius: 12px;
+    background: var(--studio-surface-soft);
+}
+
+.advanced-task-box legend {
+    padding: 0 6px;
+    color: var(--react-soft);
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.text-link,
+.text-link-button {
+    color: var(--studio-primary);
+    font-size: 11px;
+    font-weight: 760;
+    text-decoration: none;
+}
+
+.text-link-button {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.text-link:hover,
+.text-link-button:hover {
+    color: var(--app-primary-light);
+}
+
+.projects-panel,
+.deadlines-panel {
+    min-width: 0;
+}
+
+@media (max-width: 1100px) {
+    .project-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .task-line {
+        grid-template-columns: auto minmax(180px, 1fr) auto auto;
+    }
+
+    .task-line .task-deadline {
+        display: none;
+    }
+
+    .task-line .row-actions {
+        grid-column: 2 / -1;
+    }
+}
+
+@media (max-width: 900px) {
+    .advanced-task-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .form-grid.two,
+    .form-grid.three,
+    .mini-metric-grid,
+    .mini-metric-grid.two-col {
+        grid-template-columns: 1fr;
+    }
+
+    .task-line {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .task-line .row-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+    }
+
+    .filter-count {
+        margin-left: 0;
+    }
+
+    .simple-resource-list > div {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .simple-resource-list span {
+        white-space: normal;
+    }
+}
+
+/* Focus Studio: keep API errors visible without disturbing the original calm layout. */
+.focus-inline-error {
+    max-width: min(620px, 100%);
+    margin: 0 auto 14px;
+    padding: 10px 14px;
+    border: 1px solid color-mix(in srgb, #b45353 28%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, #b45353 9%, transparent);
+    color: #8f4040;
+    font-size: .76rem;
+    line-height: 1.45;
+}
+html[data-theme="dark"] .focus-inline-error {
+    color: #f0b2b2;
+}

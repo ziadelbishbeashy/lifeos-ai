@@ -51,7 +51,14 @@ def focus_state():
 @focus_api_bp.get("/insights")
 @api_auth_required
 def focus_insights():
-    return jsonify(json_safe(get_focus_insights(current_user.id)))
+    data = get_focus_insights(current_user.id)
+    recent_sessions = data.pop("recent_sessions", [])
+    payload = json_safe(data)
+    payload["recent_sessions"] = [
+        serialize_focus_session(session)
+        for session in recent_sessions
+    ]
+    return jsonify(payload)
 
 
 @focus_api_bp.post("/start")

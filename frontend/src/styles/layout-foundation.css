@@ -1,0 +1,333 @@
+/*
+ * LifeOS layout contract for the separated React frontend.
+ *
+ * This file is deliberately loaded LAST.  It fixes the one structural rule
+ * that broke the whole site during visual-parity restoration: the obsolete
+ * Phase-2 CSS made .app-shell a CSS grid while the original LifeOS shell uses
+ * a fixed sidebar plus a margin-offset main canvas.  Mixing both systems
+ * double-counted the sidebar and collapsed every page into a narrow column.
+ *
+ * Keep page-specific visual styling in the original LifeOS stylesheets.  This
+ * file only owns geometry, min-width safety, and responsive grid fallbacks.
+ */
+
+html,
+body,
+#root,
+.app-shell {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+}
+
+body.app-body,
+#root,
+.app-shell {
+    overflow-x: clip;
+}
+
+/* ----- Canonical desktop application shell ----- */
+.app-shell {
+    display: block !important;
+    position: relative;
+    min-height: 100vh;
+}
+
+.app-sidebar {
+    width: 280px;
+    max-width: 280px;
+}
+
+.app-main {
+    width: calc(100% - 280px) !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 100vh;
+    margin-left: 280px !important;
+}
+
+.app-topbar {
+    width: 100%;
+    min-width: 0;
+}
+
+.app-content {
+    width: 100% !important;
+    max-width: 1540px;
+    min-width: 0 !important;
+    margin-inline: auto !important;
+}
+
+.app-content > * {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* Every page root must fill the React canvas instead of sizing to content. */
+.dashboard-page,
+.projects-page,
+.project-studio-index,
+.project-workspace-page,
+.task-center-page,
+.notes-studio-page,
+.note-workspace-page,
+.analytics-page,
+.workspace-page,
+.document-native,
+.focus-native,
+.notification-settings-page,
+.notification-history-page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* Grid/flex children are allowed to shrink without shrinking the grid itself. */
+.dashboard-hero > *,
+.dashboard-stat-grid > *,
+.dashboard-main-grid > *,
+.dashboard-secondary-grid > *,
+.project-summary-grid > *,
+.project-studio-grid > *,
+.project-detail-grid > *,
+.project-form-grid > *,
+.professional-task-list > *,
+.task-filter-panel > *,
+.analytics-summary-grid > *,
+.analytics-grid > *,
+.analytics-insight-grid > *,
+.studio-note-grid > *,
+.db-upload-grid > *,
+.db-document-grid > *,
+.native-card-grid > *,
+.attention-grid > *,
+.action-grid > *,
+.takeaway-grid > *,
+.document-grid > *,
+.plan-section-grid > *,
+.settings-toggle-grid > *,
+.advanced-task-grid > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* ----- Dashboard: preserve the original LifeOS proportions ----- */
+.dashboard-hero {
+    width: 100%;
+    grid-template-columns: minmax(0, 1.2fr) minmax(330px, 0.72fr);
+}
+
+.dashboard-stat-grid {
+    width: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-main-grid {
+    width: 100%;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.78fr);
+}
+
+.dashboard-secondary-grid {
+    width: 100%;
+    grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+}
+
+/* ----- Projects/tasks ----- */
+.project-summary-grid {
+    width: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.project-studio-grid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-form-grid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.task-filter-panel {
+    width: 100%;
+    grid-template-columns: minmax(250px, 1fr) repeat(3, minmax(130px, 150px)) auto;
+}
+
+.professional-task-list,
+.professional-task-card {
+    width: 100%;
+    min-width: 0;
+}
+
+/* ----- Notes / analytics / Document Brain ----- */
+.studio-note-grid {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.analytics-summary-grid {
+    width: 100%;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.analytics-grid-primary {
+    width: 100%;
+    grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.8fr);
+}
+
+.analytics-grid-secondary,
+.analytics-insight-grid {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.db-upload-grid {
+    width: 100%;
+    grid-template-columns: minmax(240px, 0.62fr) minmax(340px, 1.38fr);
+}
+
+.db-document-grid:not([data-view="list"]) {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Long content must wrap inside its card rather than forcing columns wider. */
+.dashboard-hero-copy,
+.hero-execution-card,
+.dashboard-panel,
+.dashboard-stat-card,
+.professional-project-card,
+.professional-task-card,
+.project-summary-item,
+.workspace-content-card,
+.panel-card,
+.analytics-panel,
+.db-document-card,
+.document-mini-card,
+.attention-card,
+.action-card,
+.takeaway-card,
+.project-info-panel,
+.project-section {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ----- Responsive contract ----- */
+@media (max-width: 1240px) {
+    .dashboard-stat-grid,
+    .project-summary-grid,
+    .analytics-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-main-grid,
+    .dashboard-secondary-grid,
+    .analytics-grid-primary {
+        grid-template-columns: 1fr;
+    }
+
+    .analytics-grid-secondary,
+    .analytics-insight-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1180px) {
+    .studio-note-grid,
+    .db-document-grid:not([data-view="list"]) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .task-filter-panel {
+        grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(130px, 1fr));
+    }
+
+    .task-filter-panel > :nth-last-child(-n + 2) {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 1100px) {
+    .dashboard-hero,
+    .db-upload-grid,
+    .project-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .project-studio-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 980px) {
+    .app-sidebar {
+        width: min(88vw, 310px);
+        max-width: min(88vw, 310px);
+    }
+
+    .app-main {
+        width: 100% !important;
+        margin-left: 0 !important;
+    }
+
+    .app-content {
+        max-width: none;
+    }
+}
+
+@media (max-width: 760px) {
+    .dashboard-stat-grid,
+    .project-summary-grid,
+    .studio-note-grid,
+    .db-document-grid:not([data-view="list"]),
+    .analytics-summary-grid,
+    .analytics-grid-secondary,
+    .analytics-insight-grid,
+    .project-form-grid,
+    .native-form-grid,
+    .advanced-task-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .task-filter-panel {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-hero,
+    .dashboard-main-grid,
+    .dashboard-secondary-grid,
+    .db-upload-grid,
+    .analytics-grid-primary {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-list > div {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+}
+
+/* Frontend runtime safety: a page-level React failure must never become a blank workspace. */
+.frontend-error-card {
+  max-width: 760px;
+  margin: 48px auto;
+  padding: 28px;
+  border: 1px solid var(--border-color, rgba(148, 163, 184, 0.18));
+  border-radius: 20px;
+  background: var(--surface-color, rgba(24, 29, 49, 0.92));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.16);
+}
+.frontend-error-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--accent-color, #8b7cff);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.frontend-error-card h2 { margin: 0 0 10px; }
+.frontend-error-card p { margin: 0; max-width: 62ch; opacity: 0.78; }
+.frontend-error-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }

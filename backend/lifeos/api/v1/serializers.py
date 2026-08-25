@@ -191,11 +191,20 @@ def serialize_focus_session(session) -> dict[str, Any] | None:
     if session is None:
         return None
     task = getattr(session, "task", None)
+    task_project = getattr(task, "project", None) if task is not None else None
     return {
         "id": session.id,
         "task_id": session.task_id,
         "task": (
-            {"id": task.id, "title": task.title}
+            {
+                "id": task.id,
+                "title": task.title,
+                "project": (
+                    {"id": task_project.id, "title": task_project.title}
+                    if task_project is not None
+                    else None
+                ),
+            }
             if task is not None
             else None
         ),

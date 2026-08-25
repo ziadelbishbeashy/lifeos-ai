@@ -1,119 +1,24 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
+import { useMemo,useState } from "react";
 import { ApiError } from "../api/client";
 import type { Task } from "../api/types";
 import { TaskForm } from "../features/tasks/TaskForm";
-import { createTask, deleteTask, fetchTasks, taskKeys, toggleTask, updateTask } from "../features/tasks/api";
+import { createTask,deleteTask,fetchTasks,taskKeys,toggleTask,updateTask } from "../features/tasks/api";
 import { projectKeys } from "../features/projects/api";
 
-export function TasksPage() {
-  const queryClient = useQueryClient();
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<Task | null>(null);
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [scopeFilter, setScopeFilter] = useState("all");
-  const [error, setError] = useState<string | null>(null);
-
-  const tasks = useQuery({ queryKey: taskKeys.all, queryFn: fetchTasks });
-
-  const refresh = async (projectId?: number | null) => {
-    const promises = [
-      queryClient.invalidateQueries({ queryKey: taskKeys.all }),
-      queryClient.invalidateQueries({ queryKey: projectKeys.all }),
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-    ];
-    if (projectId) promises.push(queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) }));
-    await Promise.all(promises);
-  };
-
-  const createMutation = useMutation({
-    mutationFn: createTask,
-    onSuccess: async (result) => { setCreating(false); setError(null); await refresh(result.item.project_id); },
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "The task could not be created."),
-  });
-  const updateMutation = useMutation({
-    mutationFn: ({ id, input }: { id: number; input: Parameters<typeof updateTask>[1] }) => updateTask(id, input),
-    onSuccess: async (result) => { setEditing(null); setError(null); await refresh(result.item.project_id); },
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "The task could not be updated."),
-  });
-  const toggleMutation = useMutation({ mutationFn: toggleTask, onSuccess: (result) => refresh(result.item.project_id) });
-  const deleteMutation = useMutation({ mutationFn: deleteTask, onSuccess: (result) => refresh(result.project_id) });
-
-  const filtered = useMemo(() => {
-    if (!tasks.data) return [];
-    return tasks.data.items.filter((task) => {
-      if (statusFilter !== "all" && task.status !== statusFilter) return false;
-      if (scopeFilter === "general" && task.project_id !== null) return false;
-      if (scopeFilter === "project" && task.project_id === null) return false;
-      return true;
-    });
-  }, [tasks.data, statusFilter, scopeFilter]);
-
-  if (tasks.isPending) return <TaskPageState text="Loading task workspace…" />;
-  if (tasks.isError || !tasks.data) return <TaskPageState text="Task API unavailable." error retry={() => tasks.refetch()} />;
-
-  const data = tasks.data;
-  return (
-    <section className="workspace-page">
-      <div className="workspace-page-header">
-        <div><span className="eyebrow">Execution center</span><h1>Tasks</h1><p>Manage general and project work through the shared LifeOS task service.</p></div>
-        <button className="primary-button" onClick={() => { setCreating((value) => !value); setEditing(null); setError(null); }}>{creating ? "Close form" : "+ Add Task"}</button>
-      </div>
-
-      <div className="summary-strip">
-        <Summary label="All" value={data.counts.total} />
-        <Summary label="In progress" value={data.counts.in_progress} />
-        <Summary label="Blocked" value={data.counts.blocked} />
-        <Summary label="Overdue" value={data.counts.overdue} />
-      </div>
-
-      {(creating || editing) ? (
-        <article className="panel-card workspace-editor">
-          <div className="section-heading"><div><span className="panel-kicker">Task editor</span><h2>{editing ? "Edit task" : "Create task"}</h2></div></div>
-          {error ? <div className="form-alert error">{error}</div> : null}
-          <TaskForm
-            key={editing?.id ?? "new"}
-            projects={data.projects}
-            initial={editing}
-            submitLabel={editing ? "Save changes" : "Create task"}
-            busy={createMutation.isPending || updateMutation.isPending}
-            onCancel={() => { setCreating(false); setEditing(null); setError(null); }}
-            onSubmit={(input) => editing
-              ? updateMutation.mutateAsync({ id: editing.id, input }).then(() => undefined)
-              : createMutation.mutateAsync(input).then(() => undefined)}
-          />
-        </article>
-      ) : null}
-
-      <div className="filter-bar panel-card">
-        <label><span>Status</span><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">All statuses</option><option>Pending</option><option>In Progress</option><option>Blocked</option><option>Completed</option></select></label>
-        <label><span>Scope</span><select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)}><option value="all">All work</option><option value="general">General</option><option value="project">Project tasks</option></select></label>
-        <span className="filter-count">{filtered.length} shown</span>
-      </div>
-
-      <div className="task-table panel-card">
-        {filtered.length ? filtered.map((task) => (
-          <div className={`task-line ${task.status === "Completed" ? "completed" : ""}`} key={task.id}>
-            <button className="complete-button" title="Toggle completion" onClick={() => toggleMutation.mutate(task.id)}>{task.status === "Completed" ? "✓" : "○"}</button>
-            <div className="task-line-main">
-              <strong>{task.title}</strong>
-              <span>{task.project ? <a href={`/projects/${task.project.id}`}>{task.project.title}</a> : "General workspace"}{task.module ? ` · ${task.module}` : ""}</span>
-            </div>
-            <span className="status-pill">{task.status}</span>
-            <span className="importance-pill">{task.importance}</span>
-            <span className="task-deadline">{task.deadline || "No deadline"}</span>
-            <div className="row-actions">
-              <button className="secondary-button compact" onClick={() => { setEditing(task); setCreating(false); setError(null); }}>Edit</button>
-              <button className="danger-button" onClick={() => { if (window.confirm(`Delete “${task.title}”?`)) deleteMutation.mutate(task.id); }}>Delete</button>
-            </div>
-          </div>
-        )) : <div className="empty-workspace"><strong>No tasks match these filters</strong><span>Change the filters or create a task.</span></div>}
-      </div>
-    </section>
-  );
-}
-
-function Summary({ label, value }: { label: string; value: number }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
-function TaskPageState({ text, error, retry }: { text: string; error?: boolean; retry?: () => void }) {
-  return <section><div className={`page-state panel-card ${error ? "error-state" : ""}`}>{!error ? <div className="spinner" /> : null}<div><strong>{error ? "Tasks unavailable" : "Loading"}</strong><span>{text}</span></div>{retry ? <button className="secondary-button" onClick={retry}>Try again</button> : null}</div></section>;
-}
+function slug(v:string){return v.toLowerCase().replace(/\s+/g,"-")}
+export function TasksPage(){
+ const qc=useQueryClient();const [creating,setCreating]=useState(false),[editing,setEditing]=useState<Task|null>(null),[search,setSearch]=useState(""),[status,setStatus]=useState("all"),[importance,setImportance]=useState("all"),[scope,setScope]=useState("all"),[project,setProject]=useState("all"),[error,setError]=useState<string|null>(null);const q=useQuery({queryKey:taskKeys.all,queryFn:fetchTasks});
+ const refresh=async(pid?:number|null)=>{const p=[qc.invalidateQueries({queryKey:taskKeys.all}),qc.invalidateQueries({queryKey:projectKeys.all}),qc.invalidateQueries({queryKey:["dashboard"]})];if(pid)p.push(qc.invalidateQueries({queryKey:projectKeys.detail(pid)}));await Promise.all(p)};
+ const create=useMutation({mutationFn:createTask,onSuccess:async r=>{setCreating(false);setError(null);await refresh(r.item.project_id)},onError:e=>setError(e instanceof ApiError?e.message:"The task could not be created.")});
+ const update=useMutation({mutationFn:({id,input}:{id:number;input:Parameters<typeof updateTask>[1]})=>updateTask(id,input),onSuccess:async r=>{setEditing(null);setError(null);await refresh(r.item.project_id)},onError:e=>setError(e instanceof ApiError?e.message:"The task could not be updated.")});
+ const toggle=useMutation({mutationFn:toggleTask,onSuccess:r=>refresh(r.item.project_id)});const del=useMutation({mutationFn:deleteTask,onSuccess:r=>refresh(r.project_id)});
+ const filtered=useMemo(()=>{if(!q.data)return[];const n=search.trim().toLowerCase();return q.data.items.filter(t=>{const h=[t.title,t.description,t.module,t.tags,t.project?.title].filter(Boolean).join(" ").toLowerCase();if(n&&!h.includes(n))return false;if(status==="recurring"&&!t.is_recurring)return false;if(status!=="all"&&status!=="recurring"&&t.status.toLowerCase()!==status)return false;if(importance!=="all"&&t.importance.toLowerCase()!==importance)return false;if(scope==="general"&&t.project_id!==null)return false;if(scope==="project"&&t.project_id===null)return false;if(project==="general"&&t.project_id!==null)return false;if(project!=="all"&&project!=="general"&&String(t.project_id)!==project)return false;return true})},[q.data,search,status,importance,scope,project]);
+ if(q.isPending)return <div className="professional-task-empty-state"><span className="empty-task-symbol">…</span><h3>Opening tasks</h3><p>Loading all workspace tasks…</p></div>;if(q.isError||!q.data)return <div className="professional-task-empty-state"><span className="empty-task-symbol">!</span><h3>Tasks unavailable</h3><p>LifeOS could not load tasks.</p><button className="workspace-secondary-button" onClick={()=>q.refetch()}>Try again</button></div>;
+ const d=q.data;return <div className="task-center-page"><header className="workspace-page-header"><div><span className="workspace-eyebrow">Global Task Center</span><h1>Tasks</h1><p>View and manage both general workspace tasks and project-connected tasks in one place.</p></div><button type="button" className="workspace-primary-button" onClick={()=>{setCreating(true);setEditing(null);setError(null)}}><span className="button-icon">+</span>New Task</button></header>
+ <section className="project-summary-grid"><Summary icon="T" tone="purple" label="Total Tasks" value={d.counts.total}/><Summary icon="P" tone="blue" label="General Tasks" value={d.counts.general}/><Summary icon="C" tone="green" label="Project Tasks" value={d.counts.project}/><Summary icon="O" tone="orange" label="Overdue" value={d.counts.overdue}/></section>
+ <section className="task-filter-panel"><div className="task-search-wrapper"><span>⌕</span><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search all tasks..."/></div><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="recurring">Recurring tasks</option><option value="pending">Pending</option><option value="in progress">In Progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select><select value={importance} onChange={e=>setImportance(e.target.value)}><option value="all">All importance</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select><select value={scope} onChange={e=>setScope(e.target.value)}><option value="all">All task scopes</option><option value="general">General workspace</option><option value="project">Project tasks</option></select><select value={project} onChange={e=>setProject(e.target.value)}><option value="all">All projects</option><option value="general">General Workspace</option>{d.projects.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select><button type="button" className="clear-task-filters" onClick={()=>{setSearch("");setStatus("all");setImportance("all");setScope("all");setProject("all")}}>Clear</button></section>
+ {filtered.length?<section className="professional-task-list">{filtered.map(t=><article key={t.id} className={`professional-task-card ${t.status==="Completed"?"completed":""} ${t.deadline&&new Date(t.deadline+"T23:59:59")<new Date()&&t.status!=="Completed"?"overdue":""}`}><button className={`professional-task-toggle ${t.status==="Completed"?"checked":""}`} title="Toggle completion" onClick={()=>toggle.mutate(t.id)}>{t.status==="Completed"?"✓":""}</button><div className="professional-task-content"><div className="professional-task-labels"><span className={`task-scope-badge ${t.project_id?"task-scope-project":"task-scope-general"}`}>{t.project?.title||"General Workspace"}</span>{t.module?<span className="task-module-label">{t.module}</span>:null}<span className={`task-importance-label importance-${t.importance.toLowerCase()}`}>{t.importance}</span><span className={`task-status-label status-${slug(t.status)}`}>{t.status}</span>{t.deadline?<span className="task-deadline-label">{t.deadline}</span>:null}{t.reminder_enabled?<span className="task-reminder-label">Reminder</span>:null}{t.is_recurring?<span className="task-recurring-label">Recurring</span>:null}</div><h3>{t.title}</h3>{t.description?<p className="professional-task-description">{t.description}</p>:null}<div className="professional-task-meta"><span>Difficulty <strong>{t.difficulty}</strong></span>{t.tags?<span>Tags <strong>{t.tags}</strong></span>:null}</div></div><div className="professional-task-actions"><button className="task-edit-action" onClick={()=>{setEditing(t);setCreating(false);setError(null)}}>Edit</button><button className="task-edit-action task-action-muted" onClick={()=>{if(confirm(`Delete “${t.title}”?`))del.mutate(t.id)}}>Delete</button></div></article>)}</section>:<div className="task-no-results"><p>No tasks match these filters.</p><button className="workspace-secondary-button" onClick={()=>{setSearch("");setStatus("all");setImportance("all");setScope("all");setProject("all")}}>Clear filters</button></div>}
+ {(creating||editing)?<div className="project-modal-overlay open"><section className="project-modal task-native-modal" role="dialog" aria-modal="true"><div className="project-modal-header"><div><span className="workspace-eyebrow">Task editor</span><h2>{editing?"Edit Task":"New Task"}</h2></div><button className="project-modal-close" onClick={()=>{setCreating(false);setEditing(null)}}>×</button></div>{error?<div className="form-alert error">{error}</div>:null}<TaskForm key={editing?.id??"new"} projects={d.projects} initial={editing} submitLabel={editing?"Save changes":"Create task"} busy={create.isPending||update.isPending} onCancel={()=>{setCreating(false);setEditing(null);setError(null)}} onSubmit={input=>editing?update.mutateAsync({id:editing.id,input}).then(()=>undefined):create.mutateAsync(input).then(()=>undefined)}/></section></div>:null}
+ </div>}
+function Summary({icon,tone,label,value}:{icon:string;tone:string;label:string;value:number}){return <article className="project-summary-item"><div className={`summary-icon summary-icon-${tone}`}>{icon}</div><div><span>{label}</span><strong>{value}</strong></div></article>}
