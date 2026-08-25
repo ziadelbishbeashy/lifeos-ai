@@ -15,6 +15,7 @@ import "./styles/lifeos/focus.css";
 import "./styles/react-native-extras.css";
 import "./styles/visual-parity.css";
 import "./styles/layout-foundation.css";
+import "./styles/lifeos/polish.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

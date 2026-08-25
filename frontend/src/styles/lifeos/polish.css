@@ -1,0 +1,331 @@
+/* =========================================================
+   LifeOS — Polish & Motion Layer
+   Non-destructive visual enhancement loaded after every other
+   stylesheet. Targets shared naming conventions (*-card,
+   *-panel, *-button, *-pill, *-badge) so it reaches every page
+   without needing per-page overrides. Respects prefers-reduced-motion.
+   ========================================================= */
+
+:root {
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --polish-fast: 140ms;
+    --polish-base: 220ms;
+    --polish-slow: 420ms;
+}
+
+/* ---------- Motion-safe entrance animation ---------- */
+@keyframes lifeos-rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes lifeos-scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@keyframes lifeos-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+@keyframes lifeos-pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(124, 114, 242, 0.35); }
+    100% { box-shadow: 0 0 0 10px rgba(124, 114, 242, 0); }
+}
+@keyframes lifeos-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+}
+@keyframes lifeos-aura-drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(3%, -4%) scale(1.06); }
+    100% { transform: translate(0, 0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ---------- Global feel: smoother default transitions ---------- */
+a, button, [class*="-button"], [class*="-pill"], [class*="-badge"], [class*="-chip"],
+[class*="-card"], [class*="-panel"], [class*="-row"], [class*="-link"] {
+    transition:
+        transform var(--polish-base) var(--ease-out-expo),
+        box-shadow var(--polish-base) var(--ease-out-expo),
+        border-color var(--polish-base) var(--ease-standard),
+        background var(--polish-base) var(--ease-standard),
+        color var(--polish-fast) var(--ease-standard);
+}
+
+/* ---------- Focus visibility ---------- */
+a:focus-visible, button:focus-visible, [class*="-button"]:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible,
+[tabindex]:focus-visible {
+    outline: none;
+    box-shadow: var(--studio-focus-ring, 0 0 0 4px rgba(124, 114, 242, 0.25));
+    border-radius: var(--studio-radius-sm, 8px);
+}
+
+/* ---------- Scrollbars ---------- */
+* { scrollbar-width: thin; scrollbar-color: var(--app-border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+    background: var(--app-border-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--app-primary); background-clip: padding-box; }
+
+/* ---------- Buttons: lift + press + sheen ---------- */
+.primary-public-button, .dashboard-primary-action, .primary-button,
+.focus-start-button, .review-dashboard-button {
+    position: relative;
+    overflow: hidden;
+    will-change: transform;
+}
+.primary-public-button::before, .dashboard-primary-action::before, .primary-button::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.22) 45%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform var(--polish-slow) var(--ease-out-expo);
+    pointer-events: none;
+}
+.primary-public-button:hover::before, .dashboard-primary-action:hover::before, .primary-button:hover::before {
+    transform: translateX(120%);
+}
+.primary-public-button:hover, .dashboard-primary-action:hover, .primary-button:hover,
+.focus-start-button:hover, .review-dashboard-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px -10px rgba(124, 114, 242, 0.55);
+}
+.primary-public-button:active, .dashboard-primary-action:active, .primary-button:active,
+.secondary-public-button:active, .dashboard-secondary-action:active, .secondary-button:active {
+    transform: translateY(0) scale(0.98);
+}
+.secondary-public-button:hover, .dashboard-secondary-action:hover, .secondary-button:hover {
+    transform: translateY(-1px);
+    border-color: var(--app-primary, #7c72f2);
+}
+
+/* ---------- Cards & panels: elevation on hover ---------- */
+.dashboard-panel, .feature-card, .dashboard-stat-card, .quick-action-card,
+.project-studio-card, .attention-card, .authentication-card, .detection-card,
+.db-document-card, .studio-note-card, .panel-card, .qa-card, .prose-card,
+.plan-section-card, .system-card-heading, .sidebar-system-card {
+    will-change: transform;
+}
+.feature-card:hover, .dashboard-stat-card:hover, .quick-action-card:hover,
+.project-studio-card:hover, .db-document-card:hover, .studio-note-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--studio-shadow-md, 0 20px 44px rgba(0, 0, 0, 0.28));
+    border-color: var(--app-primary, #7c72f2);
+}
+.dashboard-panel:hover {
+    border-color: var(--app-border-strong);
+}
+.dashboard-project-row:hover, .deadline-row:hover {
+    transform: translateX(4px);
+    background: var(--studio-surface-hover, rgba(255, 255, 255, 0.06));
+}
+
+/* Quick action arrow nudge on hover */
+.quick-action-card em {
+    display: inline-block;
+    transition: transform var(--polish-base) var(--ease-spring);
+}
+.quick-action-card:hover em { transform: translateX(4px); }
+.quick-action-card:hover .quick-action-icon {
+    transform: scale(1.08) rotate(-4deg);
+}
+.quick-action-icon { transition: transform var(--polish-base) var(--ease-spring); }
+
+/* ---------- Stat cards: staggered rise-in on page load ---------- */
+.dashboard-stat-grid > .dashboard-stat-card {
+    animation: lifeos-rise-in var(--polish-slow) var(--ease-out-expo) both;
+}
+.dashboard-stat-grid > .dashboard-stat-card:nth-child(1) { animation-delay: 0ms; }
+.dashboard-stat-grid > .dashboard-stat-card:nth-child(2) { animation-delay: 60ms; }
+.dashboard-stat-grid > .dashboard-stat-card:nth-child(3) { animation-delay: 120ms; }
+.dashboard-stat-grid > .dashboard-stat-card:nth-child(4) { animation-delay: 180ms; }
+
+.dashboard-main-grid > *, .dashboard-secondary-grid > * {
+    animation: lifeos-rise-in var(--polish-slow) var(--ease-out-expo) both;
+    animation-delay: 100ms;
+}
+
+.quick-action-grid > .quick-action-card {
+    animation: lifeos-rise-in var(--polish-slow) var(--ease-out-expo) both;
+}
+.quick-action-grid > .quick-action-card:nth-child(1) { animation-delay: 0ms; }
+.quick-action-grid > .quick-action-card:nth-child(2) { animation-delay: 50ms; }
+.quick-action-grid > .quick-action-card:nth-child(3) { animation-delay: 100ms; }
+.quick-action-grid > .quick-action-card:nth-child(4) { animation-delay: 150ms; }
+
+.feature-grid > .feature-card {
+    animation: lifeos-rise-in var(--polish-slow) var(--ease-out-expo) both;
+}
+.feature-grid > .feature-card:nth-child(1) { animation-delay: 0ms; }
+.feature-grid > .feature-card:nth-child(2) { animation-delay: 50ms; }
+.feature-grid > .feature-card:nth-child(3) { animation-delay: 100ms; }
+.feature-grid > .feature-card:nth-child(4) { animation-delay: 150ms; }
+.feature-grid > .feature-card:nth-child(5) { animation-delay: 200ms; }
+.feature-grid > .feature-card:nth-child(6) { animation-delay: 250ms; }
+
+/* ---------- Progress rings & bars ---------- */
+.progress-ring, .mini-progress-ring {
+    transition: filter var(--polish-base) var(--ease-standard);
+}
+.progress-ring::after, .mini-progress-ring::after {
+    content: "";
+}
+.progress-fill, .preview-progress span {
+    position: relative;
+    overflow: hidden;
+    transition: width 900ms var(--ease-out-expo);
+}
+.progress-fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    animation: lifeos-shimmer 2.6s linear infinite;
+    background-size: 200% 100%;
+}
+.progress-track {
+    overflow: hidden;
+}
+
+.live-status i {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: lifeos-pulse-ring 1.8s var(--ease-standard) infinite;
+}
+
+/* ---------- Sidebar navigation ---------- */
+.navigation-link {
+    position: relative;
+}
+.navigation-link::before {
+    content: "";
+    position: absolute;
+    left: -14px;
+    top: 50%;
+    height: 0;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--app-primary, #7c72f2);
+    transform: translateY(-50%);
+    transition: height var(--polish-base) var(--ease-spring);
+}
+.navigation-link.active::before { height: 60%; }
+.navigation-link:hover { transform: translateX(2px); }
+.navigation-link svg { transition: transform var(--polish-base) var(--ease-spring); }
+.navigation-link:hover svg { transform: scale(1.1); }
+
+.app-brand-mark {
+    transition: transform var(--polish-base) var(--ease-spring), box-shadow var(--polish-base) var(--ease-standard);
+}
+.app-brand:hover .app-brand-mark {
+    transform: rotate(-6deg) scale(1.05);
+    box-shadow: 0 0 0 4px var(--studio-primary-soft, rgba(124, 114, 242, 0.18));
+}
+
+/* ---------- Empty / loading states ---------- */
+.dashboard-empty-state .empty-state-icon {
+    animation: lifeos-float 3.2s var(--ease-standard) infinite;
+}
+
+/* ---------- Landing hero: ambient motion ---------- */
+.landing-hero {
+    position: relative;
+    isolation: isolate;
+}
+.landing-hero::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: -12%;
+    right: -8%;
+    width: 46%;
+    aspect-ratio: 1;
+    background: radial-gradient(circle, var(--studio-primary, #7c72f2) 0%, transparent 70%);
+    opacity: 0.22;
+    filter: blur(60px);
+    animation: lifeos-aura-drift 14s var(--ease-standard) infinite;
+    pointer-events: none;
+}
+.landing-hero::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    bottom: -18%;
+    left: -6%;
+    width: 34%;
+    aspect-ratio: 1;
+    background: radial-gradient(circle, var(--studio-accent, #a47cf3) 0%, transparent 70%);
+    opacity: 0.16;
+    filter: blur(70px);
+    animation: lifeos-aura-drift 18s var(--ease-standard) infinite reverse;
+    pointer-events: none;
+}
+
+.hero-content {
+    animation: lifeos-rise-in var(--polish-slow) var(--ease-out-expo) both;
+}
+.hero-preview {
+    animation: lifeos-scale-in 600ms var(--ease-out-expo) 120ms both;
+}
+.preview-window {
+    transition: transform var(--polish-slow) var(--ease-out-expo), box-shadow var(--polish-slow) var(--ease-out-expo);
+}
+.preview-window:hover {
+    transform: perspective(1000px) rotateX(1deg) rotateY(-2deg) translateY(-4px);
+    box-shadow: var(--studio-shadow-md, 0 30px 70px rgba(0, 0, 0, 0.3));
+}
+.hero-points span {
+    transition: transform var(--polish-fast) var(--ease-spring), color var(--polish-fast) var(--ease-standard);
+}
+.hero-points span:hover {
+    transform: translateY(-2px);
+    color: var(--app-primary, #7c72f2);
+}
+
+.feature-number {
+    transition: transform var(--polish-base) var(--ease-spring), color var(--polish-base) var(--ease-standard);
+}
+.feature-card:hover .feature-number {
+    transform: scale(1.15);
+    color: var(--app-primary, #7c72f2);
+}
+
+/* ---------- Avatars & pills: subtle depth ---------- */
+[class*="-avatar"], .preview-avatar {
+    transition: transform var(--polish-base) var(--ease-spring);
+}
+[class*="-avatar"]:hover, .preview-avatar:hover { transform: scale(1.06); }
+
+[class*="-pill"]:hover, [class*="-badge"]:hover, [class*="-chip"]:hover {
+    transform: translateY(-1px);
+}
+
+/* ---------- Page section reveal on scroll (progressive, JS-free fallback) ---------- */
+.landing-section, .workflow-section, .landing-cta {
+    animation: lifeos-rise-in var(--polish-slow) var(--ease-out-expo) both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+}
+@supports not (animation-timeline: view()) {
+    .landing-section, .workflow-section, .landing-cta { animation: none; }
+}
