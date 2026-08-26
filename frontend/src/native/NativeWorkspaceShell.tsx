@@ -75,7 +75,7 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
       <div className="sidebar-header">
         <a href="/dashboard" className="app-brand">
           <span className="app-brand-mark">L</span>
-          <span className="app-brand-copy"><strong>LifeOS AI</strong><small>Focus Studio</small></span>
+          <span className="app-brand-copy"><strong>LifeOS AI</strong><small>Personal workspace</small></span>
         </a>
         <button type="button" className="sidebar-close-button" onClick={() => setMobileOpen(false)} aria-label="Close navigation">×</button>
       </div>
@@ -87,7 +87,7 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
         <span className="navigation-label navigation-label-spaced">Planning</span>
         <span className="navigation-link navigation-link-disabled"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.4 5.1L20 8l-4 4 .9 5.7L12 15l-4.9 2.7L8 12 4 8l5.6-.9L12 2Z"/></svg><span>Smart Plan</span><em>Soon</em></span>
       </nav>
-      <div className="sidebar-system-card"><div className="system-card-heading"><span className="system-status-dot"/><strong>Workspace online</strong></div><p>Projects and task management are active.</p></div>
+      <div className="sidebar-system-card"><div className="system-card-heading"><span className="system-status-dot"/><strong>All systems ready</strong></div><p>Your workspace is connected and ready.</p></div>
       <div className="sidebar-user-summary"><div className="account-avatar">{initial}</div><div className="account-information"><strong>{user.name}</strong><span>{user.email}</span></div></div>
     </aside>
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, apiGet, apiPostForm } from "../api/client";
 
 type Document = {
@@ -16,6 +16,8 @@ type Document = {
 type Project = { id: number; title: string };
 type Data = { items: Document[]; projects: Project[]; max_upload_bytes: number };
 
+type IconName = "document" | "search" | "upload" | "compare" | "project" | "spark" | "check" | "warning";
+
 export function DocumentsPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +26,7 @@ export function DocumentsPage() {
   const [project, setProject] = useState("all");
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("newest");
+  const [selectedFile, setSelectedFile] = useState("");
 
   const query = useQuery({
     queryKey: ["documents"],
@@ -34,6 +37,7 @@ export function DocumentsPage() {
     mutationFn: (form: FormData) => apiPostForm<any>("/api/v1/documents", form),
     onSuccess: async (result) => {
       setError(null);
+      setSelectedFile("");
       setMessage(
         result.indexing_succeeded
           ? `Uploaded and indexed ${result.chunk_count} searchable chunks.`
@@ -47,34 +51,18 @@ export function DocumentsPage() {
     },
   });
 
-  // Important: all React hooks are declared before any conditional return.
-  // The previous implementation called useMemo only after the loading render,
-  // which changed the number of hooks between renders and caused React to
-  // crash with "Rendered more hooks than during the previous render".
   if (query.isPending) {
-    return (
-      <div className="db-empty-state">
-        <span className="db-empty-icon">…</span>
-        <div>
-          <h2>Opening Document Brain</h2>
-          <p>Loading your project knowledge…</p>
-        </div>
-      </div>
-    );
+    return <BrainState symbol="…" title="Opening Document Brain" text="Loading your project knowledge…" />;
   }
 
   if (query.isError || !query.data) {
     return (
-      <div className="db-empty-state">
-        <span className="db-empty-icon">!</span>
-        <div>
-          <h2>Document Brain unavailable</h2>
-          <p>Could not load documents.</p>
-          <button className="workspace-secondary-button" type="button" onClick={() => query.refetch()}>
-            Try again
-          </button>
-        </div>
-      </div>
+      <BrainState
+        symbol="!"
+        title="Document Brain unavailable"
+        text="Could not load your documents."
+        action={<button className="workspace-secondary-button" onClick={() => query.refetch()}>Try again</button>}
+      />
     );
   }
 
@@ -91,7 +79,7 @@ export function DocumentsPage() {
         .toLowerCase();
 
       if (normalizedSearch && !searchable.includes(normalizedSearch)) return false;
-      if (project !== "all" && item.project?.title.toLowerCase() !== project) return false;
+      if (project !== "all" && String(item.project_id ?? "") !== project) return false;
       if (status === "analysed" && !item.summary) return false;
       if (status === "ready" && (!item.has_text || Boolean(item.summary))) return false;
       if (status === "needs-text" && item.has_text) return false;
@@ -111,212 +99,274 @@ export function DocumentsPage() {
     upload.mutate(new FormData(event.currentTarget));
   }
 
+  const hasFilters = Boolean(search.trim()) || project !== "all" || status !== "all";
+
   return (
-    <div className="db-library">
-      <section className="db-library-hero">
-        <div className="db-library-hero-copy">
-          <span className="db-kicker">Private project knowledge</span>
-          <h1>Turn every PDF into a searchable, actionable workspace.</h1>
-          <p>
-            Upload project documents, extract their readable text, analyse requirements and risks,
-            create tasks from detected actions, and ask grounded questions with page-level evidence.
-          </p>
-          <div className="db-hero-actions">
-            {data.projects.length ? (
-              <a href="#upload-document" className="workspace-primary-button">Upload a PDF</a>
-            ) : (
-              <a href="/projects" className="workspace-primary-button">Create a project</a>
-            )}
-            {data.items.length ? (
-              <>
-                <a href="/documents/compare" className="workspace-secondary-button">Compare documents</a>
-                <a href="#document-library" className="workspace-secondary-button">Browse documents</a>
-              </>
-            ) : null}
-          </div>
+    <section className="brain-library-page">
+      <header className="brain-page-header">
+        <div className="brain-page-title">
+          <span className="brain-eyebrow">Grounded workspace</span>
+          <h1>Document Brain</h1>
+          <p>Search, analyse and question the PDFs connected to your projects.</p>
         </div>
-        <div className="db-hero-visual" aria-hidden="true">
-          <div className="db-hero-document">
-            <span className="db-hero-document-type">PDF</span>
-            <div><span/><span/><span/></div>
-          </div>
-          <div className="db-hero-orbit db-hero-orbit-analysis"><strong>AI</strong><small>Analysis</small></div>
-          <div className="db-hero-orbit db-hero-orbit-search"><strong>{textReady}</strong><small>Ready</small></div>
-          <div className="db-hero-orbit db-hero-orbit-answer"><strong>{analysed}</strong><small>Analysed</small></div>
+        <div className="brain-header-actions">
+          {data.items.length ? (
+            <a className="workspace-secondary-button" href="/documents/compare">
+              <BrainIcon name="compare" />
+              Compare
+            </a>
+          ) : null}
+          {data.projects.length ? (
+            <a className="workspace-primary-button" href="#brain-upload">
+              <BrainIcon name="upload" />
+              Upload PDF
+            </a>
+          ) : (
+            <a className="workspace-primary-button" href="/projects">Create project</a>
+          )}
         </div>
-      </section>
+      </header>
 
-      <section className="db-library-metrics" aria-label="Document Brain overview">
-        <Metric icon="D" tone="purple" value={data.items.length} label="Total documents" />
-        <Metric icon="T" tone="mint" value={textReady} label="Text ready" />
-        <Metric icon="A" tone="amber" value={analysed} label="Analysed" />
-        <Metric icon="P" tone="blue" value={data.projects.length} label="Projects" />
-      </section>
+      <div className="brain-summary-strip" aria-label="Document Brain summary">
+        <SummaryItem label="Documents" value={data.items.length} icon="document" />
+        <SummaryItem label="Search ready" value={textReady} icon="check" />
+        <SummaryItem label="Analysed" value={analysed} icon="spark" />
+        <SummaryItem label="Projects" value={data.projects.length} icon="project" />
+      </div>
 
-      {error ? <div className="db-upload-error">{error}</div> : null}
-      {message ? <div className="form-alert success">{message}</div> : null}
+      {error ? <div className="brain-alert is-error">{error}</div> : null}
+      {message ? <div className="brain-alert is-success">{message}</div> : null}
 
-      {data.projects.length ? (
-        <section id="upload-document" className="db-upload-section">
-          <div className="db-section-heading">
+      <div className="brain-workspace-grid">
+        <main className="brain-library-panel">
+          <div className="brain-panel-heading">
             <div>
-              <span className="db-kicker">Add knowledge</span>
-              <h2>Upload a project PDF</h2>
-              <p>LifeOS stores the file privately, extracts readable text, creates searchable chunks and prepares it for analysis.</p>
+              <span className="brain-eyebrow">Library</span>
+              <h2>Your documents</h2>
             </div>
-            <span className="db-section-step">PDF only · Up to {Math.round(data.max_upload_bytes / 1024 / 1024)} MB</span>
+            <span className="brain-result-count">{filtered.length} of {data.items.length}</span>
           </div>
-          <form className="db-upload-form" onSubmit={submit}>
-            <div className="db-upload-grid">
-              <div className="form-group db-upload-project">
-                <label>Connect to project</label>
-                <select name="project_id" required defaultValue="">
-                  <option value="">Select a project</option>
-                  {data.projects.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}
-                </select>
-                <small>Documents inherit the selected project's ownership and access rules.</small>
+
+          {data.items.length ? (
+            <>
+              <div className="brain-toolbar">
+                <label className="brain-search-control">
+                  <BrainIcon name="search" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search documents, projects, summaries…"
+                    aria-label="Search documents"
+                  />
+                </label>
+                <div className="brain-filter-row">
+                  <label>
+                    <span>Project</span>
+                    <select value={project} onChange={(event) => setProject(event.target.value)}>
+                      <option value="all">All projects</option>
+                      {data.projects.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Status</span>
+                    <select value={status} onChange={(event) => setStatus(event.target.value)}>
+                      <option value="all">All statuses</option>
+                      <option value="analysed">Analysed</option>
+                      <option value="ready">Ready to analyse</option>
+                      <option value="needs-text">Needs OCR</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Sort</span>
+                    <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                      <option value="newest">Newest</option>
+                      <option value="oldest">Oldest</option>
+                      <option value="name">Name A–Z</option>
+                      <option value="project">Project A–Z</option>
+                    </select>
+                  </label>
+                </div>
               </div>
-              <div className="db-upload-file-column">
-                <label className="db-dropzone">
-                  <input type="file" name="document" accept=".pdf,application/pdf" required />
-                  <span className="db-dropzone-icon">PDF</span>
-                  <span className="db-dropzone-copy">
-                    <strong>Drop a PDF here or browse</strong>
-                    <small>The original filename is shown in LifeOS while storage uses a private, unique key.</small>
+
+              {filtered.length ? (
+                <div className="brain-document-list">
+                  {filtered.map((item) => <DocumentRow doc={item} key={item.id} />)}
+                </div>
+              ) : (
+                <BrainState
+                  compact
+                  symbol="⌕"
+                  title="No matching documents"
+                  text="Try a different search or clear one of the filters."
+                  action={hasFilters ? (
+                    <button
+                      type="button"
+                      className="workspace-secondary-button"
+                      onClick={() => { setSearch(""); setProject("all"); setStatus("all"); }}
+                    >
+                      Clear filters
+                    </button>
+                  ) : undefined}
+                />
+              )}
+            </>
+          ) : (
+            <BrainState
+              compact
+              symbol="D"
+              title="No documents yet"
+              text="Upload your first project PDF to start building a searchable knowledge base."
+              action={data.projects.length ? <a href="#brain-upload" className="workspace-primary-button">Upload first PDF</a> : undefined}
+            />
+          )}
+        </main>
+
+        <aside className="brain-side-column">
+          {data.projects.length ? (
+            <section className="brain-upload-card" id="brain-upload">
+              <div className="brain-upload-heading">
+                <span className="brain-upload-icon"><BrainIcon name="upload" /></span>
+                <div>
+                  <span className="brain-eyebrow">Add knowledge</span>
+                  <h2>Upload a PDF</h2>
+                </div>
+              </div>
+              <p className="brain-upload-intro">
+                Connect a PDF to a project. LifeOS will extract its text and prepare it for search and analysis.
+              </p>
+
+              <form className="brain-upload-form" onSubmit={submit}>
+                <label className="brain-field">
+                  <span>Project</span>
+                  <select name="project_id" required defaultValue="">
+                    <option value="" disabled>Select a project</option>
+                    {data.projects.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}
+                  </select>
+                </label>
+
+                <label className={`brain-file-picker ${selectedFile ? "has-file" : ""}`}>
+                  <input
+                    type="file"
+                    name="document"
+                    accept=".pdf,application/pdf"
+                    required
+                    onChange={(event) => setSelectedFile(event.target.files?.[0]?.name || "")}
+                  />
+                  <span className="brain-file-icon">PDF</span>
+                  <span className="brain-file-copy">
+                    <strong>{selectedFile || "Choose a PDF"}</strong>
+                    <small>{selectedFile ? "Ready to upload" : `PDF only · up to ${Math.round(data.max_upload_bytes / 1024 / 1024)} MB`}</small>
                   </span>
-                  <span className="db-dropzone-browse">Choose file</span>
+                  <span className="brain-file-action">Browse</span>
                 </label>
-              </div>
-            </div>
-            <div className="db-upload-footer">
-              <div className="db-upload-guidance">
-                <span><b>1</b>Private storage</span>
-                <span><b>2</b>Automatic text extraction</span>
-                <span><b>3</b>Searchable hybrid index</span>
-              </div>
-              <button type="submit" className="workspace-primary-button" disabled={upload.isPending}>
-                {upload.isPending ? "Uploading…" : "Upload and prepare"}
-              </button>
-            </div>
-          </form>
-        </section>
-      ) : (
-        <section className="db-empty-state db-project-required">
-          <span className="db-empty-icon">P</span>
-          <div>
-            <h2>Create a project first</h2>
-            <p>Every document belongs to a project so LifeOS can keep ownership and actions connected.</p>
-            <a href="/projects" className="workspace-primary-button">Create project</a>
-          </div>
-        </section>
-      )}
 
-      <section id="document-library" className="db-library-section">
-        <div className="db-section-heading">
-          <div>
-            <span className="db-kicker">Project knowledge</span>
-            <h2>Your document library</h2>
-            <p>Search, filter and open any PDF to view its analysis, actions and grounded question history.</p>
-          </div>
-          {data.items.length ? <span className="db-visible-count"><strong>{filtered.length}</strong> shown</span> : null}
-        </div>
+                <button type="submit" className="workspace-primary-button brain-upload-button" disabled={upload.isPending}>
+                  {upload.isPending ? "Uploading…" : "Upload & prepare"}
+                </button>
+              </form>
 
-        {data.items.length ? (
-          <>
-            <div className="db-library-toolbar">
-              <label className="db-search-field">
-                <span className="db-search-icon">⌕</span>
-                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search documents or projects" />
-              </label>
-              <div className="db-library-filters">
-                <label>
-                  <select value={project} onChange={(event) => setProject(event.target.value)}>
-                    <option value="all">All projects</option>
-                    {data.projects.map((item) => <option key={item.id} value={item.title.toLowerCase()}>{item.title}</option>)}
-                  </select>
-                </label>
-                <label>
-                  <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                    <option value="all">All statuses</option>
-                    <option value="analysed">Analysed</option>
-                    <option value="ready">Ready to analyse</option>
-                    <option value="needs-text">Needs OCR</option>
-                  </select>
-                </label>
-                <label>
-                  <select value={sort} onChange={(event) => setSort(event.target.value)}>
-                    <option value="newest">Newest first</option>
-                    <option value="oldest">Oldest first</option>
-                    <option value="name">Name A–Z</option>
-                    <option value="project">Project A–Z</option>
-                  </select>
-                </label>
+              <div className="brain-upload-steps" aria-label="Upload processing steps">
+                <span><b>1</b> Private storage</span>
+                <span><b>2</b> Text extraction</span>
+                <span><b>3</b> Search index</span>
               </div>
-            </div>
-            <div className="db-document-grid" data-view="grid">
-              {filtered.map((item) => <DocumentCard doc={item} key={item.id} />)}
-            </div>
-            {!filtered.length ? (
-              <div className="db-empty-state">
-                <span className="db-empty-icon">⌕</span>
-                <div><h2>No matching documents</h2><p>Try a different search or filter.</p></div>
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <div className="db-empty-state">
-            <span className="db-empty-icon">D</span>
-            <div><h2>No documents yet</h2><p>Upload a PDF to begin building grounded project knowledge.</p></div>
-          </div>
-        )}
-      </section>
-    </div>
+            </section>
+          ) : (
+            <section className="brain-create-project-card">
+              <span className="brain-upload-icon"><BrainIcon name="project" /></span>
+              <h2>Create a project first</h2>
+              <p>Documents belong to projects so analysis, tasks and evidence stay connected.</p>
+              <a href="/projects" className="workspace-primary-button">Create project</a>
+            </section>
+          )}
+
+          <section className="brain-help-card">
+            <span className="brain-eyebrow">What you can do</span>
+            <ul>
+              <li><BrainIcon name="search" /><span><strong>Search the source</strong><small>Find exact passages inside extracted text.</small></span></li>
+              <li><BrainIcon name="spark" /><span><strong>Analyse with AI</strong><small>Surface risks, requirements and next actions.</small></span></li>
+              <li><BrainIcon name="check" /><span><strong>Verify answers</strong><small>Jump back to page-level evidence.</small></span></li>
+            </ul>
+          </section>
+        </aside>
+      </div>
+    </section>
   );
 }
 
-function Metric({ icon, tone, value, label }: { icon: string; tone: string; value: number; label: string }) {
+function SummaryItem({ label, value, icon }: { label: string; value: number; icon: IconName }) {
   return (
-    <article>
-      <span className={`db-metric-icon db-metric-${tone}`}>{icon}</span>
+    <article className="brain-summary-item">
+      <span className="brain-summary-icon"><BrainIcon name={icon} /></span>
       <div><strong>{value}</strong><span>{label}</span></div>
     </article>
   );
 }
 
-function DocumentCard({ doc }: { doc: Document }) {
+function DocumentRow({ doc }: { doc: Document }) {
   const ui = doc.summary
     ? { key: "analysed", label: "Analysed" }
     : doc.has_text
       ? { key: "ready", label: "Ready to analyse" }
       : { key: "needs-text", label: "Needs OCR" };
 
+  const date = doc.uploaded_at
+    ? new Date(doc.uploaded_at).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })
+    : "Date unavailable";
+
   return (
-    <article className="db-document-card">
-      <div className="db-document-card-top">
-        <div className="db-file-mark">PDF</div>
-        <div className="db-document-card-heading">
-          <span className="db-project-pill">{doc.project?.title || "No project"}</span>
-          <span className="db-version-library-badge is-current">{doc.version_label}</span>
-          <h3 title={doc.filename}>{doc.filename}</h3>
-        </div>
-        <span className={`db-status-badge db-status-${ui.key}`}>{ui.label}</span>
-      </div>
-      <p className="db-document-preview">
-        {doc.summary || (doc.has_text
-          ? "Text extracted and ready for analysis and grounded questions."
-          : "This PDF is stored safely, but no readable embedded text was found. OCR support is required before analysis or questions.")}
-      </p>
-      <div className="db-document-card-footer">
-        <span className="db-document-date">
-          {doc.uploaded_at
-            ? new Date(doc.uploaded_at).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })
-            : "Date unavailable"}
+    <article className="brain-document-row">
+      <a className="brain-document-main" href={`/documents/${doc.id}`} aria-label={`Open ${doc.filename}`}>
+        <span className="brain-document-icon"><BrainIcon name="document" /></span>
+        <span className="brain-document-copy">
+          <span className="brain-document-title-line">
+            <strong title={doc.filename}>{doc.filename}</strong>
+            <span className={`brain-status is-${ui.key}`}>{ui.label}</span>
+          </span>
+          <span className="brain-document-meta">
+            <span>{doc.project?.title || "No project"}</span>
+            <span>{doc.version_label}</span>
+            <span>{date}</span>
+          </span>
+          <small>
+            {doc.summary || (doc.has_text
+              ? "Text extracted and ready for grounded analysis and questions."
+              : "Stored safely, but readable embedded text was not found. OCR is required.")}
+          </small>
         </span>
-        <div className="db-document-actions">
-          <a href={`/documents/${doc.id}`} className="workspace-primary-button">Open</a>
-          {doc.project ? <a href={`/projects/${doc.project.id}`} className="workspace-secondary-button">Project</a> : null}
-        </div>
+      </a>
+      <div className="brain-document-actions">
+        {doc.project ? <a href={`/projects/${doc.project.id}`} className="brain-row-link">Project</a> : null}
+        <a href={`/documents/${doc.id}`} className="workspace-secondary-button">Open</a>
       </div>
     </article>
   );
+}
+
+function BrainState({ symbol, title, text, action, compact = false }: { symbol: string; title: string; text: string; action?: ReactNode; compact?: boolean }) {
+  return (
+    <div className={`brain-state ${compact ? "is-compact" : ""}`}>
+      <span className="brain-state-symbol">{symbol}</span>
+      <div>
+        <h2>{title}</h2>
+        <p>{text}</p>
+        {action ? <div className="brain-state-action">{action}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function BrainIcon({ name }: { name: IconName }) {
+  const paths: Record<IconName, ReactNode> = {
+    document: <><path d="M7 3.5h6.5L17 7v13.5H7z"/><path d="M13.5 3.5V7H17M10 11h4M10 14h4M10 17h3"/></>,
+    search: <><circle cx="11" cy="11" r="5.5"/><path d="m15.2 15.2 4 4"/></>,
+    upload: <><path d="M12 16V5M8.5 8.5 12 5l3.5 3.5"/><path d="M5 15.5v4h14v-4"/></>,
+    compare: <><path d="M8 5h11M15.5 2 19 5l-3.5 3M16 19H5M8.5 16 5 19l3.5 3"/></>,
+    project: <><path d="M4 7.5h6l1.5 2H20v9.5H4z"/><path d="M4 7.5V5h6l1.5 2.5"/></>,
+    spark: <><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2z"/><path d="m18 14 .7 2.3L21 17l-2.3.7L18 20l-.7-2.3L15 17l2.3-.7z"/></>,
+    check: <path d="m5 12.5 4 4 10-10"/>,
+    warning: <><path d="M12 4 3.8 19h16.4z"/><path d="M12 9v4M12 16.5h.01"/></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }

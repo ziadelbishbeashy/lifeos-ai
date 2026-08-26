@@ -25,6 +25,8 @@ const expected = [
   "./visual-parity.css",
   "./layout-foundation.css",
   "./lifeos/polish.css",
+  "./ux-refresh.css",
+  "./document-brain.css",
 ];
 
 const source = fs.readFileSync(entry, "utf8");
