@@ -32,6 +32,24 @@ def env_int(name: str, default: int, minimum: int | None = None) -> int:
     return value
 
 
+def env_float(
+    name: str,
+    default: float,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    if minimum is not None:
+        value = max(minimum, value)
+    if maximum is not None:
+        value = min(maximum, value)
+    return value
+
+
 class BaseConfig:
     ENV_NAME = "base"
     SECRET_KEY = os.getenv("SECRET_KEY", "development-only-change-me")
@@ -65,6 +83,23 @@ class BaseConfig:
         str(BACKEND_DIR / "instance" / "storage"),
     )
     JOB_BACKEND = os.getenv("JOB_BACKEND", "inline")
+
+    # Step 15 OCR. Disabled by default so ordinary native-text PDFs keep the
+    # same zero-dependency path. Enable Tesseract explicitly per environment.
+    OCR_PROVIDER = os.getenv("OCR_PROVIDER", "disabled")
+    OCR_LANGUAGES = os.getenv("OCR_LANGUAGES", "eng")
+    OCR_TESSERACT_CMD = os.getenv("OCR_TESSERACT_CMD")
+    OCR_RENDER_DPI = env_int("OCR_RENDER_DPI", 300, minimum=72)
+    OCR_LOW_CONFIDENCE_THRESHOLD = env_float(
+        "OCR_LOW_CONFIDENCE_THRESHOLD",
+        0.70,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    OCR_AUTO_ENQUEUE = env_bool("OCR_AUTO_ENQUEUE", False)
+    # Step 15E.1: optional provider-neutral OpenCV cleanup before OCR.
+    OCR_PREPROCESSING_ENABLED = env_bool("OCR_PREPROCESSING_ENABLED", False)
+    OCR_PREPROCESSING_MODE = os.getenv("OCR_PREPROCESSING_MODE", "auto")
     EMAIL_SCHEDULER_INTERVAL_MINUTES = env_int(
         "EMAIL_SCHEDULER_INTERVAL_MINUTES", 60, minimum=1
     )

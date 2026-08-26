@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_login import current_user
@@ -12,6 +13,7 @@ from lifeos.api.v1.serializers import (
     serialize_document_analysis,
     serialize_document_comparison,
     serialize_document_question,
+    serialize_document_ocr_status,
     serialize_document_suggestion,
     serialize_document_summary,
     serialize_project_summary,
@@ -33,6 +35,11 @@ from services.document_navigation_service import (
     prepare_owned_document_file,
 )
 from services.document_overview_service import build_structured_document_overview
+from services.document_ocr_workflow_service import (
+    DocumentOCRNotFoundError,
+    DocumentOCRWorkflowError,
+    queue_owned_document_ocr,
+)
 from services.document_question_workflow_service import DocumentQuestionNotFoundError, DocumentQuestionNotReadyError, DocumentQuestionWorkflowError, ask_owned_document, list_owned_document_questions
 from services.document_search_service import (
     DocumentSearchError,
@@ -138,13 +145,35 @@ def upload_document_route():
     except (DocumentPersistenceError, DocumentUploadError, StorageError):
         current_app.logger.exception("API document upload failed")
         return persistence_error("LifeOS could not save the document.")
+    ocr_job_id = None
+    if (
+        current_app.config.get("OCR_AUTO_ENQUEUE")
+        and result.document.ocr_status == "pending"
+    ):
+        try:
+            queued_ocr = queue_owned_document_ocr(
+                document_id=result.document.id,
+                user_id=current_user.id,
+            )
+            result_document = queued_ocr.document
+            ocr_job_id = queued_ocr.job_id
+        except DocumentOCRWorkflowError:
+            current_app.logger.exception(
+                "Automatic OCR queueing failed for document %s.",
+                result.document.id,
+            )
+            result_document = result.document
+    else:
+        result_document = result.document
+
     return jsonify({
-        "item": serialize_document(result.document),
+        "item": serialize_document(result_document),
         "extraction_succeeded": result.extraction_succeeded,
         "pages_with_text": result.pages_with_text,
         "indexing_succeeded": result.indexing_succeeded,
         "chunk_count": result.chunk_count,
         "indexing_message": result.indexing_message,
+        "ocr_job_id": ocr_job_id,
     }), 201
 
 
@@ -156,6 +185,97 @@ def document_details_route(document_id: int):
     except AccessDocumentNotFoundError:
         return not_found("Document not found.")
     return jsonify(_details(document))
+
+
+@documents_api_bp.get("/<int:document_id>/ocr")
+@api_auth_required
+def document_ocr_status_route(document_id: int):
+    try:
+        document = require_owned_document(document_id, current_user.id)
+    except AccessDocumentNotFoundError:
+        return not_found("Document not found.")
+    return jsonify({"ocr": serialize_document_ocr_status(document)})
+
+
+@documents_api_bp.get("/<int:document_id>/ocr/layout")
+@api_auth_required
+def document_ocr_layout_route(document_id: int):
+    try:
+        document = require_owned_document(document_id, current_user.id)
+    except AccessDocumentNotFoundError:
+        return not_found("Document not found.")
+
+    try:
+        page_number = int(request.args.get("page") or 0)
+    except (TypeError, ValueError):
+        page_number = 0
+
+    if page_number <= 0:
+        return validation_error("Please provide a valid PDF page number.")
+
+    raw_layout = str(getattr(document, "ocr_layout_json", "") or "").strip()
+    if not raw_layout:
+        return jsonify({
+            "status": str(getattr(document, "ocr_status", "not_needed") or "not_needed"),
+            "layout_available": False,
+            "page": page_number,
+            "source": "native",
+            "text": "",
+            "words": [],
+        })
+
+    try:
+        payload = json.loads(raw_layout)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        current_app.logger.warning(
+            "Invalid OCR layout JSON for document %s.", document_id
+        )
+        return persistence_error("LifeOS could not read the OCR text layer.")
+
+    pages = payload.get("pages") if isinstance(payload, dict) else {}
+    page = pages.get(str(page_number), {}) if isinstance(pages, dict) else {}
+    if not isinstance(page, dict):
+        page = {}
+
+    words = page.get("words") if isinstance(page.get("words"), list) else []
+    return jsonify({
+        "status": str(getattr(document, "ocr_status", "not_needed") or "not_needed"),
+        "layout_available": True,
+        "page": page_number,
+        "source": str(page.get("source") or "native"),
+        "confidence": page.get("confidence"),
+        "text": str(page.get("text") or ""),
+        "words": words,
+    })
+
+
+@documents_api_bp.post("/<int:document_id>/ocr")
+@api_auth_required
+def document_ocr_start_route(document_id: int):
+    payload = json_body()
+    force = bool(payload.get("force", False))
+    try:
+        result = queue_owned_document_ocr(
+            document_id=document_id,
+            user_id=current_user.id,
+            force=force,
+        )
+    except DocumentOCRNotFoundError:
+        return not_found("Document not found.")
+    except DocumentOCRWorkflowError as error:
+        current_app.logger.exception(
+            "API OCR start failed for document %s.", document_id
+        )
+        return jsonify({
+            "error": "ocr_failed",
+            "message": str(error),
+        }), 503
+
+    return jsonify({
+        "ocr": serialize_document_ocr_status(result.document),
+        "job_id": result.job_id,
+        "queued": result.queued,
+    }), 202
 
 
 @documents_api_bp.get("/<int:document_id>/search")
@@ -256,6 +376,8 @@ def document_file_route(document_id: int):
     except StorageError:
         return persistence_error("LifeOS could not open the document file.")
     response.headers["Cache-Control"] = "private, no-store, max-age=0"
+    # Allow the separated React frontend to embed this same-origin PDF in its viewer.
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
     return response
 
 

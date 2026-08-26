@@ -270,6 +270,38 @@ def serialize_notification_log(log) -> dict[str, Any]:
     }
 
 
+
+
+def serialize_document_ocr_status(document) -> dict[str, Any]:
+    status = str(getattr(document, "ocr_status", "not_needed") or "not_needed")
+    total_pages = int(getattr(document, "ocr_total_pages", 0) or 0)
+    pages_requested = int(getattr(document, "ocr_pages_requested", 0) or 0)
+    pages_processed = int(getattr(document, "ocr_pages_processed", 0) or 0)
+    confidence = getattr(document, "ocr_average_confidence", None)
+    return {
+        "status": status,
+        "needed": status in {"pending", "queued", "processing", "failed"} or pages_requested > 0,
+        "total_pages": total_pages,
+        "pages_requested": pages_requested,
+        "pages_processed": pages_processed,
+        "progress": (
+            min(100, int(round((pages_processed / pages_requested) * 100)))
+            if pages_requested > 0
+            else (100 if status in {"completed", "not_needed"} else 0)
+        ),
+        "low_confidence_pages": int(
+            getattr(document, "ocr_low_confidence_pages", 0) or 0
+        ),
+        "average_confidence": (
+            round(float(confidence), 4) if confidence is not None else None
+        ),
+        "started_at": _iso(getattr(document, "ocr_started_at", None)),
+        "completed_at": _iso(getattr(document, "ocr_completed_at", None)),
+        "error_message": getattr(document, "ocr_error", None),
+        "layout_available": bool(str(getattr(document, "ocr_layout_json", "") or "").strip()),
+    }
+
+
 def serialize_document(document) -> dict[str, Any]:
     project = getattr(document, "project", None)
     return {
@@ -284,6 +316,7 @@ def serialize_document(document) -> dict[str, Any]:
         "version_change": document.version_change,
         "superseded_at": _iso(document.superseded_at),
         "text_character_count": len(str(document.extracted_text or "")),
+        "ocr": serialize_document_ocr_status(document),
     }
 
 

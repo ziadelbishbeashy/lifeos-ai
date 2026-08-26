@@ -177,6 +177,7 @@ class ExtractedPDFText:
     page_count: int
     pages_with_text: int
     truncated: bool
+    pages_needing_ocr: tuple[int, ...] = ()
 
 
 def clean_extracted_text(
@@ -206,6 +207,34 @@ def clean_extracted_text(
         )
 
     return cleaned
+
+
+
+
+def is_useful_native_page_text(
+    value: str | None,
+) -> bool:
+    """Return whether embedded PDF text is reliable enough to avoid OCR.
+
+    Some scanned PDFs contain only a few garbage glyphs or an invisible text
+    artifact. LifeOS keeps any native text it can read, but marks suspiciously
+    thin pages for OCR so mixed PDFs can be repaired page-by-page.
+    """
+
+    text = clean_extracted_text(value)
+    if not text:
+        return False
+
+    alphanumeric = sum(character.isalnum() for character in text)
+    words = [part for part in text.split() if any(ch.isalnum() for ch in part)]
+
+    if alphanumeric >= 12 and len(words) >= 2:
+        return True
+
+    if alphanumeric >= 24:
+        return True
+
+    return False
 
 
 def extract_pdf_text(
@@ -247,6 +276,7 @@ def extract_pdf_text(
 
             page_count = len(reader.pages)
             pages_with_text = 0
+            pages_needing_ocr: list[int] = []
             text_parts: list[str] = []
             current_length = 0
             truncated = False
@@ -260,9 +290,13 @@ def extract_pdf_text(
                 )
 
                 if not page_text:
+                    pages_needing_ocr.append(page_number)
                     continue
 
                 pages_with_text += 1
+
+                if not is_useful_native_page_text(page_text):
+                    pages_needing_ocr.append(page_number)
 
                 page_block = (
                     f"--- Page {page_number} ---\n"
@@ -272,6 +306,12 @@ def extract_pdf_text(
                 if text_parts:
                     page_block = "\n\n" + page_block
 
+                # Keep inspecting later pages even after the text payload reaches
+                # its cap. OCR readiness must describe the complete PDF, not only
+                # the prefix retained for RAG storage.
+                if truncated:
+                    continue
+
                 remaining = max_chars - current_length
 
                 if len(page_block) > remaining:
@@ -279,9 +319,10 @@ def extract_pdf_text(
                         text_parts.append(
                             page_block[:remaining].rstrip()
                         )
+                        current_length += remaining
 
                     truncated = True
-                    break
+                    continue
 
                 text_parts.append(page_block)
                 current_length += len(page_block)
@@ -291,6 +332,7 @@ def extract_pdf_text(
                 page_count=page_count,
                 pages_with_text=pages_with_text,
                 truncated=truncated,
+                pages_needing_ocr=tuple(pages_needing_ocr),
             )
 
     except PDFExtractionError:

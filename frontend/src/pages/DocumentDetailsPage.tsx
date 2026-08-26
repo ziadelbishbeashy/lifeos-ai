@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { apiGet, apiPost, apiPostForm, ApiError } from "../api/client";
 import { PageState, VerifyButton, type Evidence } from "../components/NativeUi";
+import { DocumentPdfWorkspace } from "../features/documentBrain/DocumentPdfWorkspace";
 import { currentPath } from "../core/navigation";
 
 type Suggestion = {
@@ -46,6 +47,28 @@ type Detection = {
   reason: string;
 };
 
+type OCRStatus = {
+  status: "not_needed" | "pending" | "queued" | "processing" | "completed" | "failed" | string;
+  needed: boolean;
+  total_pages: number;
+  pages_requested: number;
+  pages_processed: number;
+  progress: number;
+  low_confidence_pages: number;
+  average_confidence: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  layout_available: boolean;
+};
+
+type AskPayload = {
+  question: string;
+  selected_context_text?: string;
+  selected_context_page?: number | null;
+  selected_context_section?: string;
+};
+
 type SearchHit = {
   rank: number;
   chunk_id: number | null;
@@ -65,6 +88,12 @@ type SearchData = {
   result_count: number;
   semantic_fallback: boolean;
   items: SearchHit[];
+};
+
+type SelectedPdfContext = {
+  text: string;
+  page: number;
+  section: string;
 };
 
 type Tab = "overview" | "details" | "pdf" | "search" | "actions" | "ask";
@@ -89,11 +118,17 @@ export function DocumentDetailsPage() {
   const [detection, setDetection] = useState<Detection | null>(null);
   const [pdfPage, setPdfPage] = useState<number | null>(null);
   const [searchResults, setSearchResults] = useState<SearchData | null>(null);
+  const [selectedPdfContext, setSelectedPdfContext] = useState<SelectedPdfContext | null>(null);
 
   const query = useQuery({
     queryKey: ["document", id],
     queryFn: () => apiGet<Detail>(`/api/v1/documents/${id}`),
     enabled: Number.isFinite(id),
+    refetchInterval: (activeQuery) => {
+      const current = activeQuery.state.data as Detail | undefined;
+      const status = String(current?.document?.ocr?.status || "");
+      return status === "queued" || status === "processing" ? 2000 : false;
+    },
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["document", id] });
@@ -109,6 +144,33 @@ export function DocumentDetailsPage() {
     window.addEventListener("lifeos-open-pdf", openEvidence);
     return () => window.removeEventListener("lifeos-open-pdf", openEvidence);
   }, []);
+
+  useEffect(() => {
+    const attachSelection = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      if (Number(detail.documentId) !== id) return;
+      const text = String(detail.text || "").trim();
+      if (!text) return;
+      setSelectedPdfContext({
+        text,
+        page: Number(detail.page) || 1,
+        section: String(detail.section || ""),
+      });
+      setTab("ask");
+    };
+    window.addEventListener("lifeos-pdf-selection-context", attachSelection);
+    return () => window.removeEventListener("lifeos-pdf-selection-context", attachSelection);
+  }, [id]);
+
+  useEffect(() => {
+    if (tab !== "pdf" || !Number.isFinite(id)) return;
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("lifeos-open-pdf-workspace", {
+        detail: { documentId: id, page: pdfPage || 1 },
+      }));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [tab, pdfPage, id]);
 
   const detect = useMutation({
     mutationFn: () => apiPost<{ detection: Detection }>(`/api/v1/documents/${id}/detect-type`),
@@ -129,8 +191,20 @@ export function DocumentDetailsPage() {
     onError: (failure) => setError(failure instanceof ApiError ? failure.message : "Analysis failed."),
   });
 
+  const runOcr = useMutation({
+    mutationFn: () => apiPost<{ ocr: OCRStatus; job_id: string | null; queued: boolean }>(
+      `/api/v1/documents/${id}/ocr`,
+      { force: query.data?.document?.ocr?.status === "completed" || query.data?.document?.ocr?.status === "failed" || query.data?.document?.ocr?.layout_available === false },
+    ),
+    onSuccess: async () => {
+      setError(null);
+      await refresh();
+    },
+    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "OCR failed."),
+  });
+
   const ask = useMutation({
-    mutationFn: (question: string) => apiPost<{ item: Question }>(`/api/v1/documents/${id}/questions`, { question }),
+    mutationFn: (payload: AskPayload) => apiPost<{ item: Question }>(`/api/v1/documents/${id}/questions`, payload),
     onSuccess: refresh,
     onError: (failure) => setError(failure instanceof ApiError ? failure.message : "LifeOS could not answer this question."),
   });
@@ -162,6 +236,26 @@ export function DocumentDetailsPage() {
   }
 
   const data = query.data;
+  const ocr = data.document?.ocr as OCRStatus | undefined;
+  const ocrStatus = String(ocr?.status || "");
+  const ocrActive = ocrStatus === "queued" || ocrStatus === "processing";
+  const ocrNeedsLayoutRebuild = ocrStatus === "completed" && ocr?.layout_available === false;
+  const ocrRunnable = ocrStatus === "pending" || ocrStatus === "failed" || ocrStatus === "completed" || ocrNeedsLayoutRebuild;
+  const ocrLabel = runOcr.isPending
+    ? "Starting OCR…"
+    : ocrStatus === "pending"
+      ? "Run OCR"
+      : ocrStatus === "failed"
+        ? "Retry OCR"
+        : ocrStatus === "queued"
+          ? "OCR queued…"
+          : ocrStatus === "processing"
+            ? `OCR ${ocr?.progress ?? 0}%`
+            : ocrStatus === "completed" && ocr?.layout_available === false
+              ? "Build OCR text layer"
+              : ocrStatus === "completed"
+                ? "Re-run OCR"
+              : "OCR not needed";
   const experience = data.analysis_experience || {};
   const overview = data.overview || {};
   const analysis = overview.analysis || data.analysis?.insights || {};
@@ -181,7 +275,18 @@ export function DocumentDetailsPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const question = String(form.get("question") || "").trim();
-    if (question) ask.mutate(question);
+    const selectedText = String(form.get("selected_context_text") || "").trim();
+    const selectedPageRaw = String(form.get("selected_context_page") || "").trim();
+    const selectedPage = selectedPageRaw ? Number(selectedPageRaw) : null;
+    const selectedSection = String(form.get("selected_context_section") || "").trim();
+    if (question) {
+      ask.mutate({
+        question,
+        selected_context_text: selectedText,
+        selected_context_page: Number.isFinite(selectedPage) ? selectedPage : null,
+        selected_context_section: selectedSection,
+      });
+    }
   }
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
@@ -229,6 +334,27 @@ export function DocumentDetailsPage() {
           </div>
         </div>
         <div className="brain-detail-actions">
+          {ocr ? (
+            <button
+              className="workspace-secondary-button"
+              type="button"
+              onClick={() => runOcr.mutate()}
+              disabled={!ocrRunnable || runOcr.isPending || ocrActive}
+              title={
+                ocrStatus === "failed" && ocr.error_message
+                  ? `OCR failed: ${ocr.error_message}`
+                  : ocrStatus === "completed"
+                    ? (ocr.layout_available === false
+                        ? "Re-run OCR once to build the selectable text layer for scanned pages."
+                        : `Re-run OCR with the current preprocessing settings. ${ocr.pages_processed} page${ocr.pages_processed === 1 ? "" : "s"} were processed last time.`)
+                    : ocrStatus === "not_needed"
+                      ? "This PDF already contains readable text."
+                      : "Extract readable text from scanned PDF pages."
+              }
+            >
+              {ocrLabel}
+            </button>
+          ) : null}
           <a className="workspace-secondary-button" href={`${data.pdf_url}?download=1`}>Download PDF</a>
           <button className="workspace-primary-button" onClick={() => detect.mutate()} disabled={detect.isPending}>
             {detect.isPending ? "Detecting…" : data.analysis ? "Re-analyse" : "Analyse document"}
@@ -282,7 +408,7 @@ export function DocumentDetailsPage() {
           ["actions", "Actions", data.suggestions.length ? `${data.suggestions.length} suggested` : "Suggested next steps", "actions"],
           ["ask", "Ask AI", "Grounded Q&A", "ask"],
         ] as const).map(([key, label, hint, icon]) => (
-          <button key={key} type="button" className={`brain-tab brain-tab--${key} ${tab === key ? "active" : ""}`.trim()} onClick={() => setTab(key)} aria-label={label}>
+          <button key={key} type="button" data-db-tab={key} className={`brain-tab brain-tab--${key} ${tab === key ? "active" : ""}`.trim()} onClick={() => setTab(key)} aria-label={label}>
             <span className="brain-tab-icon"><BrainDetailIcon name={icon} /></span>
             <span className="brain-tab-copy">
               <strong>{label}</strong>
@@ -416,10 +542,17 @@ export function DocumentDetailsPage() {
       {tab === "pdf" ? (
         <article className="brain-card brain-pdf-card">
           <div className="brain-card-heading">
-            <div><span className="brain-eyebrow">Original evidence</span><h2>PDF viewer</h2></div>
+            <div><span className="brain-eyebrow">Original evidence</span><h2>Full PDF workspace</h2></div>
             {pdfPage ? <span className="brain-count-badge">Page {pdfPage}</span> : null}
           </div>
-          <iframe title={data.document.filename} src={`${data.pdf_url}${pdfPage ? `#page=${pdfPage}` : ""}`} className="brain-pdf-frame" />
+          <p className="brain-muted-copy">The original LifeOS navigator is restored here: thumbnails, semantic search, page navigation, zoom, rotation and selectable text.</p>
+          <button
+            type="button"
+            className="workspace-primary-button"
+            onClick={() => window.dispatchEvent(new CustomEvent("lifeos-open-pdf-workspace", { detail: { documentId: id, page: pdfPage || 1 } }))}
+          >
+            Open PDF workspace
+          </button>
         </article>
       ) : null}
 
@@ -488,8 +621,30 @@ export function DocumentDetailsPage() {
             <div><span className="brain-eyebrow">Grounded Q&A</span><h2>Ask this document</h2></div>
             <span className="brain-count-badge">{data.question_history.length} saved</span>
           </div>
-          <form className="brain-composer" onSubmit={submitAsk}>
-            <input name="question" placeholder="Ask a question grounded in this PDF" maxLength={2000} />
+          <form className="brain-composer" onSubmit={submitAsk} data-db-question-form>
+            <input type="hidden" name="selected_context_text" value={selectedPdfContext?.text || ""} readOnly data-db-selected-context-input />
+            <input type="hidden" name="selected_context_page" value={selectedPdfContext?.page || ""} readOnly data-db-selected-context-page-input />
+            <input type="hidden" name="selected_context_section" value={selectedPdfContext?.section || ""} readOnly data-db-selected-context-section-input />
+
+            {selectedPdfContext ? (
+              <div className="db-selected-context-card" data-db-selected-context-card>
+                <div className="db-selected-context-heading">
+                  <div>
+                    <span className="db-kicker">Selected PDF context</span>
+                    <strong data-db-selected-context-location>
+                      Page {selectedPdfContext.page}{selectedPdfContext.section ? ` · ${selectedPdfContext.section}` : ""}
+                    </strong>
+                  </div>
+                  <div className="db-selected-context-actions">
+                    <button type="button" className="db-text-button" onClick={() => setSelectedPdfContext(null)} data-db-remove-selected-context>Remove context</button>
+                  </div>
+                </div>
+                <blockquote data-db-selected-context-preview>{selectedPdfContext.text}</blockquote>
+                <p>LifeOS will treat this passage as preferred context and can still retrieve related evidence elsewhere in the PDF.</p>
+              </div>
+            ) : null}
+
+            <input name="question" data-db-question-input placeholder="Ask a question grounded in this PDF" maxLength={2000} />
             <button className="workspace-primary-button" disabled={ask.isPending}>{ask.isPending ? "Searching…" : "Ask AI"}</button>
           </form>
           <div className="brain-qa-list">
@@ -510,6 +665,8 @@ export function DocumentDetailsPage() {
           </div>
         </article>
       ) : null}
+
+      <DocumentPdfWorkspace documentId={id} filename={data.document.filename} pdfUrl={data.pdf_url} />
 
       {data.document.is_current_version ? (
         <article className="brain-card brain-version-card">

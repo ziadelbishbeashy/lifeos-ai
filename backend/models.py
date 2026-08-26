@@ -1256,6 +1256,27 @@ class Document(db.Model):
         nullable=False,
     )
     extracted_text = db.Column(db.UnicodeText, nullable=True)
+
+    # Step 15 — OCR state is persisted independently from RAG/indexing state.
+    # Native PDFs stay ``not_needed``; scanned or mixed PDFs become ``pending``
+    # until the OCR workflow is queued and processed.
+    ocr_status = db.Column(
+        db.Unicode(24),
+        nullable=False,
+        default="not_needed",
+        index=True,
+    )
+    ocr_provider = db.Column(db.Unicode(64), nullable=True)
+    ocr_started_at = db.Column(db.DateTime, nullable=True)
+    ocr_completed_at = db.Column(db.DateTime, nullable=True)
+    ocr_total_pages = db.Column(db.Integer, nullable=False, default=0)
+    ocr_pages_requested = db.Column(db.Integer, nullable=False, default=0)
+    ocr_pages_processed = db.Column(db.Integer, nullable=False, default=0)
+    ocr_low_confidence_pages = db.Column(db.Integer, nullable=False, default=0)
+    ocr_average_confidence = db.Column(db.Float, nullable=True)
+    ocr_error = db.Column(db.UnicodeText, nullable=True)
+    ocr_layout_json = db.Column(db.UnicodeText, nullable=True)
+
     summary = db.Column(db.UnicodeText, nullable=True)
     detected_modules = db.Column(db.UnicodeText, nullable=True)
     extracted_tasks = db.Column(db.UnicodeText, nullable=True)

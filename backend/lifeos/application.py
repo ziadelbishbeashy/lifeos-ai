@@ -14,6 +14,7 @@ from lifeos.core.extensions import init_extensions, login_manager
 
 from error_handlers import register_error_handlers
 from logging_config import configure_logging
+from jobs.document_ocr import register_document_ocr_job
 from models import User
 from routes.ai_routes import ai_bp
 from routes.analytics_routes import analytics_bp
@@ -120,6 +121,7 @@ def create_app(
         )
 
     init_extensions(application)
+    register_document_ocr_job()
     register_legacy_web_blueprints(application)
     register_api_v1(application)
     register_dashboard_routes(application)

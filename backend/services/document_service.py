@@ -104,6 +104,13 @@ def create_project_pdf_document(
     except PDFExtractionError as error:
         # Keep the uploaded PDF. It may require OCR or
         # a later text-extraction retry.
+        _save_ocr_native_scan_state(
+            document=document,
+            status="pending",
+            total_pages=0,
+            pages_requested=0,
+            error_message=str(error),
+        )
         return CreatedProjectDocument(
             document=document,
             original_name=stored_pdf.original_name,
@@ -129,6 +136,21 @@ def create_project_pdf_document(
 
     try:
         document.extracted_text = extracted_text
+        document.ocr_status = (
+            "pending"
+            if extraction.pages_needing_ocr
+            else "not_needed"
+        )
+        document.ocr_provider = None
+        document.ocr_total_pages = extraction.page_count
+        document.ocr_pages_requested = len(extraction.pages_needing_ocr)
+        document.ocr_pages_processed = 0
+        document.ocr_low_confidence_pages = 0
+        document.ocr_average_confidence = None
+        document.ocr_started_at = None
+        document.ocr_completed_at = None
+        document.ocr_error = None
+        document.ocr_layout_json = None
         db.session.commit()
 
     except SQLAlchemyError as error:
@@ -200,6 +222,36 @@ def create_project_pdf_document(
         chunk_count=len(chunk_result.chunks),
         indexing_message=None,
     )
+
+
+def _save_ocr_native_scan_state(
+    *,
+    document: Document,
+    status: str,
+    total_pages: int,
+    pages_requested: int,
+    error_message: str | None,
+) -> None:
+    """Persist OCR readiness without deleting a successfully uploaded PDF."""
+
+    try:
+        document.ocr_status = status
+        document.ocr_provider = None
+        document.ocr_total_pages = max(0, int(total_pages or 0))
+        document.ocr_pages_requested = max(0, int(pages_requested or 0))
+        document.ocr_pages_processed = 0
+        document.ocr_low_confidence_pages = 0
+        document.ocr_average_confidence = None
+        document.ocr_started_at = None
+        document.ocr_completed_at = None
+        document.ocr_error = (str(error_message)[:4000] if error_message else None)
+        document.ocr_layout_json = None
+        db.session.commit()
+    except SQLAlchemyError as error:
+        db.session.rollback()
+        raise DocumentUploadError(
+            "The PDF was uploaded, but LifeOS could not save its OCR readiness state."
+        ) from error
 
 
 def _delete_failed_upload(
