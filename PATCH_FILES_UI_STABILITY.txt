@@ -1,0 +1,30 @@
+Frontend UI stability patch contents
+
+MODIFIED
+.github/workflows/ci.yml
+.gitignore
+frontend/package.json
+frontend/src/main.tsx
+frontend/src/styles/layout-foundation.css
+scripts/check-react-parity.ps1
+
+ADDED
+APPLY_FRONTEND_UI_STABILITY.md
+docs/FRONTEND_UI_STABILITY.md
+frontend/playwright.config.ts
+frontend/scripts/check-css-contract.mjs
+frontend/src/styles/app.css
+frontend/src/styles/README.md
+frontend/tests/e2e/README.md
+frontend/tests/e2e/support/mockApi.ts
+frontend/tests/e2e/support/assertions.ts
+frontend/tests/e2e/layout/site-layout.spec.ts
+frontend/tests/e2e/smoke/critical-flows.spec.ts
+frontend/tests/e2e/visual/approved-screens.spec.ts
+scripts/apply-ui-stability-cleanup.ps1
+scripts/check-frontend-ui.ps1
+
+REMOVED BY CLEANUP SCRIPT
+frontend/src/styles/global.css
+frontend/tsconfig.app.tsbuildinfo (if present)
+frontend/tsconfig.node.tsbuildinfo (if present)

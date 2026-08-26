@@ -6,7 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "css:check": "node scripts/check-css-contract.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:layout": "playwright test tests/e2e/layout",
+    "test:smoke": "playwright test tests/e2e/smoke",
+    "test:visual": "playwright test tests/e2e/visual",
+    "test:visual:update": "playwright test tests/e2e/visual --update-snapshots"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
@@ -18,6 +25,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.6.2",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "@playwright/test": "^1.55.0"
   }
 }

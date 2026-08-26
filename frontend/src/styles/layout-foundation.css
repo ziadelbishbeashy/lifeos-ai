@@ -1,7 +1,7 @@
 /*
  * LifeOS layout contract for the separated React frontend.
  *
- * This file is deliberately loaded LAST.  It fixes the one structural rule
+ * This file is the canonical structural layer and is loaded after parity/component rules but before cosmetic polish.  It fixes the one structural rule
  * that broke the whole site during visual-parity restoration: the obsolete
  * Phase-2 CSS made .app-shell a CSS grid while the original LifeOS shell uses
  * a fixed sidebar plus a margin-offset main canvas.  Mixing both systems

@@ -1,0 +1,19 @@
+/*
+ * LifeOS frontend stylesheet entrypoint.
+ *
+ * This file is the ONLY stylesheet imported by src/main.tsx.  The order below
+ * intentionally preserves the last known-good visual cascade while making the
+ * ownership/order explicit in one place.  Do not add page-level layout imports
+ * directly to main.tsx.
+ */
+@import "./react-base.css";
+@import "./separated.css";
+@import "./lifeos/public.css";
+@import "./lifeos/style.css";
+@import "./lifeos/theme-v2.css";
+@import "./lifeos/project-studio.css";
+@import "./lifeos/focus.css";
+@import "./react-native-extras.css";
+@import "./visual-parity.css";
+@import "./layout-foundation.css";
+@import "./lifeos/polish.css";

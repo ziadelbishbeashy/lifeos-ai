@@ -64,4 +64,74 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package.json
       - run: npm install
+      - run: npm run css:check
       - run: npm run build
+      - run: npm audit --omit=dev
+
+  frontend-browser-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package.json
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:layout
+      - run: npm run test:smoke
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-browser-regression
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: ignore
+
+  # Screenshot baselines are intentionally opt-in.  Generate and visually
+  # approve them with `npm run test:visual:update`, then commit the PNG files.
+  # Once baselines exist this job starts enforcing pixel-level regressions.
+  frontend-visual-regression:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package.json
+      - name: Detect approved visual baselines
+        id: baselines
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem tests\e2e\visual -Recurse -Filter *.png -ErrorAction SilentlyContinue
+          if ($files.Count -gt 0) {
+            "present=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "present=false" >> $env:GITHUB_OUTPUT
+            Write-Host "No approved visual baselines yet; screenshot enforcement is intentionally inactive."
+          }
+      - if: steps.baselines.outputs.present == 'true'
+        run: npm install
+      - if: steps.baselines.outputs.present == 'true'
+        run: npx playwright install chromium
+      - if: steps.baselines.outputs.present == 'true'
+        run: npm run test:visual
+      - name: Upload visual diff diagnostics
+        if: failure() && steps.baselines.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-visual-regression
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: ignore
