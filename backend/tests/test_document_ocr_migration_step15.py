@@ -23,3 +23,14 @@ def test_ocr_layout_migration_follows_ocr_state_migration():
     assert 'revision = "20260826_0002"' in text
     assert 'down_revision = "20260826_0001"' in text
     assert "ocr_layout_json" in text
+
+QUALITY_MIGRATION = ROOT / "migrations" / "versions" / "20260827_0001_add_document_ocr_quality_metrics.py"
+
+
+def test_ocr_quality_migration_follows_layout_migration():
+    text = QUALITY_MIGRATION.read_text(encoding="utf-8")
+    assert 'revision = "20260827_0001"' in text
+    assert 'down_revision = "20260826_0002"' in text
+    assert "ocr_total_characters" in text
+    assert "ocr_total_words" in text
+    assert "ocr_quality" in text

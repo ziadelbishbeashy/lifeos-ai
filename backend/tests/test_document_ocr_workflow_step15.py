@@ -55,9 +55,20 @@ def _extraction():
         average_confidence=0.95,
         truncated=False,
         pages=(
-            OCRPageExtraction(1, "Native page.", "native", None),
-            OCRPageExtraction(2, "Recovered scanned page.", "ocr", 0.95),
+            OCRPageExtraction(
+                1, "Native page.", "native", None,
+                character_count=len("Native page."),
+                word_count=2,
+            ),
+            OCRPageExtraction(
+                2, "Recovered scanned page.", "ocr", 0.95,
+                ocr_reason="no_useful_native_text",
+                character_count=len("Recovered scanned page."),
+                word_count=3,
+            ),
         ),
+        total_character_count=len("Native page.") + len("Recovered scanned page."),
+        total_word_count=5,
     )
 
 
@@ -90,6 +101,9 @@ def test_processing_saves_ocr_text_then_reuses_existing_chunk_pipeline(
         assert saved.ocr_pages_requested == 1
         assert saved.ocr_pages_processed == 1
         assert saved.ocr_average_confidence == pytest.approx(0.95)
+        assert saved.ocr_total_characters > 0
+        assert saved.ocr_total_words == 5
+        assert saved.ocr_quality == "poor"
         assert "Recovered scanned page" in saved.extracted_text
         assert result.indexing_succeeded is True
         assert result.chunk_count == 2
@@ -142,3 +156,63 @@ def test_queue_is_idempotent_while_job_is_active(app, user):
         assert first.job_id
         assert second.queued is False
         assert len(queue.jobs) == 1
+
+
+def test_force_processing_hard_rebuilds_chunks_even_when_text_matches(
+    app, user, monkeypatch
+):
+    with app.app_context():
+        extraction = _extraction()
+        document = _document(user, text=extraction.text)
+        monkeypatch.setattr(
+            workflow,
+            "extract_stored_pdf_with_ocr",
+            lambda *args, **kwargs: extraction,
+        )
+
+        calls = {"rebuild": 0, "ensure": 0}
+
+        def rebuild(**kwargs):
+            calls["rebuild"] += 1
+            return SimpleNamespace(
+                chunks=["new-1", "new-2"],
+                source_fingerprint="forced",
+            )
+
+        def ensure(**kwargs):
+            calls["ensure"] += 1
+            raise AssertionError("force=True must bypass ensure_owned_document_chunks")
+
+        monkeypatch.setattr(workflow, "rebuild_owned_document_chunks", rebuild)
+        monkeypatch.setattr(workflow, "ensure_owned_document_chunks", ensure)
+
+        result = workflow.process_owned_document_ocr(
+            document_id=document.id,
+            user_id=user,
+            force=True,
+            provider=FakeProvider(),
+        )
+
+        assert calls == {"rebuild": 1, "ensure": 0}
+        assert result.indexing_succeeded is True
+        assert result.chunk_count == 2
+
+
+def test_queue_threads_force_into_job_payload(app, user):
+    from jobs.queue import MemoryJobQueue
+
+    with app.app_context():
+        document = _document(user, status="completed")
+        queue = MemoryJobQueue()
+
+        result = workflow.queue_owned_document_ocr(
+            document_id=document.id,
+            user_id=user,
+            force=True,
+            queue=queue,
+        )
+
+        assert result.queued is True
+        assert len(queue.jobs) == 1
+        queued = queue.jobs[0]
+        assert queued.payload["force"] is True

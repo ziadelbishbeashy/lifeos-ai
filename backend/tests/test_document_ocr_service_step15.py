@@ -8,11 +8,17 @@ from storage.local import LocalStorage
 
 
 class FakePage:
-    def __init__(self, text: str):
+    def __init__(self, text: str, *, images=()):
         self._text = text
+        self.images = images
 
     def extract_text(self):
         return self._text
+
+
+class FakeEmbeddedImage:
+    def __init__(self, *, width: int, height: int):
+        self.image = type("Image", (), {"width": width, "height": height})()
 
 
 class FakeReader:
@@ -147,3 +153,33 @@ def test_preprocessor_runs_before_provider(monkeypatch, tmp_path):
 
     assert received == [b"cleaned-raw-render"]
     assert "Recovered text from cleaned image." in result.text
+
+
+def test_thin_native_text_over_large_embedded_image_is_still_ocred(monkeypatch, tmp_path):
+    storage, key = _stored_pdf(tmp_path)
+    reader = FakeReader([
+        FakePage(
+            "Lecture 5",
+            images=(FakeEmbeddedImage(width=1600, height=2200),),
+        )
+    ])
+    monkeypatch.setattr(service, "PdfReader", lambda *args, **kwargs: reader)
+
+    rendered: list[int] = []
+    provider = RecordingProvider()
+    result = service.extract_stored_pdf_with_ocr(
+        key,
+        provider=provider,
+        storage=storage,
+        render_page=lambda pdf_bytes, *, page_index, dpi: (
+            rendered.append(page_index) or b"page-image"
+        ),
+    )
+
+    assert rendered == [0]
+    assert provider.pages == [1]
+    assert result.ocr_page_count == 1
+    assert result.native_page_count == 0
+    assert result.pages[0].source == "ocr"
+    assert result.pages[0].ocr_reason == "thin_native_text_over_image"
+    assert "OCR recovered content for page 1." in result.text

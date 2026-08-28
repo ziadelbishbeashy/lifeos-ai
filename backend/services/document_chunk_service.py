@@ -12,6 +12,7 @@ from database import db
 from models import (
     Document,
     DocumentChunk,
+    DocumentTable,
     Project,
 )
 
@@ -56,6 +57,8 @@ class BuiltChunk:
     section_title: str | None
     text: str
     character_count: int
+    content_type: str = "text"
+    table_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -217,29 +220,29 @@ def rebuild_owned_document_chunks(
         max_chars=max_chars,
         overlap_chars=overlap_chars,
     )
-
+    document_tables = _document_tables(document_id=document.id, user_id=user_id)
+    next_index = len(built_chunks)
+    for table in document_tables:
+        table_text = str(table.markdown_text or "").strip()
+        if not table_text:
+            continue
+        chunk_text = f"--- Page {table.page_number} ---\n[STRUCTURED TABLE {table.table_index}]\n{table_text}"
+        built_chunks.append(BuiltChunk(
+            chunk_index=next_index, page_start=table.page_number, page_end=table.page_number,
+            section_title=table.title or f"Table {table.table_index}", text=chunk_text,
+            character_count=len(chunk_text), content_type="table", table_id=table.id,
+        ))
+        next_index += 1
     if not built_chunks:
-        raise DocumentChunkNotReadyError(
-            "No searchable chunks could be created."
-        )
-
-    fingerprint = create_source_fingerprint(
-        extracted_text
-    )
-
+        raise DocumentChunkNotReadyError("No searchable chunks could be created.")
+    fingerprint = create_index_fingerprint(extracted_text=extracted_text, tables=document_tables)
     stored_chunks = [
         DocumentChunk(
-            document_id=document.id,
-            user_id=user_id,
-            chunk_index=chunk.chunk_index,
-            page_start=chunk.page_start,
-            page_end=chunk.page_end,
-            section_title=chunk.section_title,
-            text=chunk.text,
-            character_count=chunk.character_count,
-            source_fingerprint=fingerprint,
-        )
-        for chunk in built_chunks
+            document_id=document.id, user_id=user_id, chunk_index=chunk.chunk_index,
+            page_start=chunk.page_start, page_end=chunk.page_end, section_title=chunk.section_title,
+            content_type=chunk.content_type, table_id=chunk.table_id, text=chunk.text,
+            character_count=chunk.character_count, source_fingerprint=fingerprint,
+        ) for chunk in built_chunks
     ]
 
     try:
@@ -311,8 +314,9 @@ def ensure_owned_document_chunks(
             "This document has no readable extracted text."
         )
 
-    current_fingerprint = create_source_fingerprint(
-        extracted_text
+    current_fingerprint = create_index_fingerprint(
+        extracted_text=extracted_text,
+        tables=_document_tables(document_id=document.id, user_id=user_id),
     )
 
     existing_chunks = (
@@ -382,6 +386,22 @@ def create_source_fingerprint(
     return hashlib.sha256(
         str(extracted_text or "").encode("utf-8")
     ).hexdigest()
+
+
+def create_index_fingerprint(*, extracted_text: str, tables: list[DocumentTable]) -> str:
+    base = create_source_fingerprint(extracted_text)
+    if not tables:
+        return base
+    parts = [base]
+    for table in tables:
+        table_hash = hashlib.sha256(str(table.markdown_text or "").encode("utf-8")).hexdigest()
+        parts.append(f"table:{table.page_number}:{table.table_index}:{table.source_fingerprint}:{table_hash}")
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def _document_tables(*, document_id: int, user_id: int) -> list[DocumentTable]:
+    return (DocumentTable.query.filter_by(document_id=document_id, user_id=user_id)
+            .order_by(DocumentTable.page_number.asc(), DocumentTable.table_index.asc()).all())
 
 
 def _find_owned_document(

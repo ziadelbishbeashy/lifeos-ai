@@ -22,6 +22,7 @@ from werkzeug.datastructures import FileStorage
 from database import db
 from models import (
     Document,
+    DocumentCollectionItem,
     DocumentAIAnalysis,
     DocumentQuestion,
     DocumentTaskSuggestion,
@@ -98,7 +99,10 @@ def current_document_filter():
 
     return or_(
         Document.version_family_id.is_(None),
-        Document.is_current_version.is_(True),
+        # SQL Server BIT columns must be compared with = 1.  Using
+        # ``.is_(True)`` compiles to ``IS 1`` under the MSSQL dialect,
+        # which SQL Server rejects with "Incorrect syntax near '1'".
+        Document.is_current_version == True,  # noqa: E712
     )
 
 
@@ -365,6 +369,16 @@ def create_new_document_version(
         )
 
         family.updated_at = datetime.utcnow()
+
+        # Collections follow the logical current document, not a stale
+        # historical row. Move memberships atomically when a new version
+        # becomes current so multi-document retrieval keeps working.
+        for collection_item in (
+            DocumentCollectionItem.query
+            .filter_by(document_id=current_document.id)
+            .all()
+        ):
+            collection_item.document_id = new_document.id
 
         (
             outdated_analyses,

@@ -16,7 +16,7 @@ type Document = {
 type Project = { id: number; title: string };
 type Data = { items: Document[]; projects: Project[]; max_upload_bytes: number };
 
-type IconName = "document" | "search" | "upload" | "compare" | "project" | "spark" | "check" | "warning";
+type IconName = "document" | "search" | "upload" | "compare" | "collection" | "project" | "spark" | "check" | "warning";
 
 export function DocumentsPage() {
   const queryClient = useQueryClient();
@@ -110,6 +110,10 @@ export function DocumentsPage() {
           <p>Search, analyse and question the PDFs connected to your projects.</p>
         </div>
         <div className="brain-header-actions">
+          <a className="workspace-secondary-button" href="/documents/collections">
+            <BrainIcon name="collection" />
+            Collections
+          </a>
           {data.items.length ? (
             <a className="workspace-secondary-button" href="/documents/compare">
               <BrainIcon name="compare" />
@@ -363,6 +367,7 @@ function BrainIcon({ name }: { name: IconName }) {
     search: <><circle cx="11" cy="11" r="5.5"/><path d="m15.2 15.2 4 4"/></>,
     upload: <><path d="M12 16V5M8.5 8.5 12 5l3.5 3.5"/><path d="M5 15.5v4h14v-4"/></>,
     compare: <><path d="M8 5h11M15.5 2 19 5l-3.5 3M16 19H5M8.5 16 5 19l3.5 3"/></>,
+    collection: <><rect x="4" y="5" width="16" height="5" rx="1.5"/><rect x="4" y="14" width="16" height="5" rx="1.5"/><path d="M8 7.5h8M8 16.5h8"/></>,
     project: <><path d="M4 7.5h6l1.5 2H20v9.5H4z"/><path d="M4 7.5V5h6l1.5 2.5"/></>,
     spark: <><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2z"/><path d="m18 14 .7 2.3L21 17l-2.3.7L18 20l-.7-2.3L15 17l2.3-.7z"/></>,
     check: <path d="m5 12.5 4 4 10-10"/>,

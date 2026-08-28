@@ -135,3 +135,91 @@ def test_ocr_status_reports_layout_availability(app, client, user):
 
     assert response.status_code == 200
     assert response.get_json()["ocr"]["layout_available"] is True
+
+
+def test_ocr_status_exposes_quality_metrics(app, client, user):
+    with app.app_context():
+        document = _document(user, status="completed")
+        document.ocr_total_characters = 2450
+        document.ocr_total_words = 390
+        document.ocr_quality = "good"
+        db.session.commit()
+        document_id = document.id
+
+    _login(client)
+    response = client.get(f"/api/v1/documents/{document_id}/ocr")
+
+    assert response.status_code == 200
+    ocr = response.get_json()["ocr"]
+    assert ocr["total_characters"] == 2450
+    assert ocr["total_words"] == 390
+    assert ocr["quality"] == "good"
+
+
+def test_ocr_diagnostics_reports_exact_rag_page_text_and_term_matches(
+    app, client, user
+):
+    import json
+
+    with app.app_context():
+        document = _document(user, status="completed")
+        document.extracted_text = (
+            "--- Page 1 ---\nLecture 5 introduction.\n\n"
+            "--- Page 2 ---\nPotential energy is stored energy in the system. "
+            "The Lagrange formulation uses kinetic and potential energy."
+        )
+        document.ocr_provider = "tesseract"
+        document.ocr_total_characters = 132
+        document.ocr_total_words = 20
+        document.ocr_average_confidence = 0.88
+        document.ocr_quality = "acceptable"
+        document.ocr_layout_json = json.dumps({
+            "version": 2,
+            "metadata": {"preprocessing_mode": "auto"},
+            "pages": {
+                "2": {
+                    "page": 2,
+                    "source": "ocr",
+                    "confidence": 0.88,
+                    "quality": "acceptable",
+                    "text": "Potential energy is stored energy in the system.",
+                    "words": [],
+                }
+            },
+        })
+        db.session.commit()
+        document_id = document.id
+
+    _login(client)
+    response = client.get(
+        f"/api/v1/documents/{document_id}/ocr/diagnostics"
+        "?terms=potential,energy,Lagrange"
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["provider"] == "tesseract"
+    assert payload["preprocessing_mode"] == "auto"
+    assert payload["quality"] == "acceptable"
+    assert len(payload["pages"]) == 2
+    page_2 = payload["pages"][1]
+    assert page_2["source"] == "ocr"
+    assert page_2["confidence"] == 0.88
+    assert page_2["matched_terms"] == ["potential", "energy", "Lagrange"]
+    assert "Potential energy" in page_2["text_preview"]
+
+
+def test_ocr_diagnostics_does_not_expose_another_users_document(
+    app, client, user
+):
+    with app.app_context():
+        other = User(name="OCR Other", email="ocr-diagnostics-other@example.com")
+        other.set_password("StrongPass123!")
+        db.session.add(other)
+        db.session.commit()
+        document = _document(other.id, status="completed")
+        document_id = document.id
+
+    _login(client)
+    response = client.get(f"/api/v1/documents/{document_id}/ocr/diagnostics")
+    assert response.status_code == 404

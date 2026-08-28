@@ -10,6 +10,7 @@ def handle_document_ocr(payload: dict) -> None:
     process_owned_document_ocr(
         document_id=int(payload["document_id"]),
         user_id=int(payload["user_id"]),
+        force=bool(payload.get("force", False)),
     )
 
 

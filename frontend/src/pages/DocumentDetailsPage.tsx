@@ -90,14 +90,27 @@ type SearchData = {
   items: SearchHit[];
 };
 
+type StructuredTable = {
+  id: number;
+  document_id: number;
+  page: number;
+  table_index: number;
+  title: string | null;
+  headers: string[];
+  rows: string[][];
+  row_count: number;
+  column_count: number;
+  markdown: string;
+};
+
 type SelectedPdfContext = {
   text: string;
   page: number;
   section: string;
 };
 
-type Tab = "overview" | "details" | "pdf" | "search" | "actions" | "ask";
-type DetailIconName = "overview" | "details" | "pdf" | "search" | "actions" | "ask";
+type Tab = "overview" | "details" | "pdf" | "search" | "tables" | "actions" | "ask";
+type DetailIconName = "overview" | "details" | "pdf" | "search" | "tables" | "actions" | "ask";
 
 function textOf(value: any) {
   if (value == null) return "";
@@ -113,10 +126,13 @@ function sourceOf(value: any): Evidence {
 export function DocumentDetailsPage() {
   const id = Number(currentPath().match(/^\/documents\/(\d+)$/)?.[1] ?? NaN);
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("overview");
+  const requestedParams = new URLSearchParams(window.location.search);
+  const requestedPage = Number(requestedParams.get("page") || "");
+  const requestedTab = requestedParams.get("tab") === "pdf" ? "pdf" : "overview";
+  const [tab, setTab] = useState<Tab>(requestedTab);
   const [error, setError] = useState<string | null>(null);
   const [detection, setDetection] = useState<Detection | null>(null);
-  const [pdfPage, setPdfPage] = useState<number | null>(null);
+  const [pdfPage, setPdfPage] = useState<number | null>(Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : null);
   const [searchResults, setSearchResults] = useState<SearchData | null>(null);
   const [selectedPdfContext, setSelectedPdfContext] = useState<SelectedPdfContext | null>(null);
 
@@ -228,6 +244,25 @@ export function DocumentDetailsPage() {
       setError(null);
     },
     onError: (failure) => setError(failure instanceof ApiError ? failure.message : "Document search failed."),
+  });
+
+  const tablesQuery = useQuery({
+    queryKey: ["document-tables", id],
+    queryFn: () => apiGet<{ items: StructuredTable[] }>(`/api/v1/documents/${id}/tables`),
+    enabled: Number.isFinite(id) && tab === "tables",
+  });
+
+  const extractTables = useMutation({
+    mutationFn: () => apiPost<{ items: StructuredTable[]; table_count: number; chunks_rebuilt: boolean }>(
+      `/api/v1/documents/${id}/tables/extract`,
+      { force: true },
+    ),
+    onSuccess: async () => {
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ["document-tables", id] });
+      await refresh();
+    },
+    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "Table extraction failed."),
   });
 
   if (query.isPending) return <PageState title="Opening document" text="Loading grounded analysis and history…" />;
@@ -405,6 +440,7 @@ export function DocumentDetailsPage() {
           ["details", "Details", "Structured analysis", "details"],
           ["pdf", "PDF", "Open the source", "pdf"],
           ["search", "Search", "Find exact passages", "search"],
+          ["tables", "Tables", "Preserve rows & columns", "tables"],
           ["actions", "Actions", data.suggestions.length ? `${data.suggestions.length} suggested` : "Suggested next steps", "actions"],
           ["ask", "Ask AI", "Grounded Q&A", "ask"],
         ] as const).map(([key, label, hint, icon]) => (
@@ -583,6 +619,57 @@ export function DocumentDetailsPage() {
         </article>
       ) : null}
 
+      {tab === "tables" ? (
+        <article className="brain-card">
+          <div className="brain-card-heading">
+            <div><span className="brain-eyebrow">Structured content</span><h2>Tables in this document</h2></div>
+            <div className="brain-table-actions">
+              {tablesQuery.data ? <span className="brain-count-badge">{tablesQuery.data.items.length} table{tablesQuery.data.items.length === 1 ? "" : "s"}</span> : null}
+              <button className="workspace-secondary-button compact" type="button" disabled={extractTables.isPending} onClick={() => extractTables.mutate()}>
+                {extractTables.isPending ? "Scanning…" : "Re-scan tables"}
+              </button>
+            </div>
+          </div>
+
+          {tablesQuery.isPending ? (
+            <DetailEmpty title="Reading tables…" text="LifeOS is loading the structured rows and columns already extracted from this PDF." />
+          ) : tablesQuery.isError ? (
+            <DetailEmpty title="Tables unavailable" text="LifeOS could not load the structured table data." />
+          ) : tablesQuery.data?.items.length ? (
+            <div className="brain-table-list">
+              {tablesQuery.data.items.map((table) => (
+                <section className="brain-table-card" key={table.id}>
+                  <header>
+                    <div>
+                      <span>Page {table.page} · Table {table.table_index}</span>
+                      <strong>{table.title || `Table ${table.table_index}`}</strong>
+                      <small>{table.row_count} rows · {table.column_count} columns</small>
+                    </div>
+                    <VerifyButton source={{ page: table.page, section: table.title || `Table ${table.table_index}` }} label="Open page" />
+                  </header>
+                  <div className="brain-table-scroll">
+                    <table className="brain-structured-table">
+                      <thead>
+                        <tr>{table.headers.map((header, index) => <th key={index}>{header || `Column ${index + 1}`}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {table.rows.map((row, rowIndex) => (
+                          <tr key={rowIndex}>
+                            {table.headers.map((_, cellIndex) => <td key={cellIndex}>{row[cellIndex] || ""}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <DetailEmpty title="No structured tables found" text="New uploads are checked automatically. If this older PDF contains a native table, use Re-scan tables once." />
+          )}
+        </article>
+      ) : null}
+
       {tab === "actions" ? (
         <article className="brain-card">
           <div className="brain-card-heading">
@@ -722,6 +809,7 @@ function BrainDetailIcon({ name }: { name: DetailIconName }) {
     details: <><path d="M8 7.5h11"/><path d="M8 12h11"/><path d="M8 16.5h11"/><path d="M4.5 7.5h.01"/><path d="M4.5 12h.01"/><path d="M4.5 16.5h.01"/></>,
     pdf: <><path d="M7 3.5h6.5L17 7v13.5H7z"/><path d="M13.5 3.5V7H17"/><path d="M9.5 12h5"/><path d="M9.5 15h5"/></>,
     search: <><circle cx="11" cy="11" r="5.5"/><path d="m15.2 15.2 4 4"/></>,
+    tables: <><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 5v14M15 5v14"/></>,
     actions: <><path d="M9 11.5 11 13.5l4-4"/><path d="M7 5.5h10"/><path d="M7 18.5h10"/><rect x="4" y="3.5" width="16" height="17" rx="2.5"/></>,
     ask: <><path d="M5 7.5a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7.5v6A2.5 2.5 0 0 1 16.5 16H10l-4 3v-3H7.5A2.5 2.5 0 0 1 5 13.5z"/><path d="m12 7.5.9 2.4 2.6.1-2 1.6.7 2.4-2.2-1.4-2.2 1.4.7-2.4-2-1.6 2.6-.1z"/></>,
   };

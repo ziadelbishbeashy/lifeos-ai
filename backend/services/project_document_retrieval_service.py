@@ -139,6 +139,8 @@ class ProjectRetrievedDocumentChunk:
             "evidence": base_source.get("evidence"),
             "chunk_id": self.chunk.id,
             "chunk_index": self.chunk.chunk_index,
+            "content_type": base_source.get("content_type", "text"),
+            "table_id": base_source.get("table_id"),
             "visibility": "project_owner",
         }
 

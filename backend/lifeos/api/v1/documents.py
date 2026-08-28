@@ -15,6 +15,7 @@ from lifeos.api.v1.serializers import (
     serialize_document_question,
     serialize_document_ocr_status,
     serialize_document_suggestion,
+    serialize_document_table,
     serialize_document_summary,
     serialize_project_summary,
     serialize_task,
@@ -39,6 +40,16 @@ from services.document_ocr_workflow_service import (
     DocumentOCRNotFoundError,
     DocumentOCRWorkflowError,
     queue_owned_document_ocr,
+)
+from services.document_ocr_diagnostics_service import (
+    DocumentOCRDiagnosticsNotFoundError,
+    build_owned_document_ocr_diagnostics,
+)
+from services.document_table_service import (
+    DocumentTableError,
+    DocumentTableNotFoundError,
+    extract_owned_document_tables,
+    list_owned_document_tables,
 )
 from services.document_question_workflow_service import DocumentQuestionNotFoundError, DocumentQuestionNotReadyError, DocumentQuestionWorkflowError, ask_owned_document, list_owned_document_questions
 from services.document_search_service import (
@@ -173,6 +184,8 @@ def upload_document_route():
         "indexing_succeeded": result.indexing_succeeded,
         "chunk_count": result.chunk_count,
         "indexing_message": result.indexing_message,
+        "table_count": result.table_count,
+        "table_extraction_message": result.table_extraction_message,
         "ocr_job_id": ocr_job_id,
     }), 201
 
@@ -187,6 +200,37 @@ def document_details_route(document_id: int):
     return jsonify(_details(document))
 
 
+@documents_api_bp.get("/<int:document_id>/tables")
+@api_auth_required
+def document_tables_route(document_id: int):
+    try:
+        rows = list_owned_document_tables(document_id=document_id, user_id=current_user.id)
+    except DocumentTableNotFoundError:
+        return not_found("Document not found.")
+    return jsonify({"items": [serialize_document_table(row) for row in rows]})
+
+
+@documents_api_bp.post("/<int:document_id>/tables/extract")
+@api_auth_required
+def extract_document_tables_route(document_id: int):
+    payload = json_body()
+    try:
+        result = extract_owned_document_tables(
+            document_id=document_id, user_id=current_user.id,
+            force=bool(payload.get("force")), rebuild_chunks=True,
+        )
+    except DocumentTableNotFoundError:
+        return not_found("Document not found.")
+    except DocumentTableError as error:
+        return jsonify({"error": "table_extraction_failed", "message": str(error)}), 503
+    return jsonify({
+        "items": [serialize_document_table(row) for row in result.tables],
+        "table_count": len(result.tables),
+        "reused_existing": result.reused_existing,
+        "chunks_rebuilt": result.chunks_rebuilt,
+    })
+
+
 @documents_api_bp.get("/<int:document_id>/ocr")
 @api_auth_required
 def document_ocr_status_route(document_id: int):
@@ -195,6 +239,61 @@ def document_ocr_status_route(document_id: int):
     except AccessDocumentNotFoundError:
         return not_found("Document not found.")
     return jsonify({"ocr": serialize_document_ocr_status(document)})
+
+
+@documents_api_bp.get("/<int:document_id>/ocr/diagnostics")
+@api_auth_required
+def document_ocr_diagnostics_route(document_id: int):
+    raw_terms = str(request.args.get("terms") or "")
+    terms = tuple(
+        term.strip()
+        for term in raw_terms.split(",")
+        if term.strip()
+    )
+    try:
+        diagnostics = build_owned_document_ocr_diagnostics(
+            document_id=document_id,
+            user_id=current_user.id,
+            terms=terms,
+        )
+    except DocumentOCRDiagnosticsNotFoundError:
+        return not_found("Document not found.")
+
+    return jsonify({
+        "document_id": diagnostics.document_id,
+        "status": diagnostics.status,
+        "provider": diagnostics.provider,
+        "preprocessing_mode": diagnostics.preprocessing_mode,
+        "total_characters": diagnostics.total_characters,
+        "total_words": diagnostics.total_words,
+        "average_confidence": (
+            round(float(diagnostics.average_confidence), 4)
+            if diagnostics.average_confidence is not None
+            else None
+        ),
+        "quality": diagnostics.quality,
+        "terms": list(diagnostics.terms),
+        "pages": [
+            {
+                "page": page.page_number,
+                "source": page.source,
+                "character_count": page.character_count,
+                "word_count": page.word_count,
+                "confidence": (
+                    round(float(page.confidence), 4)
+                    if page.confidence is not None
+                    else None
+                ),
+                "quality": page.quality,
+                "selected_provider": page.selected_provider,
+                "selected_strategy": page.selected_strategy,
+                "selection_attempts": list(page.selection_attempts),
+                "text_preview": page.text_preview,
+                "matched_terms": list(page.matched_terms),
+            }
+            for page in diagnostics.pages
+        ],
+    })
 
 
 @documents_api_bp.get("/<int:document_id>/ocr/layout")
@@ -244,6 +343,11 @@ def document_ocr_layout_route(document_id: int):
         "page": page_number,
         "source": str(page.get("source") or "native"),
         "confidence": page.get("confidence"),
+        "selected_provider": page.get("selected_provider"),
+        "selected_strategy": page.get("selected_strategy"),
+        "selection_attempts": (
+            page.get("selection_attempts") if isinstance(page.get("selection_attempts"), list) else []
+        ),
         "text": str(page.get("text") or ""),
         "words": words,
     })

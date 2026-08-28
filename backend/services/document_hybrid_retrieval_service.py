@@ -139,6 +139,8 @@ class HybridRetrievedDocumentChunk:
             "evidence": _evidence_preview(
                 self.text
             ),
+            "content_type": str(getattr(self.chunk, "content_type", "text") or "text"),
+            "table_id": getattr(self.chunk, "table_id", None),
         }
 
 

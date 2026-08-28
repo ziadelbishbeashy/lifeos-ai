@@ -352,8 +352,12 @@ def create_project_document_source_fingerprint(
         content_hash = hashlib.sha256(
             str(document.extracted_text or "").encode("utf-8")
         ).hexdigest()
+        structured_identity = ";".join(
+            f"{table.page_number}:{table.table_index}:{table.source_fingerprint}"
+            for table in getattr(document, "tables", [])
+        )
         parts.append(
-            f"document:{document.id}:{document.filename}:{content_hash}"
+            f"document:{document.id}:{document.filename}:{content_hash}:tables:{structured_identity}"
         )
 
     return hashlib.sha256(
@@ -440,6 +444,8 @@ def _sources_from_claims(
                 "section": str(trusted_source.get("section") or "").strip(),
                 "evidence": preview.text,
                 "preview_type": "focused" if preview.focused else "leading",
+                "content_type": trusted_source.get("content_type", "text"),
+                "table_id": trusted_source.get("table_id"),
                 "visibility": "project_owner",
             }
         )

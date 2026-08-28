@@ -1276,6 +1276,12 @@ class Document(db.Model):
     ocr_average_confidence = db.Column(db.Float, nullable=True)
     ocr_error = db.Column(db.UnicodeText, nullable=True)
     ocr_layout_json = db.Column(db.UnicodeText, nullable=True)
+    # Step 15f — aggregate OCR observability. These describe the *volume* of
+    # text OCR actually produced so a completed run can still be flagged as
+    # low-quality instead of being trusted just because it did not throw.
+    ocr_total_characters = db.Column(db.Integer, nullable=False, default=0)
+    ocr_total_words = db.Column(db.Integer, nullable=False, default=0)
+    ocr_quality = db.Column(db.Unicode(16), nullable=True)
 
     summary = db.Column(db.UnicodeText, nullable=True)
     detected_modules = db.Column(db.UnicodeText, nullable=True)
@@ -1310,6 +1316,21 @@ class Document(db.Model):
     lazy=True,
     cascade="all, delete-orphan",
     order_by="DocumentChunk.chunk_index",
+    )
+
+    tables = db.relationship(
+        "DocumentTable",
+        back_populates="document",
+        lazy=True,
+        cascade="all, delete-orphan",
+        order_by="DocumentTable.page_number, DocumentTable.table_index",
+    )
+
+    collection_items = db.relationship(
+        "DocumentCollectionItem",
+        back_populates="document",
+        lazy=True,
+        passive_deletes=True,
     )
 
     version_family = db.relationship(
@@ -2061,6 +2082,21 @@ class DocumentChunk(db.Model):
         nullable=True,
     )
 
+    # Step 16 — table-aware chunks still use the one existing RAG pipeline.
+    content_type = db.Column(
+        db.Unicode(20),
+        nullable=False,
+        default="text",
+        index=True,
+    )
+
+    table_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document_tables.id", ondelete="NO ACTION"),
+        nullable=True,
+        index=True,
+    )
+
     text = db.Column(
         db.UnicodeText,
         nullable=False,
@@ -2126,6 +2162,11 @@ class DocumentChunk(db.Model):
     user = db.relationship(
         "User",
         back_populates="document_chunks",
+    )
+
+    table = db.relationship(
+        "DocumentTable",
+        back_populates="chunks",
     )
 
     @property
@@ -2202,3 +2243,137 @@ class DocumentChunk(db.Model):
             f"index={self.chunk_index} "
             f"page={self.page_start}>"
         )
+
+class DocumentTable(db.Model):
+    """Structured table extracted from one PDF page (Step 16)."""
+
+    __tablename__ = "document_tables"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "document_id", "page_number", "table_index",
+            name="uq_document_table_page_index",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(
+        db.Integer, db.ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False, index=True,
+    )
+    page_number = db.Column(db.Integer, nullable=False, index=True)
+    table_index = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.Unicode(255), nullable=True)
+    headers_json = db.Column(db.UnicodeText, nullable=True)
+    rows_json = db.Column(db.UnicodeText, nullable=False)
+    markdown_text = db.Column(db.UnicodeText, nullable=False)
+    row_count = db.Column(db.Integer, nullable=False, default=0)
+    column_count = db.Column(db.Integer, nullable=False, default=0)
+    source_fingerprint = db.Column(db.Unicode(64), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    document = db.relationship("Document", back_populates="tables")
+    chunks = db.relationship("DocumentChunk", back_populates="table", lazy=True)
+
+    @property
+    def headers(self) -> list:
+        try:
+            parsed = json.loads(self.headers_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+    @property
+    def rows(self) -> list:
+        try:
+            parsed = json.loads(self.rows_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+
+class DocumentCollection(db.Model):
+    """User-defined document group queried with the existing grounded RAG stack."""
+
+    __tablename__ = "document_collections"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False, index=True,
+    )
+    name = db.Column(db.Unicode(150), nullable=False)
+    description = db.Column(db.UnicodeText, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    items = db.relationship(
+        "DocumentCollectionItem", back_populates="collection", lazy=True,
+        cascade="all, delete-orphan", order_by="DocumentCollectionItem.added_at",
+    )
+    questions = db.relationship(
+        "DocumentCollectionQuestion", back_populates="collection", lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+
+class DocumentCollectionItem(db.Model):
+    __tablename__ = "document_collection_items"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "collection_id", "document_id", name="uq_document_collection_item"
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    collection_id = db.Column(
+        db.Integer, db.ForeignKey("document_collections.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    document_id = db.Column(
+        db.Integer, db.ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    added_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    collection = db.relationship("DocumentCollection", back_populates="items")
+    document = db.relationship("Document", back_populates="collection_items")
+
+
+class DocumentCollectionQuestion(db.Model):
+    __tablename__ = "document_collection_questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    collection_id = db.Column(
+        db.Integer, db.ForeignKey("document_collections.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False, index=True,
+    )
+    question = db.Column(db.Unicode(2000), nullable=False)
+    answer = db.Column(db.UnicodeText, nullable=True)
+    sources_json = db.Column(db.UnicodeText, nullable=True)
+    provider = db.Column(db.Unicode(30), nullable=False)
+    model = db.Column(db.Unicode(100), nullable=False)
+    status = db.Column(db.Unicode(20), nullable=False, default="Completed", index=True)
+    source_fingerprint = db.Column(db.Unicode(64), nullable=True)
+    error_message = db.Column(db.UnicodeText, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    collection = db.relationship("DocumentCollection", back_populates="questions")
+
+    @property
+    def sources(self) -> list:
+        try:
+            parsed = json.loads(self.sources_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+

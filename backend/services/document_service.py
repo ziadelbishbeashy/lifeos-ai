@@ -18,6 +18,10 @@ from services.document_chunk_service import (
     DocumentChunkError,
     ensure_owned_document_chunks,
 )
+from services.document_table_service import (
+    DocumentTableError,
+    extract_owned_document_tables,
+)
 from services.pdf_service import (
     PDFExtractionError,
     StoredPDF,
@@ -51,6 +55,8 @@ class CreatedProjectDocument:
     indexing_succeeded: bool = False
     chunk_count: int = 0
     indexing_message: str | None = None
+    table_count: int = 0
+    table_extraction_message: str | None = None
 
 
 def create_project_pdf_document(
@@ -182,6 +188,19 @@ def create_project_pdf_document(
             ),
         )
 
+    table_count = 0
+    table_extraction_message = None
+    try:
+        table_result = extract_owned_document_tables(
+            document_id=document.id,
+            user_id=owner_id,
+            rebuild_chunks=False,
+            storage=storage_service,
+        )
+        table_count = len(table_result.tables)
+    except DocumentTableError as error:
+        table_extraction_message = str(error)
+
     try:
         chunk_result = ensure_owned_document_chunks(
             document_id=document.id,
@@ -205,6 +224,8 @@ def create_project_pdf_document(
             indexing_succeeded=False,
             chunk_count=0,
             indexing_message=str(error),
+            table_count=table_count,
+            table_extraction_message=table_extraction_message,
         )
 
     return CreatedProjectDocument(
@@ -221,6 +242,8 @@ def create_project_pdf_document(
         indexing_succeeded=True,
         chunk_count=len(chunk_result.chunks),
         indexing_message=None,
+        table_count=table_count,
+        table_extraction_message=table_extraction_message,
     )
 
 

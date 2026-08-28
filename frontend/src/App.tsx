@@ -6,6 +6,7 @@ import { NativeWorkspaceShell, type NativeSection } from "./native/NativeWorkspa
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocumentComparePage, DocumentComparisonDetailsPage } from "./pages/DocumentComparePage";
+import { DocumentCollectionsPage } from "./pages/DocumentCollectionsPage";
 import { DocumentDetailsPage } from "./pages/DocumentDetailsPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { FocusInsightsPage, FocusPage } from "./pages/FocusPage";
@@ -86,6 +87,7 @@ export function App() {
   if (path === "/notifications/history") return <PrivateArea active="notifications"><NotificationHistoryPage /></PrivateArea>;
 
   if (path === "/documents" || path === "/documents/dashboard") return <PrivateArea active="documents"><DocumentsPage /></PrivateArea>;
+  if (path === "/documents/collections") return <PrivateArea active="documents"><DocumentCollectionsPage /></PrivateArea>;
   if (path === "/documents/compare") return <PrivateArea active="documents"><DocumentComparePage /></PrivateArea>;
   if (/^\/documents\/comparisons\/\d+$/.test(path)) return <PrivateArea active="documents"><DocumentComparisonDetailsPage /></PrivateArea>;
   if (/^\/documents\/\d+$/.test(path)) return <PrivateArea active="documents"><DocumentDetailsPage /></PrivateArea>;

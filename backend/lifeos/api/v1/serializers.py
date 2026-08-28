@@ -295,6 +295,15 @@ def serialize_document_ocr_status(document) -> dict[str, Any]:
         "average_confidence": (
             round(float(confidence), 4) if confidence is not None else None
         ),
+        "total_characters": int(
+            getattr(document, "ocr_total_characters", 0) or 0
+        ),
+        "total_words": int(
+            getattr(document, "ocr_total_words", 0) or 0
+        ),
+        "quality": (
+            str(getattr(document, "ocr_quality", "") or "").strip() or None
+        ),
         "started_at": _iso(getattr(document, "ocr_started_at", None)),
         "completed_at": _iso(getattr(document, "ocr_completed_at", None)),
         "error_message": getattr(document, "ocr_error", None),
@@ -429,3 +438,51 @@ def json_safe(value):
         return json_safe(asdict(value))
     # Do not leak arbitrary ORM/provider internals. Unknown objects become text.
     return str(value)
+
+
+def serialize_document_table(table) -> dict[str, Any]:
+    return {
+        "id": table.id,
+        "document_id": table.document_id,
+        "page": table.page_number,
+        "table_index": table.table_index,
+        "title": table.title,
+        "headers": table.headers,
+        "rows": table.rows,
+        "row_count": int(table.row_count or 0),
+        "column_count": int(table.column_count or 0),
+        "markdown": table.markdown_text,
+        "created_at": _iso(table.created_at),
+    }
+
+
+def serialize_document_collection(collection, *, include_documents: bool = False) -> dict[str, Any]:
+    items = list(getattr(collection, "items", []) or [])
+    payload = {
+        "id": collection.id,
+        "name": collection.name,
+        "description": collection.description,
+        "document_count": len(items),
+        "created_at": _iso(collection.created_at),
+        "updated_at": _iso(collection.updated_at),
+    }
+    if include_documents:
+        payload["documents"] = [
+            serialize_document_summary(item.document)
+            for item in items
+            if getattr(item, "document", None) is not None
+        ]
+    return payload
+
+
+def serialize_document_collection_question(question) -> dict[str, Any]:
+    return {
+        "id": question.id,
+        "collection_id": question.collection_id,
+        "question": question.question,
+        "answer": question.answer,
+        "sources": question.sources,
+        "status": question.status,
+        "error_message": question.error_message,
+        "created_at": _iso(question.created_at),
+    }

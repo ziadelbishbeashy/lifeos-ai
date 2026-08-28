@@ -187,9 +187,15 @@ def ask_owned_document(
         workflow_version=QUESTION_WORKFLOW_VERSION,
     )
 
+    structured_identity = "\n".join(
+        f"table:{table.page_number}:{table.table_index}:{table.source_fingerprint}"
+        for table in getattr(document, "tables", [])
+    )
+
     source_fingerprint = _create_source_fingerprint(
         extracted_text,
         selected_context=selected_context,
+        structured_identity=structured_identity,
     )
 
     if not force:
@@ -1096,8 +1102,9 @@ def _create_source_fingerprint(
     extracted_text: str,
     *,
     selected_context: ValidatedDocumentSelection | None = None,
+    structured_identity: str = "",
 ) -> str:
-    """Fingerprint document + workflow + optional selected PDF context."""
+    """Fingerprint document, structured tables and optional selected context."""
 
     selected_identity = ""
 
@@ -1110,6 +1117,7 @@ def _create_source_fingerprint(
     fingerprint_input = (
         f"{QUESTION_WORKFLOW_VERSION}\n"
         f"{str(extracted_text or '')}"
+        f"\nstructured:{str(structured_identity or '')}"
         f"{selected_identity}"
     )
 
@@ -1349,6 +1357,10 @@ def _sources_from_claims(
                 if preview.focused
                 else "leading"
             ),
+            "content_type": str(
+                getattr(database_chunk, "content_type", "text") or "text"
+            ),
+            "table_id": getattr(database_chunk, "table_id", None),
         }
 
         context_role = str(

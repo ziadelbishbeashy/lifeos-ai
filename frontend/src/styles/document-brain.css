@@ -998,7 +998,7 @@ html[data-theme="light"] .brain-alert.is-error {
   top: calc(var(--ux-topbar-height, 64px) + 8px);
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
   overflow-x: auto;
   padding: 6px;
@@ -1082,6 +1082,11 @@ html[data-theme="light"] .brain-alert.is-error {
 .brain-tab--search .brain-tab-icon {
   background: rgba(52, 211, 153, .14);
   color: #86efac;
+}
+
+.brain-tab--tables .brain-tab-icon {
+  background: rgba(34, 211, 238, .14);
+  color: #67e8f9;
 }
 
 .brain-tab--actions .brain-tab-icon {
@@ -1772,5 +1777,276 @@ html[data-theme="light"] .brain-tab--ask .brain-tab-icon {
 
   .brain-action-controls > div {
     flex-wrap: wrap;
+  }
+}
+
+
+/* Step 16 — structured tables. Kept inside Document Brain's existing visual language. */
+.brain-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brain-table-list {
+  display: grid;
+  gap: 14px;
+}
+
+.brain-table-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+  border-radius: 12px;
+  background: var(--ux-bg-soft, rgba(255,255,255,.02));
+}
+
+.brain-table-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+}
+
+.brain-table-card > header > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.brain-table-card > header span,
+.brain-table-card > header small {
+  color: var(--ux-muted, #8d98aa);
+  font-size: 12px;
+}
+
+.brain-table-card > header strong {
+  color: var(--ux-text, #f4f6fb);
+  font-size: 14px;
+}
+
+.brain-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.brain-structured-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.brain-structured-table th,
+.brain-structured-table td {
+  padding: 10px 12px;
+  border-right: 1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+  border-bottom: 1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+  color: var(--ux-text-2, #c7ced9);
+  text-align: left;
+  vertical-align: top;
+}
+
+.brain-structured-table th {
+  background: var(--ux-surface-2, #151b25);
+  color: var(--ux-text, #f4f6fb);
+  font-weight: 800;
+}
+
+.brain-structured-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Step 17 — document collections / multi-document grounded Q&A. */
+.brain-collections-layout {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.brain-collection-sidebar {
+  position: sticky;
+  top: calc(var(--ux-topbar-height, 64px) + 12px);
+}
+
+.brain-collection-create {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.brain-collection-create input,
+.brain-collection-create textarea,
+.brain-collection-add select {
+  width: 100%;
+  border: 1px solid var(--ux-border, rgba(255,255,255,.1));
+  border-radius: 9px;
+  outline: none;
+  background: var(--ux-surface-2, #151b25);
+  color: var(--ux-text, #f4f6fb);
+  font: inherit;
+  font-size: 13px;
+}
+
+.brain-collection-create input,
+.brain-collection-add select {
+  min-height: 42px;
+  padding: 0 11px;
+}
+
+.brain-collection-create textarea {
+  resize: vertical;
+  min-height: 70px;
+  padding: 10px 11px;
+}
+
+.brain-collection-list {
+  display: grid;
+  gap: 6px;
+}
+
+.brain-collection-list-item {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ux-text-2, #c7ced9);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.brain-collection-list-item:hover,
+.brain-collection-list-item.active {
+  border-color: rgba(128,118,246,.22);
+  background: rgba(128,118,246,.09);
+}
+
+.brain-collection-list-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brain-collection-list-item span {
+  color: var(--ux-muted, #8d98aa);
+  font-size: 12px;
+}
+
+.brain-collection-main {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.brain-collection-heading {
+  align-items: flex-start;
+}
+
+.brain-collection-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+
+.brain-collection-documents {
+  display: grid;
+  gap: 7px;
+}
+
+.brain-collection-document {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+  border-radius: 9px;
+  background: var(--ux-bg-soft, rgba(255,255,255,.02));
+}
+
+.brain-collection-document > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.brain-collection-document a {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ux-text, #f4f6fb);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.brain-collection-document a:hover {
+  color: var(--ux-accent-2, #a79fff);
+}
+
+.brain-collection-document span {
+  color: var(--ux-muted, #8d98aa);
+  font-size: 12px;
+}
+
+.brain-collection-source-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.brain-collection-source {
+  border: 1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: var(--ux-bg-soft, rgba(255,255,255,.02));
+}
+
+.brain-collection-source summary {
+  cursor: pointer;
+  color: var(--ux-accent-2, #a79fff);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.brain-collection-source strong {
+  display: block;
+  margin-top: 9px;
+}
+
+.brain-collection-source blockquote {
+  margin: 9px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--ux-border, rgba(255,255,255,.1));
+  color: var(--ux-text-2, #c7ced9);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .brain-collections-layout {
+    grid-template-columns: 1fr;
+  }
+  .brain-collection-sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  .brain-collection-add {
+    grid-template-columns: 1fr;
+  }
+  .brain-table-card > header,
+  .brain-collection-document {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
