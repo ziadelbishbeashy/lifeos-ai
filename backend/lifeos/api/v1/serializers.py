@@ -486,3 +486,88 @@ def serialize_document_collection_question(question) -> dict[str, Any]:
         "error_message": question.error_message,
         "created_at": _iso(question.created_at),
     }
+
+
+def serialize_lecture(lecture) -> dict[str, Any]:
+    return {
+        "id": lecture.id,
+        "module_id": lecture.module_id,
+        "title": lecture.title,
+        "lecture_number": lecture.lecture_number,
+        "lecture_date": _iso(lecture.lecture_date),
+        "status": lecture.status,
+        "topics": lecture.topics,
+        "summary": lecture.summary,
+        "created_at": _iso(lecture.created_at),
+        "updated_at": _iso(lecture.updated_at),
+    }
+
+
+def serialize_module(module, *, include_resources: bool = False) -> dict[str, Any]:
+    lectures = list(getattr(module, "lectures", []) or [])
+    document_links = list(getattr(module, "document_links", []) or [])
+    note_links = list(getattr(module, "note_links", []) or [])
+    task_links = list(getattr(module, "task_links", []) or [])
+    collection_links = list(getattr(module, "collection_links", []) or [])
+    payload = {
+        "id": module.id,
+        "title": module.title,
+        "description": module.description,
+        "subject": module.subject,
+        "status": module.status,
+        "created_at": _iso(module.created_at),
+        "updated_at": _iso(module.updated_at),
+        "counts": {
+            "lectures": len(lectures),
+            "documents": len(document_links),
+            "notes": len(note_links),
+            "tasks": len(task_links),
+            "collections": len(collection_links),
+        },
+    }
+    if include_resources:
+        payload["lectures"] = [serialize_lecture(item) for item in lectures]
+        payload["documents"] = [
+            {
+                **serialize_document_summary(link.document),
+                "lecture_id": link.lecture_id,
+            }
+            for link in document_links
+            if getattr(link, "document", None) is not None
+        ]
+        payload["notes"] = [
+            {
+                **serialize_note_summary(link.note),
+                "lecture_id": link.lecture_id,
+            }
+            for link in note_links
+            if getattr(link, "note", None) is not None
+        ]
+        payload["tasks"] = [
+            {
+                **serialize_task(link.task),
+                "lecture_id": link.lecture_id,
+            }
+            for link in task_links
+            if getattr(link, "task", None) is not None
+        ]
+        payload["collections"] = [
+            serialize_document_collection(link.collection)
+            for link in collection_links
+            if getattr(link, "collection", None) is not None
+        ]
+    return payload
+
+
+def serialize_module_question(question) -> dict[str, Any]:
+    return {
+        "id": question.id,
+        "module_id": question.module_id,
+        "lecture_id": question.lecture_id,
+        "question": question.question,
+        "answer": question.answer,
+        "sources": question.sources,
+        "status": question.status,
+        "error_message": question.error_message,
+        "created_at": _iso(question.created_at),
+    }

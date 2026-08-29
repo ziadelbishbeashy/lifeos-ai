@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from database import db
 from models import AITaskSuggestion, DocumentTaskSuggestion, Project, Task
 from services.recurring_task_service import calculate_next_date, generate_next_occurrence
+from services.lifeos_activity_service import add_activity_event
 
 
 TASK_STATUSES = frozenset({"Pending", "In Progress", "Blocked", "Completed"})
@@ -431,6 +432,16 @@ def create_task(owner_id: int, data: TaskInput) -> Task:
         db.session.flush()
         if task.is_recurring and not task.recurrence_series_id:
             task.recurrence_series_id = task.id
+        add_activity_event(
+            user_id=owner_id,
+            event_type="task.created",
+            object_type="task",
+            object_id=task.id,
+            project_id=task.project_id,
+            title=f"Task created: {task.title}",
+            summary=f"Status: {task.status}. Importance: {task.importance}.",
+            changes={"status": task.status, "deadline": task.deadline, "importance": task.importance},
+        )
         db.session.commit()
         return task
     except SQLAlchemyError as error:
@@ -443,6 +454,8 @@ def update_task(task: Task, data: TaskInput) -> Task:
 
     validate_task_input(data)
     previous_status = task.status
+    tracked_fields = ("title", "status", "importance", "deadline", "project_id")
+    before = {name: getattr(task, name) for name in tracked_fields}
 
     for field_name, field_value in data.as_model_fields().items():
         setattr(task, field_name, field_value)
@@ -450,8 +463,24 @@ def update_task(task: Task, data: TaskInput) -> Task:
     _sync_completed_at(task, previous_status)
     if task.is_recurring and not task.recurrence_series_id:
         task.recurrence_series_id = task.id
+    changes = {
+        name: {"from": before[name], "to": getattr(task, name)}
+        for name in tracked_fields
+        if before[name] != getattr(task, name)
+    }
 
     try:
+        if changes:
+            add_activity_event(
+                user_id=task.user_id,
+                event_type="task.updated",
+                object_type="task",
+                object_id=task.id,
+                project_id=task.project_id,
+                title=f"Task updated: {task.title}",
+                summary="Changed " + ", ".join(changes.keys()) + ".",
+                changes=changes,
+            )
         db.session.commit()
         return task
     except SQLAlchemyError as error:
@@ -481,6 +510,16 @@ def toggle_task_completion(task: Task) -> TaskToggleResult:
             else:
                 message = f'Task "{task.title}" completed.'
 
+        add_activity_event(
+            user_id=task.user_id,
+            event_type="task.completed" if task.status == "Completed" else "task.reopened",
+            object_type="task",
+            object_id=task.id,
+            project_id=project_id,
+            title=(f"Task completed: {task.title}" if task.status == "Completed" else f"Task reopened: {task.title}"),
+            summary=message,
+            changes={"status": task.status},
+        )
         db.session.commit()
         return TaskToggleResult(task=task, message=message, project_id=project_id)
     except (SQLAlchemyError, ValueError) as error:
@@ -521,6 +560,14 @@ def delete_task(task: Task) -> DeletedTaskResult:
             )
         )
 
+        add_activity_event(
+            user_id=task.user_id,
+            event_type="task.deleted",
+            object_type="task",
+            object_id=task.id,
+            project_id=task.project_id,
+            title=f"Task deleted: {task.title}",
+        )
         db.session.delete(task)
         db.session.commit()
         return result

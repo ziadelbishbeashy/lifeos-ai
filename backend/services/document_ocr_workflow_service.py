@@ -25,6 +25,7 @@ from services.document_chunk_service import (
     rebuild_owned_document_chunks,
 )
 from services.document_ocr_service import DocumentOCRError, OCRDocumentExtraction, extract_stored_pdf_with_ocr
+from services.resource_limit_service import get_resource_limits
 from storage.base import StorageService
 from storage.service import get_storage
 
@@ -167,10 +168,13 @@ def process_owned_document_ocr(
     try:
         active_provider = provider or get_ocr_provider()
         storage_service = storage or get_storage()
+        limits = get_resource_limits()
         kwargs = {
             "provider": active_provider,
             "storage": storage_service,
             "render_dpi": int(current_app.config.get("OCR_RENDER_DPI", 300)),
+            "max_chars": limits.max_extracted_text_characters,
+            "max_pages": limits.max_pdf_pages,
             "low_confidence_threshold": float(
                 current_app.config.get("OCR_LOW_CONFIDENCE_THRESHOLD", 0.70)
             ),

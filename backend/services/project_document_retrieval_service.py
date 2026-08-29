@@ -11,6 +11,12 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any
 
+from services.resource_limit_service import (
+    ResourceLimitError,
+    effective_context_limit,
+    enforce_scope_document_count,
+    get_resource_limits,
+)
 from models import Document, DocumentChunk, Project
 from services.document_chunk_service import (
     DocumentChunkError,
@@ -207,6 +213,10 @@ def retrieve_owned_project_document_chunks(
         raise ProjectDocumentRetrievalNotReadyError(
             "This project does not have any linked documents yet."
         )
+    try:
+        enforce_scope_document_count(len(documents), scope_label="project")
+    except ResourceLimitError as error:
+        raise ProjectDocumentRetrievalValidationError(str(error)) from error
 
     searchable_documents: list[Document] = []
     all_chunks: list[DocumentChunk] = []
@@ -418,6 +428,7 @@ def build_project_retrieval_context(
         raise ValueError(
             "Project retrieval context must allow at least 500 characters."
         )
+    max_characters = effective_context_limit(max_characters)
 
     blocks: list[str] = []
     used_characters = 0
@@ -519,9 +530,10 @@ def _validate_limit(limit: int) -> int:
             "The result limit must be at least 1."
         )
 
-    if cleaned > MAX_RESULT_LIMIT:
+    max_allowed = min(MAX_RESULT_LIMIT, get_resource_limits().max_retrieval_results)
+    if cleaned > max_allowed:
         raise ProjectDocumentRetrievalValidationError(
-            f"The result limit cannot exceed {MAX_RESULT_LIMIT}."
+            f"The result limit cannot exceed {max_allowed}."
         )
 
     return cleaned

@@ -11,10 +11,15 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ai.providers import GeminiProvider, OpenAIProvider, ProviderRequestError
+from services.resource_limit_service import ResourceLimitError, guard_generation_request
 
 
 class AIProviderRouterError(RuntimeError):
     """Friendly provider error consumed by the LifeOS service layer."""
+
+
+class AIProviderBudgetError(AIProviderRouterError):
+    """Raised when Step 20 blocks an oversized or over-budget provider call."""
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,15 @@ def friendly_provider_error(provider: str, error: Exception) -> str:
 
 
 def _execute(config: ProviderConfig, prompt: str) -> str:
+    try:
+        guard_generation_request(
+            provider=config.name,
+            model=config.model,
+            prompt=prompt,
+        )
+    except ResourceLimitError as error:
+        raise AIProviderBudgetError(str(error)) from error
+
     factory = _PROVIDER_FACTORIES[config.name]
     provider = factory(config.api_key)
     try:
@@ -149,6 +163,10 @@ def generate_text(
         if not result:
             raise AIProviderRouterError(empty_message)
         return result
+    except AIProviderBudgetError:
+        # A LifeOS budget/size boundary is intentional. Do not spend another
+        # provider call trying a fallback after Step 20 has rejected the request.
+        raise
     except AIProviderRouterError as primary_error:
         fallback = fallback_provider_config(primary.name)
         if fallback is None:

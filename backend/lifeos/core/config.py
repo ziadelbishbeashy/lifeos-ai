@@ -71,9 +71,42 @@ class BaseConfig:
 
     MAX_CONTENT_LENGTH = env_int("MAX_UPLOAD_SIZE_MB", 25, minimum=1) * 1024 * 1024
 
+    # Step 20 — predictable resource and provider-cost boundaries.
+    MAX_PDF_PAGES = env_int("MAX_PDF_PAGES", 300, minimum=1)
+    MAX_EXTRACTED_TEXT_CHARACTERS = env_int(
+        "MAX_EXTRACTED_TEXT_CHARACTERS", 200_000, minimum=10_000
+    )
+    MAX_CHUNKS_PER_DOCUMENT = env_int("MAX_CHUNKS_PER_DOCUMENT", 250, minimum=10)
+    MAX_SCOPE_DOCUMENTS = env_int("MAX_SCOPE_DOCUMENTS", 50, minimum=1)
+    MAX_RETRIEVAL_RESULTS = env_int("MAX_RETRIEVAL_RESULTS", 12, minimum=1)
+    MAX_RAG_CONTEXT_CHARACTERS = env_int(
+        "MAX_RAG_CONTEXT_CHARACTERS", 20_000, minimum=500
+    )
+    MAX_AI_PROMPT_CHARACTERS = env_int(
+        "MAX_AI_PROMPT_CHARACTERS", 120_000, minimum=2_000
+    )
+    AI_MAX_GENERATION_CALLS_PER_REQUEST = env_int(
+        "AI_MAX_GENERATION_CALLS_PER_REQUEST", 4, minimum=1
+    )
+    MAX_EMBEDDING_BATCH_SIZE = env_int(
+        "MAX_EMBEDDING_BATCH_SIZE", 50, minimum=1
+    )
+    AI_MAX_EMBEDDING_CALLS_PER_REQUEST = env_int(
+        "AI_MAX_EMBEDDING_CALLS_PER_REQUEST", 12, minimum=1
+    )
+    AI_MAX_EMBEDDING_CHARACTERS_PER_REQUEST = env_int(
+        "AI_MAX_EMBEDDING_CHARACTERS_PER_REQUEST", 120_000, minimum=1_000
+    )
+
     TEMPLATES_AUTO_RELOAD = False
     AUTO_CREATE_DB = False
     ENABLE_EMAIL_SCHEDULER = False
+    # I17 preparation. Keep autonomous automation execution disabled until the
+    # preparation test gate is explicitly completed. Definitions/previews are
+    # still available through the authenticated API.
+    ENABLE_LIFEOS_AUTOMATIONS = env_bool("ENABLE_LIFEOS_AUTOMATIONS", False)
+    LIFEOS_AUTOMATION_POLL_SECONDS = env_int("LIFEOS_AUTOMATION_POLL_SECONDS", 60, minimum=60)
+    LIFEOS_DEFAULT_TIMEZONE = os.getenv("LIFEOS_DEFAULT_TIMEZONE", "UTC")
     SECURITY_HEADERS_ENABLED = True
 
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

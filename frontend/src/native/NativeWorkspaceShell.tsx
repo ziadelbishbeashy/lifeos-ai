@@ -1,23 +1,29 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { User } from "../api/types";
+import { useQuery } from "@tanstack/react-query";
+import type { ProactiveNotificationData, User } from "../api/types";
+import { apiPost } from "../api/client";
 import { FrontendErrorBoundary } from "../components/FrontendErrorBoundary";
 import { logout } from "../auth/session";
 import { navigate } from "../core/navigation";
 
 export type NativeSection =
-  | "dashboard" | "projects" | "tasks" | "notes" | "focus"
-  | "analytics" | "notifications" | "documents";
+  | "dashboard" | "projects" | "modules" | "tasks" | "notes" | "focus"
+  | "analytics" | "notifications" | "documents" | "intelligence" | "memory" | "automations";
 
 type NavItem = { key: NativeSection; href: string; label: string; small?: string; path: string };
 const workspaceItems: NavItem[] = [
   { key: "dashboard", href: "/dashboard", label: "Dashboard", path: "M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z" },
   { key: "projects", href: "/projects", label: "Projects", path: "M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2h7.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-10Z" },
+  { key: "modules", href: "/modules", label: "Modules", small: "Learning", path: "M4 5.5 12 2l8 3.5-8 3.5-8-3.5Zm2 4.2V16l6 3 6-3V9.7l-6 2.6-6-2.6Z" },
   { key: "tasks", href: "/tasks", label: "Tasks", small: "All projects", path: "M9 5h11v2H9V5Zm0 6h11v2H9v-2Zm0 6h11v2H9v-2ZM4.5 4A1.5 1.5 0 1 1 3 5.5 1.5 1.5 0 0 1 4.5 4Zm0 6A1.5 1.5 0 1 1 3 11.5 1.5 1.5 0 0 1 4.5 10Zm0 6A1.5 1.5 0 1 1 3 17.5 1.5 1.5 0 0 1 4.5 16Z" },
   { key: "focus", href: "/focus", label: "Focus Mode", small: "Deep work", path: "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 11h4v-2h-3V6h-2v7h1Z" },
   { key: "analytics", href: "/analytics", label: "Analytics", small: "Trends & reports", path: "M4 19h16v2H2V3h2v16Zm3-3h3V9H7v7Zm5 0h3V5h-3v11Zm5 0h3v-4h-3v4Z" },
   { key: "notifications", href: "/notifications/settings", label: "Notifications", path: "M12 22a2.8 2.8 0 0 0 2.7-2h-5.4A2.8 2.8 0 0 0 12 22Zm8-6h-1V11a7 7 0 0 0-5-6.7V3a2 2 0 0 0-4 0v1.3A7 7 0 0 0 5 11v5H4a1 1 0 0 0 0 2h16a1 1 0 0 0 0-2Z" },
 ];
 const intelligenceItems: NavItem[] = [
+  { key: "intelligence", href: "/ask", label: "Ask LifeOS", small: "Verified AI", path: "m12 2 1.7 4.4L18 8l-4.3 1.6L12 14l-1.7-4.4L6 8l4.3-1.6L12 2Zm6.5 11 .9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1Z" },
+  { key: "memory", href: "/memory", label: "Memory", small: "Controlled", path: "M12 3a4 4 0 0 0-4 4v1H7a3 3 0 0 0-3 3v2a3 3 0 0 0 3 3h1v1a4 4 0 0 0 8 0v-1h1a3 3 0 0 0 3-3v-2a3 3 0 0 0-3-3h-1V7a4 4 0 0 0-4-4Zm-2 5V7a2 2 0 1 1 4 0v1h-4Zm4 8v1a2 2 0 1 1-4 0v-1h4Zm3-2H7a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1Z" },
+  { key: "automations", href: "/automations", label: "Automations", small: "Prepared", path: "M6 4h12v4H6V4Zm0 12h12v4H6v-4Zm6-8v3h5v2h-5v3l-4-4 4-4Z" },
   { key: "notes", href: "/notes", label: "AI Notes", small: "Knowledge", path: "M4 4h16v12H7l-3 3V4Zm4 4v2h8V8H8Zm0 4v2h5v-2H8Z" },
   { key: "documents", href: "/documents", label: "Document Brain", small: "Grounded AI", path: "M6 2h8l4 4v16H6V2Zm8 1.5V7h3.5L14 3.5ZM9 11v2h6v-2H9Zm0 4v2h6v-2H9Z" },
 ];
@@ -25,12 +31,16 @@ const intelligenceItems: NavItem[] = [
 const context: Record<NativeSection, { kicker: string; title: string }> = {
   dashboard: { kicker: "Execution overview", title: "Dashboard" },
   projects: { kicker: "Project workspace", title: "Projects" },
+  modules: { kicker: "Learning workspace", title: "Modules" },
   tasks: { kicker: "Execution center", title: "Tasks" },
   notes: { kicker: "Knowledge workspace", title: "AI Notes" },
   focus: { kicker: "Deep work", title: "Focus Mode" },
   analytics: { kicker: "Performance intelligence", title: "Analytics" },
   notifications: { kicker: "Smart notifications", title: "Notifications" },
   documents: { kicker: "Grounded intelligence", title: "Document Brain" },
+  intelligence: { kicker: "Verified workspace intelligence", title: "Ask LifeOS" },
+  memory: { kicker: "Controlled intelligence context", title: "Memory" },
+  automations: { kicker: "Constrained workflow preparation", title: "Automations" },
 };
 
 function NavLink({ item, active }: { item: NavItem; active: NativeSection }) {
@@ -48,6 +58,14 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
   const initial = (user.name || user.email || "L").trim().slice(0, 1).toUpperCase();
   const firstName = useMemo(() => (user.name || "Workspace").trim().split(/\s+/)[0], [user.name]);
   const pageContext = context[active];
+  const proactiveQuery = useQuery({
+    queryKey: ["lifeos-proactive-notifications"],
+    queryFn: () => apiPost<{ proactive: ProactiveNotificationData }>("/api/v1/intelligence/proactive/refresh"),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
+  const proactiveUnread = proactiveQuery.data?.proactive.counts.unread ?? 0;
 
   useEffect(() => {
     document.body.classList.add("app-body", "studio-theme");
@@ -85,7 +103,7 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
         <span className="navigation-label navigation-label-spaced">Intelligence</span>
         {intelligenceItems.map((item) => <NavLink item={item} active={active} key={item.key}/>) }
         <span className="navigation-label navigation-label-spaced">Planning</span>
-        <span className="navigation-link navigation-link-disabled"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.4 5.1L20 8l-4 4 .9 5.7L12 15l-4.9 2.7L8 12 4 8l5.6-.9L12 2Z"/></svg><span>Smart Plan</span><em>Soon</em></span>
+        <span className="navigation-link navigation-link-disabled"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.4 5.1L20 8l-4 4 .9 5.7L12 15l-4.9 2.7L8 12 4 8l5.6-.9L12 2Z"/></svg><span>Visual Flows</span><em>Later</em></span>
       </nav>
       <div className="sidebar-system-card"><div className="system-card-heading"><span className="system-status-dot"/><strong>All systems ready</strong></div><p>Your workspace is connected and ready.</p></div>
       <div className="sidebar-user-summary"><div className="account-avatar">{initial}</div><div className="account-information"><strong>{user.name}</strong><span>{user.email}</span></div></div>
@@ -104,7 +122,7 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
             <span className="theme-switch-track" aria-hidden="true"><span className="theme-switch-thumb"/></span>
             <span className="theme-switch-icon theme-switch-moon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.3 15.2A8 8 0 0 1 8.8 3.7 8.5 8.5 0 1 0 20.3 15.2Z"/></svg></span>
           </button>
-          <a className="icon-action-button notification-button" href="/notifications/history" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.4 2.4 0 0 0 2.3-2h-4.6A2.4 2.4 0 0 0 12 22Zm7-5-2-2v-4.5a5 5 0 0 0-4-4.9V4a1 1 0 0 0-2 0v1.6a5 5 0 0 0-4 4.9V15l-2 2v1h14v-1Z"/></svg></a>
+          <a className="icon-action-button notification-button lifeos-proactive-bell" href="/notifications/history" title={proactiveUnread ? `${proactiveUnread} unread LifeOS notification${proactiveUnread === 1 ? "" : "s"}` : "Notifications"} aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.4 2.4 0 0 0 2.3-2h-4.6A2.4 2.4 0 0 0 12 22Zm7-5-2-2v-4.5a5 5 0 0 0-4-4.9V4a1 1 0 0 0-2 0v1.6a5 5 0 0 0-4 4.9V15l-2 2v1h14v-1Z"/></svg>{proactiveUnread > 0 ? <span className="lifeos-proactive-badge">{proactiveUnread > 99 ? "99+" : proactiveUnread}</span> : null}</a>
           <div className="profile-menu-wrapper">
             <button type="button" className="profile-menu-button" onClick={() => setProfileOpen(v => !v)} aria-expanded={profileOpen}><span className="topbar-avatar">{initial}</span><span className="topbar-user-copy"><strong>{firstName}</strong><small>Workspace owner</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5H7Z"/></svg></button>
             <div className={`profile-dropdown ${profileOpen ? "open" : ""}`}><div className="profile-dropdown-header"><strong>{user.name}</strong><span>{user.email}</span></div><span className="profile-dropdown-item profile-dropdown-disabled">Profile settings<small>Phase 4</small></span><button type="button" className="profile-logout-button" onClick={handleLogout} disabled={loggingOut}>{loggingOut ? "Logging out…" : "Log out"}</button></div>

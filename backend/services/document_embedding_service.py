@@ -15,6 +15,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
 from models import Document, DocumentChunk
+from services.resource_limit_service import (
+    ResourceLimitError,
+    get_resource_limits,
+    guard_embedding_request,
+)
 from services.document_chunk_service import (
     DocumentChunkError,
     DocumentChunkNotFoundError,
@@ -492,6 +497,15 @@ def _generate_embeddings(
     if not texts:
         return []
 
+    try:
+        guard_embedding_request(
+            provider=EMBEDDING_PROVIDER,
+            model=model,
+            texts=texts,
+        )
+    except ResourceLimitError as error:
+        raise DocumentEmbeddingError(str(error)) from error
+
     separate_contents = [
         types.Content(
             parts=[
@@ -566,9 +580,10 @@ def _validate_batch_size(
             "Embedding batch size must be at least 1."
         )
 
-    if cleaned_batch_size > 100:
+    max_batch_size = get_resource_limits().max_embedding_batch_size
+    if cleaned_batch_size > max_batch_size:
         raise DocumentEmbeddingError(
-            "Embedding batch size cannot exceed 100."
+            f"Embedding batch size cannot exceed {max_batch_size}."
         )
 
     return cleaned_batch_size

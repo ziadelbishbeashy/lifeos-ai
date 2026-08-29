@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiPostForm, ApiError } from "../api/client";
 import { PageState, VerifyButton, type Evidence } from "../components/NativeUi";
 import { DocumentPdfWorkspace } from "../features/documentBrain/DocumentPdfWorkspace";
 import { currentPath } from "../core/navigation";
+import { ContextConnectionsPanel } from "../components/ContextConnectionsPanel";
 
 type Suggestion = {
   id: number;
@@ -754,6 +755,8 @@ export function DocumentDetailsPage() {
       ) : null}
 
       <DocumentPdfWorkspace documentId={id} filename={data.document.filename} pdfUrl={data.pdf_url} />
+
+      <ContextConnectionsPanel resourceType="document" resourceId={id} />
 
       {data.document.is_current_version ? (
         <article className="brain-card brain-version-card">

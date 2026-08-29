@@ -815,17 +815,13 @@ def _comparison_category_counts(
 def _find_owned_document_for_details(
     document_id: int,
 ) -> Document | None:
-    """Return the document only when the current user owns its project."""
+    """Return the document only when the current user owns it."""
 
     return (
         Document.query
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             Document.id == document_id,
-            Project.user_id == current_user.id,
+            Document.user_id == current_user.id,
         )
         .first()
     )

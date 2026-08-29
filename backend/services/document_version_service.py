@@ -15,7 +15,7 @@ import re
 from pathlib import PurePath
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import or_, true
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.datastructures import FileStorage
 
@@ -23,6 +23,7 @@ from database import db
 from models import (
     Document,
     DocumentCollectionItem,
+    ModuleDocumentLink,
     DocumentAIAnalysis,
     DocumentQuestion,
     DocumentTaskSuggestion,
@@ -34,6 +35,7 @@ from services.document_access_service import (
     DocumentNotFoundError,
     require_owned_document,
 )
+from services.lifeos_activity_service import add_activity_event
 from services.document_embedding_service import (
     DocumentEmbeddingError,
     ensure_owned_document_embeddings,
@@ -102,7 +104,7 @@ def current_document_filter():
         # SQL Server BIT columns must be compared with = 1.  Using
         # ``.is_(True)`` compiles to ``IS 1`` under the MSSQL dialect,
         # which SQL Server rejects with "Incorrect syntax near '1'".
-        Document.is_current_version == True,  # noqa: E712
+        Document.is_current_version == true(),
     )
 
 
@@ -134,14 +136,9 @@ def get_owned_document_version_history(
 
     family = (
         DocumentVersionFamily.query
-        .join(
-            Project,
-            DocumentVersionFamily.project_id == Project.id,
-        )
         .filter(
             DocumentVersionFamily.id == document.version_family_id,
             DocumentVersionFamily.user_id == owner_id,
-            Project.user_id == owner_id,
         )
         .first()
     )
@@ -155,7 +152,7 @@ def get_owned_document_version_history(
         Document.query
         .filter_by(
             version_family_id=family.id,
-            project_id=family.project_id,
+            user_id=owner_id,
         )
         .order_by(
             Document.version_number.asc(),
@@ -212,11 +209,6 @@ def create_new_document_version(
         raise DocumentVersionNotFoundError(
             "The source document was not found."
         ) from error
-
-    if source_document.project_id is None:
-        raise DocumentVersionValidationError(
-            "Only project documents can have version history."
-        )
 
     history = get_owned_document_version_history(
         document_id=source_document.id,
@@ -296,7 +288,7 @@ def create_new_document_version(
             Document.query
             .filter_by(
                 version_family_id=family.id,
-                project_id=source_document.project_id,
+                user_id=owner_id,
             )
             .order_by(
                 Document.version_number.desc(),
@@ -380,6 +372,14 @@ def create_new_document_version(
         ):
             collection_item.document_id = new_document.id
 
+        # Module links follow the logical current document for the same reason.
+        for module_link in (
+            ModuleDocumentLink.query
+            .filter_by(document_id=current_document.id)
+            .all()
+        ):
+            module_link.document_id = new_document.id
+
         (
             outdated_analyses,
             outdated_questions,
@@ -390,6 +390,16 @@ def create_new_document_version(
             owner_id=owner_id,
         )
 
+        add_activity_event(
+            user_id=owner_id,
+            event_type="document.version_changed",
+            object_type="document",
+            object_id=new_document.id,
+            project_id=new_document.project_id,
+            title=f"New document version: {new_document.filename}",
+            summary=f"Activated version {next_version_number} and preserved the previous version as history.",
+            changes={"from_document_id": current_document.id, "to_document_id": new_document.id, "version": next_version_number},
+        )
         db.session.commit()
 
     except SQLAlchemyError as error:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app import create_app
-from models import Document, Project
+from models import Document
 from services.document_chunk_service import (
     DocumentChunkError,
     ensure_owned_document_chunks,
@@ -16,12 +16,9 @@ def main() -> int:
     with app.app_context():
         documents = (
             Document.query
-            .join(
-                Project,
-                Document.project_id == Project.id,
-            )
             .filter(
-                Document.extracted_text.isnot(None)
+                Document.user_id.isnot(None),
+                Document.extracted_text.isnot(None),
             )
             .order_by(
                 Document.id.asc()
@@ -47,18 +44,14 @@ def main() -> int:
         )
 
         for document in readable_documents:
-            owner_id = (
-                document.project.user_id
-                if document.project
-                else None
-            )
+            owner_id = document.user_id
 
             if owner_id is None:
                 failed_count += 1
 
                 print(
                     f"[SKIPPED] Document {document.id}: "
-                    "no owning project user."
+                    "no direct document owner."
                 )
 
                 continue

@@ -6,6 +6,8 @@ from database import db
 from models import (
     Document,
     DocumentAIAnalysis,
+    DocumentCollection,
+    DocumentCollectionItem,
     DocumentQuestion,
     DocumentTaskSuggestion,
     Project,
@@ -68,6 +70,15 @@ def test_new_version_marks_old_derived_results_outdated(
 ):
     with app.app_context():
         project, old_document = _project_document(user)
+
+        collection = DocumentCollection(user_id=user, name="Version-following pack")
+        db.session.add(collection)
+        db.session.flush()
+        membership = DocumentCollectionItem(
+            collection_id=collection.id,
+            document_id=old_document.id,
+        )
+        db.session.add(membership)
 
         analysis = DocumentAIAnalysis(
             document_id=old_document.id,
@@ -180,12 +191,14 @@ def test_new_version_marks_old_derived_results_outdated(
         db.session.refresh(question)
         db.session.refresh(suggestion)
         db.session.refresh(project_question)
+        db.session.refresh(membership)
 
         assert old_document.version_number == 1
         assert old_document.is_current_version is False
         assert result.current_document.version_number == 2
         assert result.current_document.is_current_version is True
         assert result.current_document.version_family_id == old_document.version_family_id
+        assert membership.document_id == result.current_document.id
         assert result.change_summary["changed_pages"] == [2]
         assert analysis.status == "Outdated"
         assert question.status == "Outdated"

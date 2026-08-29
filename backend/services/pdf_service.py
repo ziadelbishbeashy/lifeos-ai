@@ -112,18 +112,23 @@ def store_pdf_upload(
     upload: FileStorage | None,
     *,
     owner_id: int,
-    project_id: int,
+    project_id: int | None = None,
     max_bytes: int,
     storage: StorageService | None = None,
 ) -> StoredPDF:
-    """Validate and securely store an uploaded project PDF."""
+    """Validate and securely store an uploaded LifeOS PDF.
+
+    Project documents keep their existing project namespace. Documents uploaded
+    directly into another workspace (for example a Module) use the user's
+    general document namespace instead of creating a fake Project.
+    """
 
     if owner_id <= 0:
         raise ValueError(
             "A valid document owner is required."
         )
 
-    if project_id <= 0:
+    if project_id is not None and project_id <= 0:
         raise ValueError(
             "A valid project is required."
         )
@@ -142,6 +147,8 @@ def store_pdf_upload(
 
     namespace = (
         f"user-{owner_id}-project-{project_id}"
+        if project_id is not None
+        else f"user-{owner_id}-documents"
     )
 
     upload.stream.seek(0)
@@ -163,10 +170,15 @@ def store_pdf_upload(
 
 
 MAX_EXTRACTED_TEXT_CHARACTERS = 200_000
+DEFAULT_MAX_PDF_PAGES = 300
 
 
 class PDFExtractionError(RuntimeError):
     """Raised when text cannot be extracted from a stored PDF."""
+
+
+class PDFResourceLimitError(PDFExtractionError):
+    """Raised when a valid PDF exceeds a reviewed Step 20 processing limit."""
 
 
 @dataclass(frozen=True)
@@ -242,6 +254,7 @@ def extract_pdf_text(
     *,
     storage: StorageService | None = None,
     max_chars: int = MAX_EXTRACTED_TEXT_CHARACTERS,
+    max_pages: int = DEFAULT_MAX_PDF_PAGES,
 ) -> ExtractedPDFText:
     """Extract readable embedded text from a stored PDF."""
 
@@ -255,6 +268,11 @@ def extract_pdf_text(
     if max_chars <= 0:
         raise ValueError(
             "The extracted-text limit must be positive."
+        )
+
+    if max_pages <= 0:
+        raise ValueError(
+            "The PDF page limit must be positive."
         )
 
     storage_service = storage or get_storage()
@@ -275,6 +293,12 @@ def extract_pdf_text(
                 )
 
             page_count = len(reader.pages)
+            if page_count > max_pages:
+                raise PDFResourceLimitError(
+                    f"This PDF has {page_count} pages. LifeOS can process at most "
+                    f"{max_pages} pages per PDF with the current Step 20 limits."
+                )
+
             pages_with_text = 0
             pages_needing_ocr: list[int] = []
             text_parts: list[str] = []

@@ -30,6 +30,8 @@ from models import (
     Task,
 )
 
+from services.lifeos_activity_service import add_activity_event
+
 
 NOTE_TYPES = (
     "Quick Note",
@@ -252,6 +254,16 @@ def create_note(owner_id: int, data: NoteInput) -> Note:
     note = Note(user_id=owner_id, **data.as_model_fields())
     try:
         db.session.add(note)
+        db.session.flush()
+        add_activity_event(
+            user_id=owner_id,
+            event_type="note.created",
+            object_type="note",
+            object_id=note.id,
+            project_id=note.project_id,
+            title=f"Note created: {note.title}",
+            changes={"note_type": note.note_type},
+        )
         db.session.commit()
         return note
     except SQLAlchemyError as error:
@@ -261,10 +273,27 @@ def create_note(owner_id: int, data: NoteInput) -> Note:
 
 def update_note(note: Note, data: NoteInput) -> Note:
     validate_note_input(data)
+    before = {"title": note.title, "note_type": note.note_type, "project_id": note.project_id, "is_pinned": note.is_pinned}
     for name, value in data.as_model_fields().items():
         setattr(note, name, value)
     note.updated_at = datetime.utcnow()
+    changes = {
+        name: {"from": before[name], "to": getattr(note, name)}
+        for name in before
+        if before[name] != getattr(note, name)
+    }
     try:
+        if changes:
+            add_activity_event(
+                user_id=note.user_id,
+                event_type="note.updated",
+                object_type="note",
+                object_id=note.id,
+                project_id=note.project_id,
+                title=f"Note updated: {note.title}",
+                summary="Changed " + ", ".join(changes.keys()) + ".",
+                changes=changes,
+            )
         db.session.commit()
         return note
     except SQLAlchemyError as error:
@@ -296,6 +325,14 @@ def delete_note(note: Note) -> str:
         )
         NoteAIAnalysis.query.filter_by(note_id=note.id).delete(
             synchronize_session=False
+        )
+        add_activity_event(
+            user_id=note.user_id,
+            event_type="note.deleted",
+            object_type="note",
+            object_id=note.id,
+            project_id=note.project_id,
+            title=f"Note deleted: {title}",
         )
         db.session.delete(note)
         db.session.commit()

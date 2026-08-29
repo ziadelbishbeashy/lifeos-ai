@@ -8,6 +8,7 @@ import { deleteProject, fetchProject, projectKeys, updateProject } from "../feat
 import { TaskForm } from "../features/tasks/TaskForm";
 import { createTask, deleteTask, taskKeys, toggleTask, updateTask } from "../features/tasks/api";
 import { EmptyState, VerifyButton } from "../components/NativeUi";
+import { ContextConnectionsPanel } from "../components/ContextConnectionsPanel";
 
 export function ProjectDetailsPage() {
   const queryClient = useQueryClient();
@@ -215,6 +216,8 @@ export function ProjectDetailsPage() {
         {data.document_suggestions?.length ? <div className="details-stack">{data.document_suggestions.map((item) => <div className="resource-row" key={item.id}><label className="check-row"><input type="checkbox" disabled={item.status !== "Pending"} checked={selectedSuggestions.has(item.id)} onChange={(event) => setSelectedSuggestions((current) => { const next = new Set(current); event.target.checked ? next.add(item.id) : next.delete(item.id); return next; })} /><span><strong>{item.title}</strong><small>{item.priority} · {item.lifecycle_label}</small></span></label><VerifyButton source={item.source as any} /></div>)}</div> : <EmptyState title="No document-derived actions" text="Analyze linked documents to surface grounded task suggestions here." />}
         {selectedSuggestions.size ? <div className="form-actions"><button className="primary-button" disabled={bulkSuggestions.isPending} onClick={() => bulkSuggestions.mutate([...selectedSuggestions])}>{bulkSuggestions.isPending ? "Creating…" : `Create ${selectedSuggestions.size} task${selectedSuggestions.size === 1 ? "" : "s"}`}</button></div> : null}
       </article>
+
+      <ContextConnectionsPanel resourceType="project" resourceId={projectId} />
 
       <article className="panel-card project-section">
         <div className="section-heading"><div><span className="panel-kicker">Project RAG</span><h2>Ask across project documents</h2></div><span className="status-pill">{data.metrics.searchable_document_count} searchable</span></div>

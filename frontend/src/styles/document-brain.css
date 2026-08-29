@@ -2050,3 +2050,10 @@ html[data-theme="light"] .brain-tab--ask .brain-tab-icon {
     flex-direction: column;
   }
 }
+
+
+.brain-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from services.resource_limit_service import effective_context_limit, get_resource_limits
 from models import (
     Document,
     DocumentChunk,
@@ -694,6 +695,7 @@ def build_hybrid_retrieval_context(
             "Retrieval context must allow at least "
             "500 characters."
         )
+    max_characters = effective_context_limit(max_characters)
 
     blocks: list[str] = []
     used_characters = 0
@@ -843,10 +845,11 @@ def _validate_limit(
             "The result limit must be at least 1."
         )
 
-    if cleaned_limit > MAX_RESULT_LIMIT:
+    max_allowed = min(MAX_RESULT_LIMIT, get_resource_limits().max_retrieval_results)
+    if cleaned_limit > max_allowed:
         raise DocumentHybridRetrievalValidationError(
             "The result limit cannot exceed "
-            f"{MAX_RESULT_LIMIT}."
+            f"{max_allowed}."
         )
 
     return cleaned_limit

@@ -84,3 +84,52 @@ def test_rebuild_adds_structured_table_chunk(app, user):
 
         persisted = DocumentChunk.query.filter_by(table_id=table.id).one()
         assert persisted.content_type == "table"
+
+
+def test_rebuild_allows_structured_table_only_document(app, user):
+    with app.app_context():
+        project = Project(
+            user_id=user,
+            title="Table Only Project",
+            status="In Progress",
+            priority="High",
+        )
+        document = Document(
+            project=project,
+            filename="table-only.pdf",
+            file_path="stored/table-only.pdf",
+            extracted_text="",
+        )
+        db.session.add_all([project, document])
+        db.session.commit()
+
+        table = DocumentTable(
+            document_id=document.id,
+            user_id=user,
+            page_number=2,
+            table_index=1,
+            title="Inventory",
+            headers_json=json.dumps(["Category", "Stock"]),
+            rows_json=json.dumps([["Laptops", "12"]]),
+            markdown_text=(
+                "Table: Inventory\n"
+                "| Category | Stock |\n"
+                "| --- | --- |\n"
+                "| Laptops | 12 |"
+            ),
+            row_count=1,
+            column_count=2,
+            source_fingerprint="c" * 64,
+        )
+        db.session.add(table)
+        db.session.commit()
+
+        result = rebuild_owned_document_chunks(
+            document_id=document.id,
+            user_id=user,
+        )
+
+        assert len(result.chunks) == 1
+        assert result.chunks[0].content_type == "table"
+        assert result.chunks[0].page_start == 2
+        assert "Laptops | 12" in result.chunks[0].text

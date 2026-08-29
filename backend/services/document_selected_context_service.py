@@ -75,13 +75,9 @@ def validate_owned_pdf_selection(
 
     document = (
         Document.query
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             Document.id == int(document_id),
-            Project.user_id == int(user_id),
+            Document.user_id == int(user_id),
         )
         .first()
     )

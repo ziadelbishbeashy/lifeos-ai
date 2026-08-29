@@ -79,7 +79,8 @@ export function DocumentsPage() {
         .toLowerCase();
 
       if (normalizedSearch && !searchable.includes(normalizedSearch)) return false;
-      if (project !== "all" && String(item.project_id ?? "") !== project) return false;
+      if (project === "none" && item.project_id !== null) return false;
+      if (project !== "all" && project !== "none" && String(item.project_id ?? "") !== project) return false;
       if (status === "analysed" && !item.summary) return false;
       if (status === "ready" && (!item.has_text || Boolean(item.summary))) return false;
       if (status === "needs-text" && item.has_text) return false;
@@ -107,7 +108,7 @@ export function DocumentsPage() {
         <div className="brain-page-title">
           <span className="brain-eyebrow">Grounded workspace</span>
           <h1>Document Brain</h1>
-          <p>Search, analyse and question the PDFs connected to your projects.</p>
+          <p>Search, analyse and question PDFs across your projects and learning modules.</p>
         </div>
         <div className="brain-header-actions">
           <a className="workspace-secondary-button" href="/documents/collections">
@@ -160,15 +161,16 @@ export function DocumentsPage() {
                     type="search"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search documents, projects, summaries…"
+                    placeholder="Search documents, workspaces, summaries…"
                     aria-label="Search documents"
                   />
                 </label>
                 <div className="brain-filter-row">
                   <label>
-                    <span>Project</span>
+                    <span>Project link</span>
                     <select value={project} onChange={(event) => setProject(event.target.value)}>
-                      <option value="all">All projects</option>
+                      <option value="all">All documents</option>
+                      <option value="none">Module / no project</option>
                       {data.projects.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
                     </select>
                   </label>
@@ -220,7 +222,7 @@ export function DocumentsPage() {
               compact
               symbol="D"
               title="No documents yet"
-              text="Upload your first project PDF to start building a searchable knowledge base."
+              text="Upload your first PDF from a project or learning module to start building a searchable knowledge base."
               action={data.projects.length ? <a href="#brain-upload" className="workspace-primary-button">Upload first PDF</a> : undefined}
             />
           )}
@@ -280,8 +282,8 @@ export function DocumentsPage() {
             <section className="brain-create-project-card">
               <span className="brain-upload-icon"><BrainIcon name="project" /></span>
               <h2>Create a project first</h2>
-              <p>Documents belong to projects so analysis, tasks and evidence stay connected.</p>
-              <a href="/projects" className="workspace-primary-button">Create project</a>
+              <p>This Document Brain uploader connects PDFs to projects. Module PDFs can be uploaded directly inside Modules.</p>
+              <div className="brain-empty-actions"><a href="/projects" className="workspace-primary-button">Create project</a><a href="/modules" className="workspace-secondary-button">Open Modules</a></div>
             </section>
           )}
 

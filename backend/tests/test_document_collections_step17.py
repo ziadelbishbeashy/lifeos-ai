@@ -105,3 +105,28 @@ def test_collection_listing_is_user_scoped(app, client, user):
     assert response.status_code == 200
     names = [item["name"] for item in response.get_json()["items"]]
     assert names == ["My Pack"]
+
+
+def test_delete_collection_keeps_documents(app, client, user):
+    with app.app_context():
+        document_id = _document(user, filename="keep-me.pdf").id
+
+    _login(client)
+    created = client.post(
+        "/api/v1/document-collections",
+        json={"name": "Temporary Pack"},
+    )
+    collection_id = created.get_json()["item"]["id"]
+
+    added = client.post(
+        f"/api/v1/document-collections/{collection_id}/documents",
+        json={"document_id": document_id},
+    )
+    assert added.status_code == 200
+
+    deleted = client.delete(f"/api/v1/document-collections/{collection_id}")
+    assert deleted.status_code == 200
+    assert deleted.get_json()["deleted"] is True
+
+    with app.app_context():
+        assert db.session.get(Document, document_id) is not None

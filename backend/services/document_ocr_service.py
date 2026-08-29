@@ -117,6 +117,7 @@ def extract_stored_pdf_with_ocr(
     render_page: Callable[..., bytes] = render_pdf_page_png,
     render_dpi: int = 300,
     max_chars: int = MAX_EXTRACTED_TEXT_CHARACTERS,
+    max_pages: int = 300,
     low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
     preprocess_image: Callable[[bytes], bytes] | None = None,
 ) -> OCRDocumentExtraction:
@@ -127,6 +128,8 @@ def extract_stored_pdf_with_ocr(
         raise DocumentOCRError("A stored PDF is required for OCR.")
     if max_chars <= 0:
         raise ValueError("The extracted-text limit must be positive.")
+    if max_pages <= 0:
+        raise ValueError("The PDF page limit must be positive.")
     if not 0 <= low_confidence_threshold <= 1:
         raise ValueError("OCR confidence threshold must be between 0 and 1.")
 
@@ -143,6 +146,11 @@ def extract_stored_pdf_with_ocr(
         if reader.is_encrypted:
             raise DocumentOCRError(
                 "Password-protected PDFs cannot be processed with OCR."
+            )
+        if len(reader.pages) > max_pages:
+            raise DocumentOCRError(
+                f"This PDF has {len(reader.pages)} pages. LifeOS OCR can process at most "
+                f"{max_pages} pages with the current Step 20 limits."
             )
 
         extracted_pages: list[OCRPageExtraction] = []

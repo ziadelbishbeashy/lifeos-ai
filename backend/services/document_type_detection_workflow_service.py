@@ -97,13 +97,9 @@ def _find_owned_document(
 
     return (
         Document.query
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             Document.id == document_id,
-            Project.user_id == user_id,
+            Document.user_id == user_id,
         )
         .first()
     )

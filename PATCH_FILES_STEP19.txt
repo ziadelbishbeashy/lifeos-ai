@@ -1,0 +1,24 @@
+Step 19 — Prompt Injection & Security
+
+Added:
+- STEP19_PROMPT_INJECTION_SECURITY.md
+- STEP19_ATTACK_MATRIX.md
+- backend/STEP19_PROMPT_INJECTION_SECURITY.md
+- backend/STEP19_ATTACK_MATRIX.md
+- backend/evaluations/step19_prompt_injection.json
+- backend/services/document_security_service.py
+- backend/services/security_evaluation_service.py
+- backend/tests/test_document_security_service_step19.py
+- backend/tests/test_prompt_injection_security_step19.py
+- backend/tests/test_security_evaluation_service_step19.py
+- backend/reports/step19-static.json
+
+Updated:
+- backend/lifeos/application.py
+- backend/services/ai_service.py
+- backend/services/document_answerability_service.py
+- backend/services/document_comparison_verifier_service.py
+- backend/services/document_type_detection_service.py
+
+No database migration was added for Step 19.
+Frontend was not redesigned or modified.

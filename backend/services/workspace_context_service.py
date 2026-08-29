@@ -145,6 +145,7 @@ def build_project_tasks_context(
                 "difficulty": task.difficulty or "Medium",
                 "deadline": iso_date(task.deadline),
                 "completed_at": iso_date(task.completed_at),
+                "created_at": iso_date(task.created_at),
                 "priority_score": task.priority_score or 0,
             }
         )
@@ -693,13 +694,9 @@ def build_project_documents_context(
 
     base_query = (
         Document.query
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             Document.project_id == project.id,
-            Project.user_id == owner_id,
+            Document.user_id == owner_id,
             current_document_filter(),
         )
     )

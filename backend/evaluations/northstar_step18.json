@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "name": "Northstar Step 18 Gold Set",
+  "description": "Gold regression set for native text, structured tables, collection retrieval, multi-document answers, citations, and unsupported-question grounding.",
+  "defaults": {
+    "top_k": 10
+  },
+  "thresholds": {
+    "retrieval_recall": 0.9,
+    "retrieval_all_sources_rate": 0.8,
+    "retrieval_mrr": 0.5,
+    "answerability_accuracy": 1.0,
+    "answer_text_accuracy": 0.9,
+    "citation_recall": 0.9,
+    "citation_all_sources_rate": 0.8
+  },
+  "cases": [
+    {
+      "id": "retail_laptop_q4_units",
+      "description": "Step 16 table cell retrieval preserves the Laptop row and Q4 column.",
+      "tags": [
+        "document",
+        "table",
+        "step16"
+      ],
+      "scope": {
+        "type": "document",
+        "filename": "01_Northstar_Retail_Performance_2026.pdf"
+      },
+      "question": "What were Laptop Q4 unit sales?",
+      "expected": {
+        "answerable": true,
+        "answer_contains": [
+          "3,250"
+        ],
+        "retrieval_sources": [
+          {
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3
+          }
+        ],
+        "citation_sources": [
+          {
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "content_type": "table"
+          }
+        ]
+      }
+    },
+    {
+      "id": "retail_highest_return_rate",
+      "description": "Step 16 retrieves and cites the return-rate table that directly supports Headphones at 6.4%.",
+      "tags": [
+        "document",
+        "table",
+        "step16"
+      ],
+      "scope": {
+        "type": "document",
+        "filename": "01_Northstar_Retail_Performance_2026.pdf"
+      },
+      "question": "What product had the highest return rate?",
+      "expected": {
+        "answerable": true,
+        "answer_contains": [
+          "Headphones",
+          "6.4%"
+        ],
+        "retrieval_sources": [
+          {
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 5
+          }
+        ],
+        "citation_sources": [
+          {
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 5,
+            "content_type": "table"
+          }
+        ]
+      }
+    },
+    {
+      "id": "retail_below_reorder_point",
+      "description": "Step 16 retrieves and cites the reorder-point table that directly supports Laptops and Smartwatches.",
+      "tags": [
+        "document",
+        "table",
+        "step16"
+      ],
+      "scope": {
+        "type": "document",
+        "filename": "01_Northstar_Retail_Performance_2026.pdf"
+      },
+      "question": "Which two categories are below their reorder points?",
+      "expected": {
+        "answerable": true,
+        "answer_contains": [
+          "Laptops",
+          "Smartwatches"
+        ],
+        "retrieval_sources": [
+          {
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 6
+          }
+        ],
+        "citation_sources": [
+          {
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 6,
+            "content_type": "table"
+          }
+        ]
+      }
+    },
+    {
+      "id": "collection_codename_manager_budget",
+      "description": "Step 17 combines Operations and Finance evidence in one grounded answer.",
+      "tags": [
+        "collection",
+        "multi-document",
+        "step17"
+      ],
+      "scope": {
+        "type": "collection",
+        "document_filenames": [
+          "01_Northstar_Retail_Performance_2026.pdf",
+          "02_Northstar_Operations_Strategy_2026.pdf",
+          "03_Northstar_Finance_Customer_Insights_2026.pdf"
+        ]
+      },
+      "question": "What is the project codename, who manages it, and what is its approved budget?",
+      "expected": {
+        "answerable": true,
+        "answer_contains": [
+          "AURORA-26",
+          "Nadia Fawzy",
+          "EGP 8.4 million"
+        ],
+        "sources": [
+          {
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf"
+          },
+          {
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf"
+          }
+        ]
+      }
+    },
+    {
+      "id": "collection_three_document_answer",
+      "description": "Step 17 spans Operations, Finance, and the Retail table. The broad product wording includes Accessories.",
+      "tags": [
+        "collection",
+        "multi-document",
+        "table",
+        "step16",
+        "step17"
+      ],
+      "scope": {
+        "type": "collection",
+        "document_filenames": [
+          "01_Northstar_Retail_Performance_2026.pdf",
+          "02_Northstar_Operations_Strategy_2026.pdf",
+          "03_Northstar_Finance_Customer_Insights_2026.pdf"
+        ]
+      },
+      "question": "Give me the program launch date, approved budget, and the product with the highest Q4 unit sales.",
+      "expected": {
+        "answerable": true,
+        "answer_contains": [
+          "16 November 2026",
+          "EGP 8.4 million",
+          "Accessories",
+          "8,600"
+        ],
+        "sources": [
+          {
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf"
+          },
+          {
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf"
+          },
+          {
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "content_type": "table"
+          }
+        ]
+      }
+    },
+    {
+      "id": "collection_unsupported_ceo_salary",
+      "description": "The answerability verifier must fail closed when the collection has no supporting evidence.",
+      "tags": [
+        "collection",
+        "grounding",
+        "no-answer",
+        "step17"
+      ],
+      "scope": {
+        "type": "collection",
+        "document_filenames": [
+          "01_Northstar_Retail_Performance_2026.pdf",
+          "02_Northstar_Operations_Strategy_2026.pdf",
+          "03_Northstar_Finance_Customer_Insights_2026.pdf"
+        ]
+      },
+      "question": "What is the CEO's salary?",
+      "expected": {
+        "answerable": false,
+        "answer_not_contains": [
+          "EGP 8.4 million",
+          "AURORA-26"
+        ]
+      }
+    }
+  ]
+}

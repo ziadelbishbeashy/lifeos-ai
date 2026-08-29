@@ -15,6 +15,7 @@ from sqlalchemy import case
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
+from services.lifeos_activity_service import add_activity_event
 from services.document_comparison_service import (
     delete_comparisons_referencing_documents,
 )
@@ -207,6 +208,16 @@ def create_project(owner_id: int, data: ProjectInput) -> Project:
 
     try:
         db.session.add(project)
+        db.session.flush()
+        add_activity_event(
+            user_id=owner_id,
+            event_type="project.created",
+            object_type="project",
+            object_id=project.id,
+            project_id=project.id,
+            title=f"Project created: {project.title}",
+            changes={"status": project.status, "priority": project.priority, "progress": project.progress},
+        )
         db.session.commit()
         return project
     except SQLAlchemyError as error:
@@ -218,11 +229,30 @@ def update_project(project: Project, data: ProjectInput) -> Project:
     """Validate and update an existing project in one transaction."""
 
     validate_project_input(data)
+    tracked_fields = ("title", "status", "priority", "current_phase", "progress", "deadline", "start_date")
+    before = {name: getattr(project, name) for name in tracked_fields}
 
     for field_name, field_value in data.as_model_fields().items():
         setattr(project, field_name, field_value)
 
+    changes = {
+        name: {"from": before[name], "to": getattr(project, name)}
+        for name in tracked_fields
+        if before[name] != getattr(project, name)
+    }
+
     try:
+        if changes:
+            add_activity_event(
+                user_id=project.user_id,
+                event_type="project.updated",
+                object_type="project",
+                object_id=project.id,
+                project_id=project.id,
+                title=f"Project updated: {project.title}",
+                summary="Changed " + ", ".join(changes.keys()) + ".",
+                changes=changes,
+            )
         db.session.commit()
         return project
     except SQLAlchemyError as error:
@@ -256,6 +286,15 @@ def delete_project(project: Project) -> str:
 
         db.session.flush()
 
+        add_activity_event(
+            user_id=project.user_id,
+            event_type="project.deleted",
+            object_type="project",
+            object_id=project.id,
+            project_id=None,
+            title=f"Project deleted: {project_title}",
+            summary="The project was removed from the workspace.",
+        )
         db.session.delete(project)
         db.session.commit()
         return project_title

@@ -118,8 +118,7 @@ def build_dashboard_context(owner_id: int) -> dict[str, Any]:
 
     documents_count = (
         Document.query
-        .join(Project, Document.project_id == Project.id)
-        .filter(Project.user_id == owner_id)
+        .filter(Document.user_id == owner_id)
         .count()
     )
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 from sqlalchemy.exc import SQLAlchemyError
 from database import db
-from models import Document,DocumentCollection,DocumentCollectionItem,DocumentCollectionQuestion
+from models import Document,DocumentCollection,DocumentCollectionItem,DocumentCollectionQuestion,Project
 from services.ai_service import AIServiceError,MAX_QUESTION_CHARACTERS,ask_document_collection_question,get_ai_configuration
 from services.document_answerability_service import DocumentAnswerabilityError,verify_document_answerability
 from services.document_collection_retrieval_service import CollectionRetrievalError,CollectionRetrievalNotFoundError,CollectionRetrievalNotReadyError,CollectionRetrievalValidationError,CollectionRetrievalResult,build_collection_context,retrieve_owned_collection_chunks,select_collection_sources
@@ -58,14 +58,27 @@ def list_owned_collection_questions(*,collection_id:int,user_id:int,limit:int=50
 
 def create_collection_source_fingerprint(*,collection_id:int,user_id:int)->str:
     c=_find(collection_id,user_id)
-    docs=(Document.query.join(DocumentCollectionItem,DocumentCollectionItem.document_id==Document.id).filter(DocumentCollectionItem.collection_id==c.id,current_document_filter()).order_by(Document.id.asc()).all())
-    readable=[d for d in docs if str(d.extracted_text or "").strip()]
-    if not readable: raise CollectionQuestionNotReadyError("This collection does not have any readable current documents yet.")
+    docs=(Document.query
+          .join(DocumentCollectionItem,DocumentCollectionItem.document_id==Document.id)
+          .filter(DocumentCollectionItem.collection_id==c.id,Document.user_id==user_id,current_document_filter())
+          .order_by(Document.id.asc()).all())
+    readable=[d for d in docs if _has_searchable_content(d)]
+    if not readable: raise CollectionQuestionNotReadyError("This collection does not have any readable current documents or structured tables yet.")
     parts=[COLLECTION_QUESTION_WORKFLOW_VERSION,f"collection:{c.id}"]
     for d in readable:
-        ch=hashlib.sha256(str(d.extracted_text or "").encode()).hexdigest(); th="|".join(sorted(f"{t.page_number}:{t.table_index}:{t.source_fingerprint}" for t in getattr(d,"tables",[])))
-        parts.append(f"document:{d.id}:{d.filename}:{ch}:{th}")
+        text_hash=hashlib.sha256(str(d.extracted_text or "").encode()).hexdigest()
+        table_parts=[]
+        for table in getattr(d,"tables",[]):
+            table_hash=hashlib.sha256(str(table.markdown_text or "").encode()).hexdigest()
+            table_parts.append(f"{table.page_number}:{table.table_index}:{table.source_fingerprint}:{table_hash}")
+        table_identity="|".join(sorted(table_parts))
+        parts.append(f"document:{d.id}:{d.filename}:{text_hash}:{table_identity}")
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+def _has_searchable_content(document:Document)->bool:
+    if str(document.extracted_text or "").strip():
+        return True
+    return any(str(table.markdown_text or "").strip() for table in getattr(document,"tables",[]))
 
 def _sources(r:CollectionRetrievalResult,claims:list[dict[str,Any]]):
     if not claims: raise CollectionQuestionWorkflowError("The answer did not include supported claims.")

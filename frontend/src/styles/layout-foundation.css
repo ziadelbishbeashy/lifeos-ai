@@ -77,7 +77,8 @@ body.app-body,
 .document-native,
 .focus-native,
 .notification-settings-page,
-.notification-history-page {
+.notification-history-page,
+.ask-lifeos-page {
     width: 100%;
     max-width: 100%;
     min-width: 0;

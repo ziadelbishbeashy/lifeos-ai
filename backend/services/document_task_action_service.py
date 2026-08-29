@@ -117,15 +117,11 @@ def require_owned_document_suggestion(
             Document,
             DocumentTaskSuggestion.document_id == Document.id,
         )
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             DocumentTaskSuggestion.id == suggestion_id,
             DocumentTaskSuggestion.document_id == document_id,
             DocumentTaskSuggestion.user_id == user_id,
-            Project.user_id == user_id,
+            Document.user_id == user_id,
         )
         .first()
     )
@@ -147,10 +143,9 @@ def list_document_suggestions(
 
     owned_document = (
         Document.query
-        .join(Project, Document.project_id == Project.id)
         .filter(
             Document.id == document_id,
-            Project.user_id == user_id,
+            Document.user_id == user_id,
         )
         .first()
     )
@@ -511,14 +506,10 @@ def bulk_create_document_suggestions(
             Document,
             DocumentTaskSuggestion.document_id == Document.id,
         )
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             DocumentTaskSuggestion.id.in_(cleaned_ids),
             DocumentTaskSuggestion.user_id == user_id,
-            Project.user_id == user_id,
+            Document.user_id == user_id,
         )
     )
 
@@ -751,10 +742,9 @@ def _require_suggestion_owner(
 ) -> None:
     document = (
         Document.query
-        .join(Project, Document.project_id == Project.id)
         .filter(
             Document.id == suggestion.document_id,
-            Project.user_id == user_id,
+            Document.user_id == user_id,
         )
         .first()
     )

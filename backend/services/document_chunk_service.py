@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
+from services.resource_limit_service import ResourceLimitError, enforce_chunk_count
+
 from models import (
     Document,
     DocumentChunk,
@@ -209,10 +211,14 @@ def rebuild_owned_document_chunks(
     extracted_text = str(
         document.extracted_text or ""
     ).strip()
+    document_tables = _document_tables(
+        document_id=document.id,
+        user_id=user_id,
+    )
 
-    if not extracted_text:
+    if not extracted_text and not document_tables:
         raise DocumentChunkNotReadyError(
-            "This document has no readable extracted text."
+            "This document has no readable extracted text or structured tables."
         )
 
     built_chunks = build_document_chunks(
@@ -220,7 +226,6 @@ def rebuild_owned_document_chunks(
         max_chars=max_chars,
         overlap_chars=overlap_chars,
     )
-    document_tables = _document_tables(document_id=document.id, user_id=user_id)
     next_index = len(built_chunks)
     for table in document_tables:
         table_text = str(table.markdown_text or "").strip()
@@ -235,6 +240,11 @@ def rebuild_owned_document_chunks(
         next_index += 1
     if not built_chunks:
         raise DocumentChunkNotReadyError("No searchable chunks could be created.")
+    try:
+        enforce_chunk_count(len(built_chunks))
+    except ResourceLimitError as error:
+        raise DocumentChunkError(str(error)) from error
+
     fingerprint = create_index_fingerprint(extracted_text=extracted_text, tables=document_tables)
     stored_chunks = [
         DocumentChunk(
@@ -308,15 +318,19 @@ def ensure_owned_document_chunks(
     extracted_text = str(
         document.extracted_text or ""
     ).strip()
+    document_tables = _document_tables(
+        document_id=document.id,
+        user_id=user_id,
+    )
 
-    if not extracted_text:
+    if not extracted_text and not document_tables:
         raise DocumentChunkNotReadyError(
-            "This document has no readable extracted text."
+            "This document has no readable extracted text or structured tables."
         )
 
     current_fingerprint = create_index_fingerprint(
         extracted_text=extracted_text,
-        tables=_document_tables(document_id=document.id, user_id=user_id),
+        tables=document_tables,
     )
 
     existing_chunks = (
@@ -339,6 +353,12 @@ def ensure_owned_document_chunks(
         chunk.chunk_index
         for chunk in existing_chunks
     ]
+
+    if existing_chunks:
+        try:
+            enforce_chunk_count(len(existing_chunks))
+        except ResourceLimitError as error:
+            raise DocumentChunkError(str(error)) from error
 
     chunks_are_current = (
         bool(existing_chunks)
@@ -413,13 +433,9 @@ def _find_owned_document(
 
     return (
         Document.query
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             Document.id == document_id,
-            Project.user_id == user_id,
+            Document.user_id == user_id,
         )
         .first()
     )

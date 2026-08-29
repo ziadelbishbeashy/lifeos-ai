@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, time
 
+from sqlalchemy import event, select
+
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -118,6 +120,27 @@ class User(UserMixin, db.Model):
         back_populates="user",
         lazy=True,
         foreign_keys="NoteAIQuestion.user_id",
+    )
+
+    documents = db.relationship(
+        "Document",
+        back_populates="owner",
+        lazy=True,
+        foreign_keys="Document.user_id",
+    )
+
+    modules = db.relationship(
+        "LearningModule",
+        back_populates="owner",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    module_questions = db.relationship(
+        "ModuleQuestion",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
     )
 
     def set_password(self, password):
@@ -1148,7 +1171,7 @@ class DocumentVersionFamily(db.Model):
             "projects.id",
             ondelete="NO ACTION",
         ),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -1208,6 +1231,20 @@ class Document(db.Model):
     __tablename__ = "documents"
 
     id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        # Kept nullable in ORM metadata for backward-compatible test fixtures;
+        # migration 20260828_0003 backfills and enforces NOT NULL in production.
+        nullable=True,
+        index=True,
+    )
+    owner = db.relationship(
+        "User",
+        back_populates="documents",
+        foreign_keys=[user_id],
+    )
 
     project_id = db.Column(
         db.Integer,
@@ -1333,6 +1370,13 @@ class Document(db.Model):
         passive_deletes=True,
     )
 
+    module_links = db.relationship(
+        "ModuleDocumentLink",
+        back_populates="document",
+        lazy=True,
+        passive_deletes=True,
+    )
+
     version_family = db.relationship(
         "DocumentVersionFamily",
         back_populates="documents",
@@ -1374,6 +1418,17 @@ class Document(db.Model):
 
     def __repr__(self):
         return f"<Document {self.filename}>"
+
+
+@event.listens_for(Document, "before_insert")
+def _backfill_document_owner_for_legacy_project_rows(mapper, connection, target):
+    """Keep old project-based constructors compatible while ownership moves to Document."""
+    if target.user_id is not None or target.project_id is None:
+        return
+    target.user_id = connection.execute(
+        select(Project.user_id).where(Project.id == target.project_id)
+    ).scalar_one_or_none()
+
 
 class DocumentAIAnalysis(db.Model):
     """Stored structured understanding of a project document."""
@@ -2377,3 +2432,614 @@ class DocumentCollectionQuestion(db.Model):
             return []
         return parsed if isinstance(parsed, list) else []
 
+
+
+class LearningModule(db.Model):
+    """Knowledge-driven workspace containing lectures and shared LifeOS resources."""
+
+    __tablename__ = "learning_modules"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False, index=True,
+    )
+    title = db.Column(db.Unicode(150), nullable=False)
+    description = db.Column(db.UnicodeText, nullable=True)
+    subject = db.Column(db.Unicode(150), nullable=True)
+    status = db.Column(db.Unicode(32), nullable=False, default="Active", index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    owner = db.relationship("User", back_populates="modules")
+    lectures = db.relationship(
+        "Lecture", back_populates="module", lazy=True,
+        cascade="all, delete-orphan", order_by="Lecture.lecture_number, Lecture.id",
+    )
+    document_links = db.relationship(
+        "ModuleDocumentLink", back_populates="module", lazy=True,
+        cascade="all, delete-orphan",
+    )
+    note_links = db.relationship(
+        "ModuleNoteLink", back_populates="module", lazy=True,
+        cascade="all, delete-orphan",
+    )
+    task_links = db.relationship(
+        "ModuleTaskLink", back_populates="module", lazy=True,
+        cascade="all, delete-orphan",
+    )
+    collection_links = db.relationship(
+        "ModuleCollectionLink", back_populates="module", lazy=True,
+        cascade="all, delete-orphan",
+    )
+    questions = db.relationship(
+        "ModuleQuestion", back_populates="module", lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return f"<LearningModule {self.title}>"
+
+
+class Lecture(db.Model):
+    __tablename__ = "lectures"
+    __table_args__ = (
+        db.UniqueConstraint("module_id", "lecture_number", name="uq_module_lecture_number"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    title = db.Column(db.Unicode(180), nullable=False)
+    lecture_number = db.Column(db.Integer, nullable=True)
+    lecture_date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.Unicode(32), nullable=False, default="Planned", index=True)
+    topics = db.Column(db.UnicodeText, nullable=True)
+    summary = db.Column(db.UnicodeText, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    module = db.relationship("LearningModule", back_populates="lectures")
+    document_links = db.relationship(
+        "ModuleDocumentLink", back_populates="lecture", lazy=True,
+        foreign_keys="ModuleDocumentLink.lecture_id",
+    )
+    note_links = db.relationship(
+        "ModuleNoteLink", back_populates="lecture", lazy=True,
+        foreign_keys="ModuleNoteLink.lecture_id",
+    )
+    task_links = db.relationship(
+        "ModuleTaskLink", back_populates="lecture", lazy=True,
+        foreign_keys="ModuleTaskLink.lecture_id",
+    )
+    questions = db.relationship(
+        "ModuleQuestion", back_populates="lecture", lazy=True,
+        foreign_keys="ModuleQuestion.lecture_id",
+    )
+
+    def __repr__(self):
+        return f"<Lecture module={self.module_id} number={self.lecture_number} title={self.title!r}>"
+
+
+class ModuleDocumentLink(db.Model):
+    __tablename__ = "module_document_links"
+    __table_args__ = (
+        db.UniqueConstraint("module_id", "document_id", name="uq_module_document_link"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    document_id = db.Column(
+        db.Integer, db.ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    lecture_id = db.Column(
+        db.Integer, db.ForeignKey("lectures.id", ondelete="NO ACTION"),
+        nullable=True, index=True,
+    )
+    added_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    module = db.relationship("LearningModule", back_populates="document_links")
+    lecture = db.relationship("Lecture", back_populates="document_links", foreign_keys=[lecture_id])
+    document = db.relationship("Document", back_populates="module_links")
+
+
+class ModuleNoteLink(db.Model):
+    __tablename__ = "module_note_links"
+    __table_args__ = (
+        db.UniqueConstraint("module_id", "note_id", name="uq_module_note_link"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    note_id = db.Column(
+        db.Integer, db.ForeignKey("notes.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    lecture_id = db.Column(
+        db.Integer, db.ForeignKey("lectures.id", ondelete="NO ACTION"),
+        nullable=True, index=True,
+    )
+    added_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    module = db.relationship("LearningModule", back_populates="note_links")
+    lecture = db.relationship("Lecture", back_populates="note_links", foreign_keys=[lecture_id])
+    note = db.relationship("Note")
+
+
+class ModuleTaskLink(db.Model):
+    __tablename__ = "module_task_links"
+    __table_args__ = (
+        db.UniqueConstraint("module_id", "task_id", name="uq_module_task_link"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    task_id = db.Column(
+        db.Integer, db.ForeignKey("tasks.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    lecture_id = db.Column(
+        db.Integer, db.ForeignKey("lectures.id", ondelete="NO ACTION"),
+        nullable=True, index=True,
+    )
+    added_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    module = db.relationship("LearningModule", back_populates="task_links")
+    lecture = db.relationship("Lecture", back_populates="task_links", foreign_keys=[lecture_id])
+    task = db.relationship("Task")
+
+
+class ModuleCollectionLink(db.Model):
+    __tablename__ = "module_collection_links"
+    __table_args__ = (
+        db.UniqueConstraint("module_id", "collection_id", name="uq_module_collection_link"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    collection_id = db.Column(
+        db.Integer, db.ForeignKey("document_collections.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    added_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    module = db.relationship("LearningModule", back_populates="collection_links")
+    collection = db.relationship("DocumentCollection")
+
+
+class ModuleQuestion(db.Model):
+    __tablename__ = "module_questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    lecture_id = db.Column(
+        db.Integer, db.ForeignKey("lectures.id", ondelete="NO ACTION"),
+        nullable=True, index=True,
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False, index=True,
+    )
+    question = db.Column(db.Unicode(2000), nullable=False)
+    answer = db.Column(db.UnicodeText, nullable=True)
+    sources_json = db.Column(db.UnicodeText, nullable=True)
+    provider = db.Column(db.Unicode(30), nullable=False)
+    model = db.Column(db.Unicode(100), nullable=False)
+    status = db.Column(db.Unicode(20), nullable=False, default="Completed", index=True)
+    source_fingerprint = db.Column(db.Unicode(64), nullable=True)
+    error_message = db.Column(db.UnicodeText, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    module = db.relationship("LearningModule", back_populates="questions")
+    lecture = db.relationship("Lecture", back_populates="questions", foreign_keys=[lecture_id])
+    user = db.relationship("User", back_populates="module_questions")
+
+    @property
+    def sources(self) -> list:
+        try:
+            parsed = json.loads(self.sources_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+
+class LifeOSActionProposal(db.Model):
+    """User-owned, confirmation-gated action prepared by LifeOS intelligence."""
+
+    __tablename__ = "lifeos_action_proposals"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    action_type = db.Column(db.Unicode(64), nullable=False, index=True)
+    status = db.Column(db.Unicode(24), nullable=False, default="pending", index=True)
+    title = db.Column(db.Unicode(255), nullable=False)
+    reason = db.Column(db.UnicodeText, nullable=True)
+    target_type = db.Column(db.Unicode(64), nullable=False)
+    target_id = db.Column(db.Integer, nullable=True)
+    # Historical audit/proposal records must not block project deletion.
+    # Ownership is revalidated before execution; this is an informational ID.
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    payload_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    evidence_json = db.Column(db.UnicodeText, nullable=False, default="[]")
+    risk_level = db.Column(db.Unicode(24), nullable=False, default="medium")
+    requires_confirmation = db.Column(db.Boolean, nullable=False, default=True)
+    execution_resource_type = db.Column(db.Unicode(64), nullable=True)
+    execution_resource_id = db.Column(db.Integer, nullable=True)
+    failure_message = db.Column(db.UnicodeText, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+
+    @property
+    def payload(self) -> dict:
+        try:
+            parsed = json.loads(self.payload_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @property
+    def evidence(self) -> list:
+        try:
+            parsed = json.loads(self.evidence_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+
+class LifeOSActivityEvent(db.Model):
+    """Auditable, user-owned record of meaningful workspace changes."""
+
+    __tablename__ = "lifeos_activity_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    event_type = db.Column(db.Unicode(80), nullable=False, index=True)
+    object_type = db.Column(db.Unicode(64), nullable=False, index=True)
+    object_id = db.Column(db.Integer, nullable=True)
+    # Keep historical activity after a project is removed without a FK blocker.
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    title = db.Column(db.Unicode(255), nullable=False)
+    summary = db.Column(db.UnicodeText, nullable=True)
+    changes_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    source_type = db.Column(db.Unicode(64), nullable=False, default="user")
+    source_id = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    @property
+    def changes(self) -> dict:
+        try:
+            parsed = json.loads(self.changes_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+
+class LifeOSContextLink(db.Model):
+    """User-owned first-class relationship between two LifeOS resources.
+
+    Polymorphic resource IDs intentionally do not use cross-table foreign keys.
+    Ownership is validated by the context-link service before links are created
+    or exposed.  This keeps historical/provenance relationships from blocking
+    normal resource deletion on SQL Server while still enforcing a user FK.
+    """
+
+    __tablename__ = "lifeos_context_links"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            "source_type",
+            "source_id",
+            "target_type",
+            "target_id",
+            "relation_type",
+            name="uq_lifeos_context_link_edge",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    source_type = db.Column(db.Unicode(40), nullable=False, index=True)
+    source_id = db.Column(db.Integer, nullable=False, index=True)
+    target_type = db.Column(db.Unicode(40), nullable=False, index=True)
+    target_id = db.Column(db.Integer, nullable=False, index=True)
+    relation_type = db.Column(db.Unicode(48), nullable=False, index=True)
+    reason = db.Column(db.UnicodeText, nullable=True)
+    provenance_type = db.Column(db.Unicode(48), nullable=False, default="user")
+    provenance_id = db.Column(db.Integer, nullable=True)
+    evidence_json = db.Column(db.UnicodeText, nullable=False, default="[]")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    @property
+    def evidence(self) -> list:
+        try:
+            parsed = json.loads(self.evidence_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+
+class LifeOSIntelligenceEvent(db.Model):
+    """I14 normalized event detected from trusted LifeOS state.
+
+    Events are user-owned and deliberately separate from raw activity history.
+    State events (for example ``task.overdue``) stay open while the condition is
+    true and are resolved on a later scan. Point-in-time events are stored as
+    observed history. No event is allowed to mutate workspace resources.
+    """
+
+    __tablename__ = "lifeos_intelligence_events"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            "dedupe_key",
+            name="uq_lifeos_intelligence_event_dedupe",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    event_type = db.Column(db.Unicode(80), nullable=False, index=True)
+    severity = db.Column(db.Unicode(24), nullable=False, default="normal", index=True)
+    lifecycle = db.Column(db.Unicode(24), nullable=False, default="open", index=True)
+    object_type = db.Column(db.Unicode(64), nullable=False, index=True)
+    object_id = db.Column(db.Integer, nullable=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    title = db.Column(db.Unicode(255), nullable=False)
+    summary = db.Column(db.UnicodeText, nullable=True)
+    dedupe_key = db.Column(db.Unicode(255), nullable=False)
+    context_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    source_type = db.Column(db.Unicode(64), nullable=False, default="state_scan")
+    source_id = db.Column(db.Integer, nullable=True)
+    detected_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+
+    @property
+    def context(self) -> dict:
+        try:
+            parsed = json.loads(self.context_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+
+class LifeOSProactiveNotification(db.Model):
+    """I15 in-app notification generated from one normalized I14 event.
+
+    This is a suggestion/attention surface only. It never executes an I9 action
+    or writes to Task/Project/Document/Note state by itself.
+    """
+
+    __tablename__ = "lifeos_proactive_notifications"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            "event_id",
+            name="uq_lifeos_proactive_notification_event",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    event_id = db.Column(
+        db.Integer,
+        db.ForeignKey("lifeos_intelligence_events.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category = db.Column(db.Unicode(64), nullable=False, default="attention", index=True)
+    severity = db.Column(db.Unicode(24), nullable=False, default="normal", index=True)
+    status = db.Column(db.Unicode(24), nullable=False, default="unread", index=True)
+    title = db.Column(db.Unicode(255), nullable=False)
+    message = db.Column(db.UnicodeText, nullable=False)
+    action_label = db.Column(db.Unicode(80), nullable=True)
+    action_href = db.Column(db.Unicode(500), nullable=True)
+    ask_query = db.Column(db.Unicode(1000), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+    read_at = db.Column(db.DateTime, nullable=True)
+    dismissed_at = db.Column(db.DateTime, nullable=True)
+
+    event = db.relationship("LifeOSIntelligenceEvent")
+
+
+class LifeOSMemory(db.Model):
+    """I16 typed, user-owned memory that is always inspectable and deletable."""
+
+    __tablename__ = "lifeos_memories"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "memory_type", "memory_key",
+            name="uq_lifeos_memory_key",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    memory_type = db.Column(db.Unicode(40), nullable=False, index=True)
+    memory_key = db.Column(db.Unicode(160), nullable=False, index=True)
+    label = db.Column(db.Unicode(180), nullable=False)
+    value_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    scope_type = db.Column(db.Unicode(40), nullable=True, index=True)
+    scope_id = db.Column(db.Integer, nullable=True, index=True)
+    source_type = db.Column(db.Unicode(48), nullable=False, default="user_confirmed", index=True)
+    source_id = db.Column(db.Integer, nullable=True)
+    user_confirmed = db.Column(db.Boolean, nullable=False, default=False)
+    status = db.Column(db.Unicode(24), nullable=False, default="active", index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    @property
+    def value(self) -> dict:
+        try:
+            parsed = json.loads(self.value_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+
+class LifeOSAutomation(db.Model):
+    """I17 preparation: user-owned automation definition.
+
+    Automations are intentionally constrained to an allow-listed trigger/action
+    registry. The model stores declarative configuration only; it never stores
+    executable code, arbitrary SQL, provider prompts, or unrestricted URLs.
+    """
+
+    __tablename__ = "lifeos_automations"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            "name",
+            name="uq_lifeos_automation_user_name",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    name = db.Column(db.Unicode(160), nullable=False)
+    description = db.Column(db.UnicodeText, nullable=True)
+    enabled = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    trigger_type = db.Column(db.Unicode(32), nullable=False, index=True)
+    trigger_config_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    action_type = db.Column(db.Unicode(48), nullable=False, index=True)
+    action_config_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    visual_graph_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    timezone = db.Column(db.Unicode(80), nullable=False, default="UTC")
+    status = db.Column(db.Unicode(24), nullable=False, default="ready", index=True)
+    next_run_at = db.Column(db.DateTime, nullable=True, index=True)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    last_event_id = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    @property
+    def trigger_config(self) -> dict:
+        try:
+            parsed = json.loads(self.trigger_config_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @property
+    def action_config(self) -> dict:
+        try:
+            parsed = json.loads(self.action_config_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @property
+    def visual_graph(self) -> dict:
+        try:
+            parsed = json.loads(self.visual_graph_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+
+class LifeOSAutomationRun(db.Model):
+    """Immutable-ish audit record for one I17 automation evaluation/execution."""
+
+    __tablename__ = "lifeos_automation_runs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    automation_id = db.Column(
+        db.Integer,
+        db.ForeignKey("lifeos_automations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    status = db.Column(db.Unicode(24), nullable=False, default="prepared", index=True)
+    trigger_source = db.Column(db.Unicode(32), nullable=False, default="manual", index=True)
+    event_id = db.Column(db.Integer, nullable=True)
+    dry_run = db.Column(db.Boolean, nullable=False, default=True)
+    output_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    error_message = db.Column(db.UnicodeText, nullable=True)
+    started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+    automation = db.relationship("LifeOSAutomation", backref=db.backref("runs", lazy=True, cascade="all, delete-orphan"))
+
+    @property
+    def output(self) -> dict:
+        try:
+            parsed = json.loads(self.output_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}

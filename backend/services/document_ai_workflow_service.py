@@ -20,6 +20,8 @@ from services.ai_service import (
     get_ai_configuration,
 )
 
+from services.lifeos_activity_service import add_activity_event
+
 from services.document_analysis_service import (
     DOCUMENT_ANALYSIS_SCHEMA_VERSION,
 )
@@ -249,6 +251,18 @@ def analyse_owned_document(
         )
 
         db.session.add_all(suggestions)
+        add_activity_event(
+            user_id=user_id,
+            event_type="document.analysis_completed",
+            object_type="document_analysis",
+            object_id=analysis.id,
+            project_id=document.project_id,
+            title=f"Document analysis completed: {document.filename}",
+            summary="LifeOS refreshed the document's structured intelligence.",
+            changes={"document_id": document.id, "document_type": analysis.document_type},
+            source_type="document_brain",
+            source_id=document.id,
+        )
         db.session.commit()
 
     except (
@@ -286,13 +300,9 @@ def _find_owned_document(
 
     return (
         Document.query
-        .join(
-            Project,
-            Document.project_id == Project.id,
-        )
         .filter(
             Document.id == document_id,
-            Project.user_id == user_id,
+            Document.user_id == user_id,
         )
         .first()
     )

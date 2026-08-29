@@ -25,11 +25,32 @@ services:
       DB_BACKEND: postgresql
       AUTO_CREATE_DB: "true"
       FLASK_DEBUG: "false"
+      ENABLE_LIFEOS_AUTOMATIONS: "true"
+      LIFEOS_AUTOMATION_POLL_SECONDS: "60"
     ports:
       - "5000:5000"
     depends_on:
       postgres:
         condition: service_healthy
+
+  automation-worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "workers.automation_worker"]
+    environment:
+      LIFEOS_ENV: development
+      SECRET_KEY: local-docker-development-secret-change-me-123456789
+      DATABASE_URL: postgresql://lifeos:lifeos@postgres:5432/lifeos
+      DB_BACKEND: postgresql
+      AUTO_CREATE_DB: "true"
+      FLASK_DEBUG: "false"
+      ENABLE_LIFEOS_AUTOMATIONS: "true"
+      LIFEOS_AUTOMATION_POLL_SECONDS: "60"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
 
 volumes:
   lifeos_postgres:

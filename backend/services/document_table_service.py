@@ -49,7 +49,7 @@ def extract_owned_document_tables(*, document_id:int, user_id:int, force:bool=Fa
     except SQLAlchemyError as e:
         db.session.rollback(); raise DocumentTableError("LifeOS could not save the extracted tables.") from e
     rebuilt=False
-    if rebuild_chunks and str(document.extracted_text or "").strip():
+    if rebuild_chunks and (str(document.extracted_text or "").strip() or stored):
         try:
             rebuild_owned_document_chunks(document_id=document.id,user_id=user_id)
             rebuilt=True

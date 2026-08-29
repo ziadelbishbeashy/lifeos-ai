@@ -12,7 +12,7 @@ from models import Document
 from services.document_access_service import (
     DocumentPersistenceError,
     DocumentValidationError,
-    create_legacy_document_metadata,
+    create_document_metadata,
 )
 from services.document_chunk_service import (
     DocumentChunkError,
@@ -24,12 +24,14 @@ from services.document_table_service import (
 )
 from services.pdf_service import (
     PDFExtractionError,
+    PDFResourceLimitError,
     StoredPDF,
     extract_pdf_text,
     store_pdf_upload,
 )
 from storage.base import StorageError, StorageService
 from storage.service import get_storage
+from services.resource_limit_service import get_resource_limits
 
 
 class DocumentUploadError(RuntimeError):
@@ -63,13 +65,15 @@ def create_project_pdf_document(
     upload: FileStorage | None,
     *,
     owner_id: int,
-    project_id: int,
+    project_id: int | None,
     max_bytes: int,
     storage: StorageService | None = None,
 ) -> CreatedProjectDocument:
     """
-    Store a PDF, create its database record, extract text and
-    automatically prepare searchable chunks.
+    Store a PDF, create its user-owned database record, extract text and
+    automatically prepare searchable chunks. ``project_id`` may be ``None``
+    for Module/general workspace documents; the authoritative RAG pipeline is
+    unchanged.
     """
 
     storage_service = storage or get_storage()
@@ -83,7 +87,7 @@ def create_project_pdf_document(
     )
 
     try:
-        document = create_legacy_document_metadata(
+        document = create_document_metadata(
             owner_id=owner_id,
             project_id=project_id,
             filename=stored_pdf.original_name,
@@ -102,10 +106,21 @@ def create_project_pdf_document(
         raise
 
     try:
+        limits = get_resource_limits()
         extraction = extract_pdf_text(
             stored_pdf.storage_key,
             storage=storage_service,
+            max_chars=limits.max_extracted_text_characters,
+            max_pages=limits.max_pdf_pages,
         )
+
+    except PDFResourceLimitError as error:
+        _delete_resource_limited_upload(
+            document=document,
+            storage=storage_service,
+            stored_pdf=stored_pdf,
+        )
+        raise DocumentValidationError(str(error)) from error
 
     except PDFExtractionError as error:
         # Keep the uploaded PDF. It may require OCR or
@@ -293,4 +308,28 @@ def _delete_failed_upload(
         raise DocumentUploadError(
             "The document record could not be created, and LifeOS "
             "could not remove the stored file."
+        ) from error
+
+def _delete_resource_limited_upload(
+    *,
+    document: Document,
+    storage: StorageService,
+    stored_pdf: StoredPDF,
+) -> None:
+    """Remove an upload that is valid but outside the configured Step 20 budget."""
+
+    try:
+        db.session.delete(document)
+        db.session.commit()
+    except SQLAlchemyError as error:
+        db.session.rollback()
+        raise DocumentUploadError(
+            "LifeOS rejected the PDF resource size but could not clean up its document record."
+        ) from error
+
+    try:
+        storage.delete(stored_pdf.storage_key)
+    except StorageError as error:
+        raise DocumentUploadError(
+            "LifeOS rejected the PDF resource size but could not remove the stored file."
         ) from error

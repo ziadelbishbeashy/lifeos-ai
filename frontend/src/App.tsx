@@ -4,6 +4,8 @@ import { PageState } from "./components/NativeUi";
 import { navigate } from "./core/navigation";
 import { NativeWorkspaceShell, type NativeSection } from "./native/NativeWorkspaceShell";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { AutomationsPage } from "./pages/AutomationsPage";
+import { AskLifeOSPage } from "./pages/AskLifeOSPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocumentComparePage, DocumentComparisonDetailsPage } from "./pages/DocumentComparePage";
 import { DocumentCollectionsPage } from "./pages/DocumentCollectionsPage";
@@ -12,6 +14,9 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { FocusInsightsPage, FocusPage } from "./pages/FocusPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
+import { MemoryPage } from "./pages/MemoryPage";
+import { ModulesPage } from "./pages/ModulesPage";
+import { ModuleDetailsPage } from "./pages/ModuleDetailsPage";
 import { NoteDetailsPage } from "./pages/NoteDetailsPage";
 import { NotesPage } from "./pages/NotesPage";
 import { NotificationHistoryPage, NotificationSettingsPage } from "./pages/NotificationsPage";
@@ -61,8 +66,13 @@ export function App() {
   if (path === "/register") return <RegisterPage />;
 
   if (path === "/dashboard") return <PrivateArea active="dashboard"><DashboardPage /></PrivateArea>;
+  if (path === "/ask" || path === "/intelligence") return <PrivateArea active="intelligence"><AskLifeOSPage /></PrivateArea>;
+  if (path === "/memory") return <PrivateArea active="memory"><MemoryPage /></PrivateArea>;
+  if (path === "/automations") return <PrivateArea active="automations"><AutomationsPage /></PrivateArea>;
   if (path === "/projects") return <PrivateArea active="projects"><ProjectsPage /></PrivateArea>;
   if (/^\/projects\/\d+$/.test(path)) return <PrivateArea active="projects"><ProjectDetailsPage /></PrivateArea>;
+  if (path === "/modules") return <PrivateArea active="modules"><ModulesPage /></PrivateArea>;
+  if (/^\/modules\/\d+$/.test(path)) return <PrivateArea active="modules"><ModuleDetailsPage /></PrivateArea>;
   if (/^\/projects\/\d+\/edit$/.test(path)) {
     navigate(path.replace(/\/edit$/, ""), true);
     return null;
