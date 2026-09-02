@@ -18,7 +18,9 @@ from models import LifeOSAutomation, LifeOSAutomationRun, LifeOSIntelligenceEven
 from services.automation_service import (
     AutomationNotFoundError,
     AutomationValidationError,
+    automation_execution_contract,
     automation_run_to_dict,
+    compile_automation_visual_flow,
     build_owned_automation_output,
     calculate_next_run_at,
     due_owned_schedule_automations,
@@ -127,11 +129,15 @@ def collect_owned_automation_candidates(*, owner_id: int, now: datetime | None =
             trigger_source="schedule",
         ))
 
-    event_automations = LifeOSAutomation.query.filter_by(
-        user_id=owner_id,
-        enabled=True,
-        trigger_type="event",
-    ).all()
+    event_automations = [
+        item
+        for item in LifeOSAutomation.query.filter_by(
+            user_id=owner_id,
+            enabled=True,
+            trigger_type="event",
+        ).all()
+        if automation_execution_contract(item).get("background_available")
+    ]
     if event_automations:
         events = LifeOSIntelligenceEvent.query.filter_by(user_id=owner_id).order_by(
             LifeOSIntelligenceEvent.id.asc()
@@ -241,6 +247,11 @@ def execute_owned_automation(
 
     effective_now = now or datetime.utcnow()
     automation = _owned_automation(owner_id=owner_id, automation_id=automation_id)
+    execution = automation_execution_contract(automation)
+    if not bool(execution.get("run_now_available")):
+        if execution.get("mode") == "blocked_invalid":
+            raise AutomationValidationError("This visual flow is invalid and must be repaired before it can run.")
+        raise AutomationValidationError("This visual flow cannot run until its validation errors are repaired.")
     source = str(trigger_source or "manual").strip().casefold()
     if source not in {"manual", "schedule", "event"}:
         raise AutomationValidationError("Unsupported automation trigger source.")
@@ -267,11 +278,21 @@ def execute_owned_automation(
     db.session.commit()  # durable audit row before intelligence work begins
 
     try:
-        output = build_owned_automation_output(
-            owner_id=owner_id,
-            automation=automation,
-            event_id=event_id,
-        )
+        if execution.get("mode") == "compiled_i17":
+            from services.automation_flow_execution_service import execute_compiled_visual_flow
+            output = execute_compiled_visual_flow(
+                owner_id=owner_id,
+                automation=automation,
+                compiled_plan=compile_automation_visual_flow(automation),
+                event_id=event_id,
+                dry_run=False,
+            )
+        else:
+            output = build_owned_automation_output(
+                owner_id=owner_id,
+                automation=automation,
+                event_id=event_id,
+            )
         finished = datetime.utcnow() if now is None else effective_now
         run.status = "succeeded"
         run.output_json = json.dumps(output, ensure_ascii=False, sort_keys=True, default=str)
@@ -305,6 +326,9 @@ def execute_owned_automation(
         if failed_run is not None:
             failed_run.status = "failed"
             failed_run.error_message = " ".join(str(error).split())[:2000]
+            audit_output = getattr(error, "audit_output", None)
+            if callable(audit_output):
+                failed_run.output_json = json.dumps(audit_output(), ensure_ascii=False, sort_keys=True, default=str)
             failed_run.finished_at = failed_at
         if failed_automation is not None:
             failed_automation.status = "error"

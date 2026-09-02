@@ -153,6 +153,12 @@ def test_i10_recent_activity_is_owner_and_project_scoped(app, user):
 
 
 def test_i10_derives_recent_state_for_pre_i10_records(app, user):
+    # Keep this deterministic around UTC midnight. The production service defines
+    # "today" from its explicit `now` value; using datetime.utcnow() twice made
+    # this test fail legitimately when the test ran during the first two UTC hours.
+    now = datetime(2026, 8, 30, 12, 0)
+    created_at = now - timedelta(hours=2)
+
     with app.app_context():
         project = Project(
             user_id=user,
@@ -160,13 +166,17 @@ def test_i10_derives_recent_state_for_pre_i10_records(app, user):
             status="In Progress",
             priority="Medium",
             progress=0,
-            created_at=datetime.utcnow() - timedelta(hours=2),
-            updated_at=datetime.utcnow() - timedelta(hours=2),
+            created_at=created_at,
+            updated_at=created_at,
         )
         db.session.add(project)
         db.session.commit()
 
-        result = build_owned_recent_activity(owner_id=user, query="What changed today?")
+        result = build_owned_recent_activity(
+            owner_id=user,
+            query="What changed today?",
+            now=now,
+        )
         assert any(
             item.source == "derived_state" and item.event_type == "project.created" and item.object_id == project.id
             for item in result.items

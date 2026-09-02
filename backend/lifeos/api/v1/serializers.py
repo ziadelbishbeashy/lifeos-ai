@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.module_assessment_service import (
+    assessment_target_date,
+    assessment_timing_label,
+    days_until_assessment,
+)
+
 
 def _iso(value):
     return value.isoformat() if value is not None else None
@@ -488,6 +494,33 @@ def serialize_document_collection_question(question) -> dict[str, Any]:
     }
 
 
+def serialize_module_assessment(assessment) -> dict[str, Any]:
+    return {
+        "id": assessment.id,
+        "module_id": assessment.module_id,
+        "title": assessment.title,
+        "assessment_type": assessment.assessment_type,
+        "assessment_date": _iso(assessment.assessment_date),
+        "assessment_time": _iso(assessment.assessment_time),
+        "due_date": _iso(assessment.due_date),
+        "due_time": _iso(assessment.due_time),
+        "target_date": _iso(assessment_target_date(assessment)),
+        "weight_percent": (
+            float(assessment.weight_percent)
+            if assessment.weight_percent is not None
+            else None
+        ),
+        "status": assessment.status,
+        "topics": assessment.topics,
+        "estimated_study_minutes": assessment.estimated_study_minutes,
+        "notes": assessment.notes,
+        "days_until": days_until_assessment(assessment),
+        "timing_label": assessment_timing_label(assessment),
+        "created_at": _iso(assessment.created_at),
+        "updated_at": _iso(assessment.updated_at),
+    }
+
+
 def serialize_lecture(lecture) -> dict[str, Any]:
     return {
         "id": lecture.id,
@@ -505,6 +538,7 @@ def serialize_lecture(lecture) -> dict[str, Any]:
 
 def serialize_module(module, *, include_resources: bool = False) -> dict[str, Any]:
     lectures = list(getattr(module, "lectures", []) or [])
+    assessments = list(getattr(module, "assessments", []) or [])
     document_links = list(getattr(module, "document_links", []) or [])
     note_links = list(getattr(module, "note_links", []) or [])
     task_links = list(getattr(module, "task_links", []) or [])
@@ -519,6 +553,7 @@ def serialize_module(module, *, include_resources: bool = False) -> dict[str, An
         "updated_at": _iso(module.updated_at),
         "counts": {
             "lectures": len(lectures),
+            "assessments": len(assessments),
             "documents": len(document_links),
             "notes": len(note_links),
             "tasks": len(task_links),
@@ -527,6 +562,7 @@ def serialize_module(module, *, include_resources: bool = False) -> dict[str, An
     }
     if include_resources:
         payload["lectures"] = [serialize_lecture(item) for item in lectures]
+        payload["assessments"] = [serialize_module_assessment(item) for item in assessments]
         payload["documents"] = [
             {
                 **serialize_document_summary(link.document),

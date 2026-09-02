@@ -12,6 +12,14 @@ from flask_login import current_user, login_user, logout_user
 from flask_wtf.csrf import generate_csrf
 from sqlalchemy.exc import SQLAlchemyError
 
+from services.experience_profile_service import (
+    ExperienceProfilePersistenceError,
+    ExperienceProfileValidationError,
+    create_registration_profile,
+    user_experience_payload,
+    validate_experience_key,
+)
+
 from lifeos.api.v1.common import api_auth_required, json_body
 from lifeos.domains.auth.facade import (
     AccountCreationError,
@@ -37,6 +45,7 @@ def _user_payload(user) -> dict:
         "id": user.id,
         "name": user.name,
         "email": user.email,
+        "experience": user_experience_payload(user),
     }
 
 
@@ -60,7 +69,8 @@ def meta():
             "native_frontend_slices": [
                 "auth", "dashboard", "projects", "tasks", "notes", "focus",
                 "analytics", "notifications", "documents", "document-analysis",
-                "document-qa", "project-rag", "comparisons", "versions"
+                "document-qa", "project-rag", "comparisons", "versions",
+                "agentic-ask-lifeos"
             ],
         }
     )
@@ -154,6 +164,13 @@ def register():
             }
         ), 400
 
+    primary_experience = payload.get("primary_experience")
+    if primary_experience:
+        try:
+            primary_experience = validate_experience_key(primary_experience)
+        except ExperienceProfileValidationError as error:
+            return jsonify({"error": "validation_error", "message": str(error)}), 400
+
     try:
         user = create_user(registration)
     except DuplicateEmailError:
@@ -173,6 +190,13 @@ def register():
                 "message": "The account could not be created.",
             }
         ), 500
+
+    if primary_experience:
+        try:
+            create_registration_profile(user=user, primary_experience=primary_experience)
+        except ExperienceProfilePersistenceError:
+            # The account remains usable; onboarding will retry this preference.
+            current_app.logger.exception("LifeOS could not save the registration experience profile.")
 
     login_user(user)
 

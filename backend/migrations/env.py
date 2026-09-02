@@ -5,6 +5,9 @@ V2 targets PostgreSQL for new environments, so a *fresh* PostgreSQL database
 must first receive the reviewed PostgreSQL baseline and be stamped before this
 historical chain is allowed to continue. This prevents accidentally replaying
 SQL Server-only revisions on Neon.
+
+This module also supports running Alembic directly with ``python -m alembic``.
+Standalone migration commands must not require booting the Flask application.
 """
 
 from __future__ import annotations
@@ -14,11 +17,19 @@ from logging.config import fileConfig
 import os
 
 from alembic import context
-from flask import current_app
+from flask import current_app, has_app_context
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.pool import NullPool
 
-from database import normalize_database_uri
+# Importing the core database module is safe because lifeos.__init__ no longer
+# imports the Flask application eagerly. Import models only to register the
+# complete SQLAlchemy metadata used by Alembic autogeneration/comparison.
+from lifeos.core.database import (
+    db,
+    get_direct_database_uri,
+    normalize_database_uri,
+)
+import models  # noqa: F401,E402
 
 
 config = context.config
@@ -29,22 +40,47 @@ if config.config_file_name is not None:
 logger = logging.getLogger("alembic.env")
 
 
+def _direct_url_override() -> str:
+    return normalize_database_uri(os.getenv("DATABASE_DIRECT_URL") or "")
+
+
 def get_flask_engine():
+    if not has_app_context():
+        raise RuntimeError("Flask application context is not active.")
     extension = current_app.extensions["migrate"]
     database = extension.db
     return database.engine
 
 
 def get_migration_engine():
-    """Use a direct Neon URL for migrations when one is provided."""
+    """Return the engine Alembic should use.
 
-    direct = normalize_database_uri(os.getenv("DATABASE_DIRECT_URL") or "")
+    A direct migration URL wins. When Alembic is invoked through Flask-Migrate
+    we reuse Flask's configured engine. For standalone Alembic commands we
+    create a short-lived engine from the same canonical database configuration
+    used by the application.
+    """
+
+    direct = _direct_url_override()
     if direct:
         return create_engine(direct, poolclass=NullPool, future=True)
-    return get_flask_engine()
+
+    if has_app_context():
+        return get_flask_engine()
+
+    return create_engine(
+        get_direct_database_uri(),
+        poolclass=NullPool,
+        future=True,
+    )
 
 
 def get_engine_url() -> str:
+    # Avoid creating an engine merely to render the URL in standalone mode.
+    if not has_app_context():
+        rendered = get_direct_database_uri()
+        return rendered.replace("%", "%%")
+
     url = get_migration_engine().url
     try:
         rendered = url.render_as_string(hide_password=False)
@@ -54,10 +90,15 @@ def get_engine_url() -> str:
 
 
 def get_metadata():
-    database = current_app.extensions["migrate"].db
-    if hasattr(database, "metadatas"):
-        return database.metadatas[None]
-    return database.metadata
+    if has_app_context():
+        database = current_app.extensions["migrate"].db
+        if hasattr(database, "metadatas"):
+            return database.metadatas[None]
+        return database.metadata
+
+    if hasattr(db, "metadatas"):
+        return db.metadatas[None]
+    return db.metadata
 
 
 config.set_main_option("sqlalchemy.url", get_engine_url())
@@ -102,25 +143,28 @@ def _guard_fresh_postgres(connection) -> None:
 
 
 def run_migrations_online() -> None:
+    direct_override = bool(_direct_url_override())
+    using_flask_engine = has_app_context() and not direct_override
     connectable = get_migration_engine()
 
-    with connectable.connect() as connection:
-        _guard_fresh_postgres(connection)
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-            compare_server_default=True,
-            render_as_batch=connection.dialect.name == "sqlite",
-        )
+    try:
+        with connectable.connect() as connection:
+            _guard_fresh_postgres(connection)
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                compare_type=True,
+                compare_server_default=True,
+                render_as_batch=connection.dialect.name == "sqlite",
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
-
-    # Flask owns/disposes its configured engine. A direct migration engine is
-    # short-lived and can be disposed here.
-    if connectable is not get_flask_engine():
-        connectable.dispose()
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        # Flask owns/disposes its configured engine. Direct/standalone migration
+        # engines are short-lived and must be disposed here.
+        if not using_flask_engine:
+            connectable.dispose()
 
 
 if context.is_offline_mode():

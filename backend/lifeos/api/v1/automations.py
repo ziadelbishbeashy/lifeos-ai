@@ -1,4 +1,4 @@
-"""I17 API for constrained, read-only LifeOS automations."""
+"""I17 automation API plus I18 visual graph validation/compilation endpoints."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user
 
 from lifeos.api.v1.common import api_auth_required, json_body, not_found, validation_error
+from services.automation_flow_execution_service import AutomationFlowExecutionError
 from services.automation_engine_service import (
     collect_owned_automation_candidates,
     execute_owned_automation,
@@ -16,7 +17,9 @@ from services.automation_service import (
     AutomationValidationError,
     automation_registry,
     automation_run_to_dict,
+    clear_owned_automation_error,
     automation_to_dict,
+    compile_owned_visual_flow_draft,
     create_owned_automation,
     delete_owned_automation,
     list_owned_automation_runs,
@@ -45,6 +48,26 @@ def automation_registry_route():
             "workspace_mutation": False,
         },
     })
+
+
+@automations_api_bp.post("/compile")
+@api_auth_required
+def automation_compile_draft_route():
+    """Validate + compile a visual draft without persistence or execution."""
+
+    payload = json_body()
+    try:
+        result = compile_owned_visual_flow_draft(
+            owner_id=current_user.id,
+            trigger_type=payload.get("trigger_type"),
+            trigger_config=payload.get("trigger_config"),
+            action_type=payload.get("action_type"),
+            action_config=payload.get("action_config"),
+            visual_graph=payload.get("visual_graph"),
+        )
+    except AutomationValidationError as error:
+        return validation_error(str(error))
+    return jsonify(result)
 
 
 @automations_api_bp.post("/candidates/scan")
@@ -137,7 +160,7 @@ def automation_preview_route(automation_id: int):
         )
     except AutomationNotFoundError:
         return not_found("Automation not found.")
-    except AutomationValidationError as error:
+    except (AutomationValidationError, AutomationFlowExecutionError) as error:
         return validation_error(str(error))
     return jsonify({"preview": result.to_dict()})
 
@@ -155,7 +178,7 @@ def automation_run_now_route(automation_id: int):
         )
     except AutomationNotFoundError:
         return not_found("Automation not found.")
-    except AutomationValidationError as error:
+    except (AutomationValidationError, AutomationFlowExecutionError) as error:
         return validation_error(str(error))
     return jsonify({"execution": result.to_dict()})
 
@@ -167,6 +190,22 @@ def automation_cycle_run_route():
 
     result = execute_owned_automation_cycle(owner_id=current_user.id)
     return jsonify({"cycle": result.to_dict()})
+
+
+
+
+@automations_api_bp.post("/<int:automation_id>/clear-error")
+@api_auth_required
+def automation_clear_error_route(automation_id: int):
+    """Clear visible error state while preserving immutable run history."""
+
+    try:
+        item = clear_owned_automation_error(owner_id=current_user.id, automation_id=automation_id)
+    except AutomationNotFoundError:
+        return not_found("Automation not found.")
+    except AutomationValidationError as error:
+        return validation_error(str(error))
+    return jsonify({"automation": automation_to_dict(item), "history_preserved": True})
 
 
 @automations_api_bp.get("/<int:automation_id>/runs")

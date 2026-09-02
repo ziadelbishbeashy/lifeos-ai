@@ -8,6 +8,7 @@ from typing import Any
 from services.intelligence_claim_verifier_service import (
     IntelligenceVerificationProviderError,
     IntelligenceVerificationResult,
+    deterministic_verify_reasoning,
     verify_project_reasoning,
 )
 from services.intelligence_context_service import collect_owned_project_context
@@ -49,6 +50,8 @@ from services.module_question_workflow_service import (
     ask_owned_module_documents,
 )
 
+from services.agent_planner_service import AgentPlannerError, plan_owned_agent_goal
+
 from services.intelligence_workspace_query_service import (
     WorkspaceInsightResult,
     build_owned_deadline_insight,
@@ -77,6 +80,7 @@ class AskLifeOSResult:
     memory: dict[str, Any] | None = None
     grounded: dict[str, Any] | None = None
     memory_suggestion: dict[str, Any] | None = None
+    goal_plan: dict[str, Any] | None = None
 
     def to_dict(self, *, include_diagnostics: bool = False) -> dict[str, Any]:
         route_payload = self.route.to_dict() if include_diagnostics else {
@@ -119,6 +123,7 @@ class AskLifeOSResult:
             "memory": self.memory,
             "grounded": self.grounded,
             "memory_suggestion": self.memory_suggestion,
+            "goal_plan": self.goal_plan,
             "read_only": True,
         }
 
@@ -343,12 +348,99 @@ def _answer_selected_knowledge_context(*, query: str, owner_id: int, context: As
     )
 
 
+def _looks_like_goal_request(query: str) -> bool:
+    """Recognize requests that benefit from the bounded I19 goal runtime.
+
+    This is intentionally conservative.  Simple questions continue through the
+    existing Ask LifeOS / RAG / deterministic routes; only clearly goal-shaped
+    requests are offered a multi-step review plan.
+    """
+
+    text = " ".join(str(query or "").casefold().split())
+    if len(text) < 12:
+        return False
+    strong_starts = (
+        "help me ",
+        "help us ",
+        "prepare me ",
+        "prepare this ",
+        "prepare my ",
+        "get me ready ",
+        "get this ready ",
+        "get my ",
+        "make this ready ",
+        "make my ",
+        "plan how ",
+        "figure out what i need ",
+        "figure out what we need ",
+    )
+    if text.startswith(strong_starts):
+        return True
+    phrases = (
+        "get this project ready",
+        "get the project ready",
+        "ready for deployment",
+        "ready for launch",
+        "ready to deploy",
+        "ready to launch",
+        "what do i need to do to finish",
+        "what do we need to do to finish",
+        "what do i need to do to launch",
+        "what do i need to do to deploy",
+        "what should i do next to",
+        "what should we do next to",
+        "what should i focus on to",
+        "review everything needed",
+        "identify the biggest blockers",
+        "tell me the blockers and what to do",
+        "move this project forward",
+        "move the project forward",
+        "reach this goal",
+        "achieve this goal",
+    )
+    if any(phrase in text for phrase in phrases):
+        return True
+
+    # Multi-part objective requests are goal shaped even when they do not use a
+    # canned phrase. Requiring at least two signals keeps simple questions such
+    # as "what is the biggest risk?" on the existing fast review path.
+    # Count semantic signal groups, not raw substrings.  A word such as
+    # "deployment" also contains "deploy"; counting both made ordinary file
+    # questions such as "Which tasks came from Deployment_Plan.pdf?" look like
+    # multi-step goals.
+    goal_signal_groups = (
+        ("blocker", "blockers"),
+        ("risk", "risks"),
+        ("focus",),
+        ("next action", "next step"),
+        ("what to do",),
+        ("move forward",),
+        ("ready", "prepare"),
+        ("deployment", "deploy"),
+        ("launch",),
+        ("finish", "complete"),
+    )
+    score = sum(1 for group in goal_signal_groups if any(signal in text for signal in group))
+    return score >= 2
+
+
+def _goal_plan_context(explicit_context: AskContextOption | None, route: IntelligenceRouteDecision) -> dict[str, Any] | None:
+    if explicit_context is not None:
+        if explicit_context.type == "project":
+            return {"type": "project", "id": int(explicit_context.id)}
+        return None
+    if route.scope_type == "project" and route.scope_id is not None:
+        return {"type": "project", "id": int(route.scope_id)}
+    return None
+
+
 def ask_lifeos(
     *,
     query: str,
     owner_id: int,
     clarification_context: dict[str, Any] | None = None,
     selected_context: dict[str, Any] | None = None,
+    verification_policy: str = "full",
 ) -> AskLifeOSResult:
     """Route and answer verified workflows, preserving safe clarification context."""
 
@@ -438,6 +530,105 @@ def ask_lifeos(
             clarification=route.clarification,
         )
 
+    # Specific deterministic routes must be resolved before I19 goal planning.
+    # I19 is an enhancement layer, never a replacement for provenance, status,
+    # deadline, activity, or other routes that already have an authoritative
+    # deterministic answer path.  Keeping context-connections here is especially
+    # important because document filenames may contain goal-like words such as
+    # "deployment".
+    if route.intent == "context_connections":
+        connections = query_owned_context_connections(owner_id=owner_id, query=query)
+        return AskLifeOSResult(
+            route=route,
+            status="completed",
+            answer=connections.summary,
+            response_mode="deterministic_verified",
+            verification={
+                "status": "verified",
+                "deterministic_checks_passed": True,
+                "prose_check_performed": False,
+                "checked_claims": {
+                    "factual": len(connections.connections),
+                    "inference": 0,
+                    "recommendation": 0,
+                },
+            },
+            attention_level=None,
+            clarification=None,
+            connections=connections.to_dict(),
+        )
+
+    # I19 is a hidden capability of Ask LifeOS, not a separate user-facing
+    # module.  Clear goal-shaped requests get a bounded read-only plan first;
+    # nothing executes until the user explicitly starts the review in chat.
+    # I19 may enrich broad review/goal requests, but it must never override a
+    # more specific deterministic route that already knows exactly how to
+    # answer the question.  In particular, I13 provenance/context-connection
+    # questions must stay deterministic even when a filename contains words
+    # such as "deployment".
+    goal_blocked_intents = {
+        "memory_query",
+        "context_connections",
+    }
+    goal_shaped = _looks_like_goal_request(query)
+    explicit_project_goal = bool(
+        goal_shaped
+        and explicit_context is not None
+        and explicit_context.type == "project"
+    )
+    broad_goal = bool(
+        goal_shaped
+        and explicit_context is None
+        and route.intent not in {
+            "today_focus",
+            "task_status",
+            "deadline_review",
+            "document_review",
+            "study_next",
+            "project_question",
+            "recent_activity",
+        }
+    )
+    if (
+        route.intent not in goal_blocked_intents
+        and (explicit_project_goal or broad_goal)
+    ):
+        try:
+            goal_plan = plan_owned_agent_goal(
+                owner_id=owner_id,
+                goal=query,
+                selected_context=_goal_plan_context(explicit_context, route),
+            )
+        except AgentPlannerError:
+            goal_plan = None
+        if goal_plan is not None:
+            plan_payload = goal_plan.to_dict()
+            route = replace(
+                route,
+                scope_type=goal_plan.scope.type,
+                scope_id=goal_plan.scope.id,
+                scope_label=goal_plan.scope.label,
+                requires_clarification=False,
+                clarification=None,
+                candidates=(),
+                status="ready",
+            )
+            return AskLifeOSResult(
+                route=route,
+                status="goal_plan_ready",
+                answer="This needs a few trusted LifeOS checks. I prepared a read-only review plan below; nothing has run yet.",
+                response_mode="goal_plan",
+                verification={
+                    "status": "verified",
+                    "deterministic_checks_passed": True,
+                    "prose_check_performed": False,
+                    "checked_claims": {"factual": 0, "inference": 0, "recommendation": 1},
+                },
+                attention_level=None,
+                clarification=None,
+                goal_plan=plan_payload,
+            )
+
     project_scope_id = route.scope_id if route.scope_type == "project" else None
 
     if route.intent == "memory_query":
@@ -460,28 +651,6 @@ def ask_lifeos(
             attention_level=None,
             clarification=None,
             memory=memory,
-        )
-
-    if route.intent == "context_connections":
-        connections = query_owned_context_connections(owner_id=owner_id, query=query)
-        return AskLifeOSResult(
-            route=route,
-            status="completed",
-            answer=connections.summary,
-            response_mode="deterministic_verified",
-            verification={
-                "status": "verified",
-                "deterministic_checks_passed": True,
-                "prose_check_performed": False,
-                "checked_claims": {
-                    "factual": len(connections.connections),
-                    "inference": 0,
-                    "recommendation": 0,
-                },
-            },
-            attention_level=None,
-            clarification=None,
-            connections=connections.to_dict(),
         )
 
     if route.intent == "today_focus":
@@ -654,23 +823,45 @@ def ask_lifeos(
             clarification=None,
         )
 
-    try:
-        verification: IntelligenceVerificationResult = verify_project_reasoning(
-            query=query,
+    if verification_policy == "automation_fast":
+        # I18 custom-question automations already run inside a constrained, read-only
+        # capability boundary and any workspace mutation still stops at I9.  Avoid a
+        # second provider round-trip here: verify the model's structured fact/support
+        # bindings deterministically against the same trusted project snapshot.
+        deterministic_ok, deterministic_issues = deterministic_verify_reasoning(
             reasoning=reasoning,
             context=context,
             review=review,
         )
-    except IntelligenceVerificationProviderError as error:
-        return AskLifeOSResult(
-            route=route,
-            status="completed",
-            answer=fallback,
-            response_mode="deterministic_fallback",
-            verification=_fallback_verification("AI verification was unavailable; LifeOS used verified project state instead."),
-            attention_level=review.attention_level,
-            clarification=None,
+        verification = IntelligenceVerificationResult(
+            verified=deterministic_ok,
+            deterministic_checks_passed=deterministic_ok,
+            prose_check_performed=False,
+            issues=deterministic_issues,
+            checked_factual_claims=len(reasoning.factual_claims),
+            checked_inferences=len(reasoning.inferences),
+            checked_recommendations=len(reasoning.recommendations),
         )
+    elif verification_policy == "full":
+        try:
+            verification = verify_project_reasoning(
+                query=query,
+                reasoning=reasoning,
+                context=context,
+                review=review,
+            )
+        except IntelligenceVerificationProviderError as error:
+            return AskLifeOSResult(
+                route=route,
+                status="completed",
+                answer=fallback,
+                response_mode="deterministic_fallback",
+                verification=_fallback_verification("AI verification was unavailable; LifeOS used verified project state instead."),
+                attention_level=review.attention_level,
+                clarification=None,
+            )
+    else:
+        raise ValueError("Unsupported Ask LifeOS verification policy.")
 
     if not verification.verified:
         return AskLifeOSResult(
@@ -683,12 +874,16 @@ def ask_lifeos(
             clarification=None,
         )
 
+    verification_payload = verification.to_dict()
+    if verification_policy == "automation_fast":
+        verification_payload["policy"] = "automation_fast"
+
     return AskLifeOSResult(
         route=route,
         status="completed",
         answer=reasoning.answer,
-        response_mode="ai_verified",
-        verification=verification.to_dict(),
+        response_mode=("ai_verified_fast" if verification_policy == "automation_fast" else "ai_verified"),
+        verification=verification_payload,
         attention_level=review.attention_level,
         clarification=None,
     )

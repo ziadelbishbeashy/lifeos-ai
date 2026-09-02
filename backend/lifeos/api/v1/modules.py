@@ -16,6 +16,7 @@ from lifeos.api.v1.serializers import (
     serialize_document_collection,
     serialize_document_summary,
     serialize_module,
+    serialize_module_assessment,
     serialize_module_question,
     serialize_note_summary,
     serialize_task,
@@ -25,6 +26,15 @@ from services.document_access_service import list_owned_documents
 from services.document_collection_service import list_owned_collections
 from services.document_ocr_workflow_service import DocumentOCRWorkflowError, queue_owned_document_ocr
 from services.document_service import DocumentUploadError
+from services.module_assessment_service import (
+    ModuleAssessmentNotFoundError,
+    ModuleAssessmentPersistenceError,
+    ModuleAssessmentValidationError,
+    create_owned_module_assessment,
+    delete_owned_module_assessment,
+    list_owned_module_assessments,
+    update_owned_module_assessment,
+)
 from services.module_question_workflow_service import (
     ModuleQuestionNotFoundError,
     ModuleQuestionNotReadyError,
@@ -196,6 +206,86 @@ def delete_module_route(module_id: int):
         return not_found("Module not found.")
     except ModulePersistenceError:
         return persistence_error("The module could not be deleted.")
+    return jsonify({"deleted": True, "title": title})
+
+
+@modules_api_bp.get("/<int:module_id>/assessments")
+@api_auth_required
+def list_module_assessments_route(module_id: int):
+    try:
+        rows = list_owned_module_assessments(
+            module_id=module_id,
+            user_id=current_user.id,
+        )
+    except ModuleNotFoundError:
+        return not_found("Module not found.")
+    return jsonify({"items": [serialize_module_assessment(item) for item in rows]})
+
+
+@modules_api_bp.post("/<int:module_id>/assessments")
+@api_auth_required
+def create_module_assessment_route(module_id: int):
+    payload = json_body()
+    try:
+        assessment = create_owned_module_assessment(
+            module_id=module_id,
+            user_id=current_user.id,
+            title=payload.get("title"),
+            assessment_type=payload.get("assessment_type"),
+            assessment_date=payload.get("assessment_date"),
+            assessment_time=payload.get("assessment_time"),
+            due_date=payload.get("due_date"),
+            due_time=payload.get("due_time"),
+            weight_percent=payload.get("weight_percent"),
+            status=payload.get("status", "Upcoming"),
+            topics=payload.get("topics"),
+            estimated_study_minutes=payload.get("estimated_study_minutes"),
+            notes=payload.get("notes"),
+        )
+    except ModuleNotFoundError:
+        return not_found("Module not found.")
+    except ModuleAssessmentValidationError as error:
+        return validation_error(str(error))
+    except ModuleAssessmentPersistenceError:
+        current_app.logger.exception("LifeOS API could not create an assessment.")
+        return persistence_error("The assessment could not be created.")
+    return jsonify({"item": serialize_module_assessment(assessment)}), 201
+
+
+@modules_api_bp.patch("/<int:module_id>/assessments/<int:assessment_id>")
+@api_auth_required
+def update_module_assessment_route(module_id: int, assessment_id: int):
+    try:
+        assessment = update_owned_module_assessment(
+            assessment_id=assessment_id,
+            user_id=current_user.id,
+            module_id=module_id,
+            changes=json_body(),
+        )
+    except ModuleAssessmentNotFoundError:
+        return not_found("Assessment not found.")
+    except ModuleAssessmentValidationError as error:
+        return validation_error(str(error))
+    except ModuleAssessmentPersistenceError:
+        current_app.logger.exception("LifeOS API could not update an assessment.")
+        return persistence_error("The assessment could not be updated.")
+    return jsonify({"item": serialize_module_assessment(assessment)})
+
+
+@modules_api_bp.delete("/<int:module_id>/assessments/<int:assessment_id>")
+@api_auth_required
+def delete_module_assessment_route(module_id: int, assessment_id: int):
+    try:
+        title = delete_owned_module_assessment(
+            assessment_id=assessment_id,
+            user_id=current_user.id,
+            module_id=module_id,
+        )
+    except ModuleAssessmentNotFoundError:
+        return not_found("Assessment not found.")
+    except ModuleAssessmentPersistenceError:
+        current_app.logger.exception("LifeOS API could not delete an assessment.")
+        return persistence_error("The assessment could not be deleted.")
     return jsonify({"deleted": True, "title": title})
 
 

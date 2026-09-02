@@ -17,10 +17,15 @@ def test_default_intelligence_registry_is_read_only_and_explicit():
     contracts = registry.list_contracts()
 
     assert [item["name"] for item in contracts] == [
+        "knowledge.ask_context",
         "project.get_documents",
         "project.get_recent_notes",
         "project.get_summary",
         "project.get_tasks",
+        "project.review",
+        "workspace.get_home",
+        "workspace.get_portfolio_review",
+        "workspace.get_recent_activity",
     ]
     assert all(item["risk"] == "read_only" for item in contracts)
     assert all(item["mutates_state"] is False for item in contracts)

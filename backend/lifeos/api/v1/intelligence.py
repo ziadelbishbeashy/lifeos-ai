@@ -7,6 +7,17 @@ from flask_login import current_user
 
 from lifeos.api.v1.common import api_auth_required, json_body, not_found, validation_error
 from services.intelligence_ask_service import ask_lifeos
+from services.agent_planner_service import AgentPlannerError, plan_owned_agent_goal
+from services.agent_runtime_service import (
+    AgentProposalError,
+    AgentRunNotFoundError,
+    AgentRuntimeError,
+    agent_run_to_dict,
+    list_owned_agent_runs,
+    prepare_agent_action_proposal,
+    require_owned_agent_run,
+    run_owned_agent_goal,
+)
 from services.intelligence_context_service import collect_owned_project_context
 from services.intelligence_intent_router_service import IntelligenceRouterError
 from services.intelligence_request_service import handle_intelligence_request
@@ -97,6 +108,87 @@ def ask_context_options_route():
     """Return owner-validated resources available to the Ask LifeOS context picker."""
 
     return jsonify({"contexts": list_owned_ask_context_options(owner_id=current_user.id)})
+
+
+@intelligence_api_bp.post("/goal-plan")
+@api_auth_required
+def goal_plan_route():
+    """Plan a complex Ask LifeOS goal without executing any tool."""
+
+    payload = json_body()
+    try:
+        plan = plan_owned_agent_goal(
+            owner_id=current_user.id,
+            goal=payload.get("goal"),
+            selected_context=payload.get("selected_context"),
+        )
+    except (AgentPlannerError, AskContextValidationError) as error:
+        return validation_error(str(error))
+    except AskContextNotFoundError:
+        return not_found("The selected LifeOS context was not found.")
+    return jsonify({"plan": plan.to_dict()})
+
+
+@intelligence_api_bp.post("/goal-runs")
+@api_auth_required
+def goal_run_route():
+    """Execute one bounded, read-only goal review from Ask LifeOS."""
+
+    payload = json_body()
+    try:
+        run = run_owned_agent_goal(
+            owner_id=current_user.id,
+            goal=payload.get("goal"),
+            selected_context=payload.get("selected_context"),
+        )
+    except (AgentPlannerError, AskContextValidationError) as error:
+        return validation_error(str(error))
+    except AskContextNotFoundError:
+        return not_found("The selected LifeOS context was not found.")
+    except AgentRuntimeError as error:
+        return jsonify({"error": "goal_review_failed", "message": str(error)}), 503
+    return jsonify({"run": agent_run_to_dict(run)}), 201
+
+
+@intelligence_api_bp.get("/goal-runs")
+@api_auth_required
+def goal_runs_route():
+    raw_limit = request.args.get("limit", "12")
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError):
+        return validation_error("Invalid goal review history limit.")
+    return jsonify({"runs": list_owned_agent_runs(owner_id=current_user.id, limit=limit)})
+
+
+@intelligence_api_bp.get("/goal-runs/<int:run_id>")
+@api_auth_required
+def goal_run_details_route(run_id: int):
+    try:
+        run = require_owned_agent_run(owner_id=current_user.id, run_id=run_id)
+    except AgentRunNotFoundError:
+        return not_found("Goal review not found.")
+    return jsonify({"run": agent_run_to_dict(run)})
+
+
+@intelligence_api_bp.post("/goal-runs/<int:run_id>/proposals")
+@api_auth_required
+def goal_prepare_proposal_route(run_id: int):
+    """Prepare an I9 proposal from trusted goal-review output; never execute it."""
+
+    payload = json_body()
+    try:
+        proposal = prepare_agent_action_proposal(
+            owner_id=current_user.id,
+            run_id=run_id,
+            suggestion_id=str(payload.get("suggestion_id") or ""),
+            action_type=str(payload.get("action_type") or ""),
+        )
+    except AgentRunNotFoundError:
+        return not_found("Goal review not found.")
+    except AgentProposalError as error:
+        return validation_error(str(error))
+    return jsonify({"proposal": proposal_to_dict(proposal)}), 201
 
 
 @intelligence_api_bp.post("/memory/propose")

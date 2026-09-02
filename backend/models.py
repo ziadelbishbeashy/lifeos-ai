@@ -136,6 +136,14 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
     )
 
+    experience_profile = db.relationship(
+        "UserExperienceProfile",
+        back_populates="user",
+        uselist=False,
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     module_questions = db.relationship(
         "ModuleQuestion",
         back_populates="user",
@@ -151,6 +159,40 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f"<User {self.email}>"
+
+
+class UserExperienceProfile(db.Model):
+    __tablename__ = "user_experience_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        unique=True,
+    )
+    primary_experience = db.Column(db.Unicode(40), nullable=True, index=True)
+    enabled_experiences_json = db.Column(db.UnicodeText, nullable=False, default="[]")
+    onboarding_completed = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    user = db.relationship("User", back_populates="experience_profile")
+
+    def enabled_experiences(self):
+        try:
+            value = json.loads(self.enabled_experiences_json or "[]")
+        except (TypeError, json.JSONDecodeError):
+            return []
+        return [str(item) for item in value] if isinstance(value, list) else []
+
+    def set_enabled_experiences(self, values):
+        self.enabled_experiences_json = json.dumps(list(values or []))
 
 
 class Project(db.Model):
@@ -2458,6 +2500,11 @@ class LearningModule(db.Model):
         "Lecture", back_populates="module", lazy=True,
         cascade="all, delete-orphan", order_by="Lecture.lecture_number, Lecture.id",
     )
+    assessments = db.relationship(
+        "ModuleAssessment", back_populates="module", lazy=True,
+        cascade="all, delete-orphan",
+        order_by="ModuleAssessment.assessment_date, ModuleAssessment.due_date, ModuleAssessment.id",
+    )
     document_links = db.relationship(
         "ModuleDocumentLink", back_populates="module", lazy=True,
         cascade="all, delete-orphan",
@@ -2525,6 +2572,41 @@ class Lecture(db.Model):
 
     def __repr__(self):
         return f"<Lecture module={self.module_id} number={self.lecture_number} title={self.title!r}>"
+
+
+class ModuleAssessment(db.Model):
+    """Academic assessment or deadline attached to a learning module."""
+
+    __tablename__ = "module_assessments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    title = db.Column(db.Unicode(180), nullable=False)
+    assessment_type = db.Column(db.Unicode(32), nullable=False, index=True)
+    assessment_date = db.Column(db.Date, nullable=True, index=True)
+    assessment_time = db.Column(db.Time, nullable=True)
+    due_date = db.Column(db.Date, nullable=True, index=True)
+    due_time = db.Column(db.Time, nullable=True)
+    weight_percent = db.Column(db.Numeric(5, 2), nullable=True)
+    status = db.Column(db.Unicode(24), nullable=False, default="Upcoming", index=True)
+    topics = db.Column(db.UnicodeText, nullable=True)
+    estimated_study_minutes = db.Column(db.Integer, nullable=True)
+    notes = db.Column(db.UnicodeText, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    module = db.relationship("LearningModule", back_populates="assessments")
+
+    def __repr__(self):
+        return (
+            f"<ModuleAssessment module={self.module_id} "
+            f"type={self.assessment_type!r} title={self.title!r}>"
+        )
 
 
 class ModuleDocumentLink(db.Model):
@@ -2935,6 +3017,73 @@ class LifeOSMemory(db.Model):
         except (json.JSONDecodeError, TypeError):
             return {}
         return parsed if isinstance(parsed, dict) else {}
+
+
+class LifeOSAgentRun(db.Model):
+    """I19 user-owned audit record for one constrained goal-driven agent run.
+
+    The model stores declarative plans, read-only tool traces, verified output and
+    action suggestions.  It never stores executable code or direct database/model
+    handles.  Workspace mutations remain separate I9 proposals.
+    """
+
+    __tablename__ = "lifeos_agent_runs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    goal = db.Column(db.UnicodeText, nullable=False)
+    scope_type = db.Column(db.Unicode(40), nullable=False, default="workspace", index=True)
+    scope_id = db.Column(db.Integer, nullable=True, index=True)
+    scope_label = db.Column(db.Unicode(255), nullable=False, default="All LifeOS")
+    status = db.Column(db.Unicode(24), nullable=False, default="running", index=True)
+    plan_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    trace_json = db.Column(db.UnicodeText, nullable=False, default="[]")
+    output_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    limits_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    provider = db.Column(db.Unicode(40), nullable=True)
+    model = db.Column(db.Unicode(120), nullable=True)
+    provider_calls = db.Column(db.Integer, nullable=False, default=0)
+    tool_calls = db.Column(db.Integer, nullable=False, default=0)
+    failure_message = db.Column(db.UnicodeText, nullable=True)
+    started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+    @staticmethod
+    def _json_object(value: str | None) -> dict:
+        try:
+            parsed = json.loads(value or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @staticmethod
+    def _json_list(value: str | None) -> list:
+        try:
+            parsed = json.loads(value or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+    @property
+    def plan(self) -> dict:
+        return self._json_object(self.plan_json)
+
+    @property
+    def trace(self) -> list:
+        return self._json_list(self.trace_json)
+
+    @property
+    def output(self) -> dict:
+        return self._json_object(self.output_json)
+
+    @property
+    def limits(self) -> dict:
+        return self._json_object(self.limits_json)
 
 
 class LifeOSAutomation(db.Model):

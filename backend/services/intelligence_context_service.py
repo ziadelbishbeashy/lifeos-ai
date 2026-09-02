@@ -426,7 +426,38 @@ def collect_owned_project_context(
             project_id=int(project_id),
         )
     )
-    if not memory_facts:
+    # Experience profile is also explicit user-controlled preference context.
+    # It may shape terminology/recommendations, but it never substitutes for
+    # workspace evidence such as deadlines, tasks, grades or project state.
+    from services.experience_profile_service import experience_context_for_ai
+
+    experience = experience_context_for_ai(int(owner_id))
+    experience_facts: tuple[ContextFact, ...] = ()
+    if experience.get("is_configured") and experience.get("primary_experience"):
+        experience_facts = (
+            ContextFact(
+                key="user.experience.primary",
+                value={
+                    "key": experience.get("primary_experience"),
+                    "label": experience.get("label"),
+                    "enabled": experience.get("enabled_experiences") or [],
+                },
+                fact_type="user_preference",
+                confidence="high",
+                evidence=(
+                    ContextEvidence(
+                        source_type="experience_profile",
+                        source_id=int(owner_id),
+                        label="User-selected LifeOS experience",
+                        field="primary experience",
+                        freshness="current",
+                    ),
+                ),
+            ),
+        )
+
+    extra_facts = memory_facts + experience_facts
+    if not extra_facts:
         return packet
     return IntelligenceContextPacket(
         schema_version=packet.schema_version,
@@ -435,7 +466,7 @@ def collect_owned_project_context(
         scope_label=packet.scope_label,
         owner_id=packet.owner_id,
         generated_at=packet.generated_at,
-        facts=packet.facts + memory_facts,
+        facts=packet.facts + extra_facts,
         recent_activity=packet.recent_activity,
         context_limited=packet.context_limited,
         tool_data=packet.tool_data,

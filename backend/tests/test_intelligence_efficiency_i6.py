@@ -165,3 +165,48 @@ def test_i6_ask_reuses_one_context_snapshot(app, user, monkeypatch):
         result = ask_lifeos(query="How is my LifeOS project going?", owner_id=user)
         assert result.response_mode == "ai_verified"
         assert calls["context"] == 1
+
+
+def test_i18_automation_fast_verification_uses_one_reasoning_pass(app, user, monkeypatch):
+    """I18 custom Ask LifeOS keeps verification but avoids a second provider call."""
+
+    with app.app_context():
+        project = _project(user)
+        project_id = int(project.id)
+        calls = {"full_verifier": 0, "deterministic_verifier": 0}
+
+        monkeypatch.setattr(
+            "services.intelligence_ask_service.reason_about_project_review",
+            lambda **kwargs: _reasoning(),
+        )
+
+        def forbidden_full_verifier(**_kwargs):
+            calls["full_verifier"] += 1
+            raise AssertionError("automation_fast must not call the prose verifier provider")
+
+        def deterministic_verifier(**_kwargs):
+            calls["deterministic_verifier"] += 1
+            return True, ()
+
+        monkeypatch.setattr(
+            "services.intelligence_ask_service.verify_project_reasoning",
+            forbidden_full_verifier,
+        )
+        monkeypatch.setattr(
+            "services.intelligence_ask_service.deterministic_verify_reasoning",
+            deterministic_verifier,
+        )
+
+        result = ask_lifeos(
+            query="How is my LifeOS project going?",
+            owner_id=user,
+            selected_context={"type": "project", "id": project_id},
+            verification_policy="automation_fast",
+        )
+
+        assert result.response_mode == "ai_verified_fast"
+        assert result.verification is not None
+        assert result.verification["deterministic_checks_passed"] is True
+        assert result.verification["prose_check_performed"] is False
+        assert result.verification["policy"] == "automation_fast"
+        assert calls == {"full_verifier": 0, "deterministic_verifier": 1}

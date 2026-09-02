@@ -209,6 +209,61 @@ def _project_notes_tool(*, owner_id: int, project_id: int) -> dict[str, Any]:
     return {"notes": notes, "count": len(notes)}
 
 
+
+def _workspace_home_tool(*, owner_id: int) -> dict[str, Any]:
+    from services.home_intelligence_service import build_owned_home_intelligence
+    return build_owned_home_intelligence(owner_id=int(owner_id)).to_dict()
+
+
+def _workspace_recent_activity_tool(*, owner_id: int) -> dict[str, Any]:
+    from services.lifeos_activity_service import build_owned_recent_activity
+    return build_owned_recent_activity(
+        owner_id=int(owner_id), query="What changed recently?"
+    ).to_dict()
+
+
+def _workspace_portfolio_review_tool(*, owner_id: int) -> dict[str, Any]:
+    from services.project_review_agent_service import run_owned_portfolio_review_agent
+    return run_owned_portfolio_review_agent(owner_id=int(owner_id)).to_dict(include_diagnostics=True)
+
+
+def _project_review_tool(*, owner_id: int, project_id: int) -> dict[str, Any]:
+    from services.project_review_agent_service import run_owned_project_review_agent
+    return run_owned_project_review_agent(
+        owner_id=int(owner_id), project_id=int(project_id)
+    ).to_dict(include_diagnostics=True)
+
+
+def _knowledge_context_tool(
+    *, owner_id: int, context_type: str, context_id: int, query: str
+) -> dict[str, Any]:
+    """Ground a goal against one explicitly owned knowledge scope.
+
+    The handler intentionally reuses Ask LifeOS/Document Brain rather than
+    exposing chunks, embeddings, SQL, or provider access to the agent runtime.
+    """
+    from services.ask_context_picker_service import validate_owned_ask_context
+    from services.intelligence_ask_service import ask_lifeos
+
+    selected = validate_owned_ask_context(
+        owner_id=int(owner_id),
+        raw_context={"type": str(context_type), "id": int(context_id)},
+    )
+    if selected is None:
+        raise IntelligenceToolInputError("A knowledge context is required.")
+    result = ask_lifeos(
+        query=str(query or "").strip(),
+        owner_id=int(owner_id),
+        selected_context={"type": selected.type, "id": selected.id},
+    ).to_dict()
+    return {
+        "answer": result.get("answer"),
+        "response_mode": result.get("response_mode"),
+        "verification": result.get("verification"),
+        "grounded": result.get("grounded"),
+        "read_only": True,
+    }
+
 def build_default_intelligence_tool_registry() -> IntelligenceToolRegistry:
     """Create the reviewed Intelligence Core V1 tool allow-list."""
 
@@ -254,6 +309,56 @@ def build_default_intelligence_tool_registry() -> IntelligenceToolRegistry:
             scope="project",
             input_fields=("project_id",),
             handler=_project_notes_tool,
+        )
+    )
+    registry.register(
+        IntelligenceToolSpec(
+            name="project.review",
+            description="Run the existing verified read-only project review agent and return ranked priorities with evidence.",
+            risk="read_only",
+            scope="project",
+            input_fields=("project_id",),
+            handler=_project_review_tool,
+        )
+    )
+    registry.register(
+        IntelligenceToolSpec(
+            name="workspace.get_home",
+            description="Read the current verified LifeOS Home/Today intelligence packet.",
+            risk="read_only",
+            scope="workspace",
+            input_fields=(),
+            handler=_workspace_home_tool,
+        )
+    )
+    registry.register(
+        IntelligenceToolSpec(
+            name="workspace.get_recent_activity",
+            description="Read bounded auditable recent workspace activity.",
+            risk="read_only",
+            scope="workspace",
+            input_fields=(),
+            handler=_workspace_recent_activity_tool,
+        )
+    )
+    registry.register(
+        IntelligenceToolSpec(
+            name="workspace.get_portfolio_review",
+            description="Run the existing verified read-only portfolio review agent and rank priorities across owned projects.",
+            risk="read_only",
+            scope="workspace",
+            input_fields=(),
+            handler=_workspace_portfolio_review_tool,
+        )
+    )
+    registry.register(
+        IntelligenceToolSpec(
+            name="knowledge.ask_context",
+            description="Ask one explicitly selected owned document, collection, module, or lecture through the existing grounded LifeOS knowledge pipeline.",
+            risk="read_only",
+            scope="knowledge",
+            input_fields=("context_type", "context_id", "query"),
+            handler=_knowledge_context_tool,
         )
     )
     return registry
