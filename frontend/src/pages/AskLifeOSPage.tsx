@@ -9,6 +9,14 @@ type AskScope = {
   label: string;
 };
 
+type AskModelTier = "cheap" | "normal" | "deep";
+
+const askModelTierOptions: Array<{ value: AskModelTier; label: string; description: string }> = [
+  { value: "cheap", label: "Fast", description: "Quick answers with lower AI cost" },
+  { value: "normal", label: "Balanced", description: "Best for most LifeOS questions" },
+  { value: "deep", label: "Deep", description: "More reasoning for difficult requests" },
+];
+
 type AskContextOption = {
   type: "project" | "document" | "module" | "lecture" | "collection" | string;
   id: number;
@@ -250,6 +258,7 @@ type AskLifeOSResponse = {
   grounded?: GroundedAskResult | null;
   memory_suggestion?: ConversationMemorySuggestion | null;
   goal_plan?: AgentPlan | null;
+  reasoning_tier?: AskModelTier | null;
   read_only: boolean;
 };
 
@@ -423,6 +432,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       const response = await apiPost<{ run: AgentRun }>("/api/v1/intelligence/goal-runs", {
         goal: goalPlan.goal,
         selected_context: selectedContext,
+        model_tier: result?.reasoning_tier ?? null,
       });
       setGoalRun(response.run);
       if (response.run.status === "failed") {
@@ -669,6 +679,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       </section> : proposalError ? <div className="ask-lifeos-action-error standalone">{proposalError}</div> : null}
       {result ? <div className="ask-lifeos-answer-meta">
         <TrustBadge result={result} />
+        {result.reasoning_tier ? <span className="ask-lifeos-model-chip">{askModelTierOptions.find((option) => option.value === result.reasoning_tier)?.label || result.reasoning_tier}</span> : null}
         {result.route.scope?.label ? <span className="ask-lifeos-scope-chip">{result.route.scope.label}</span> : null}
         {result.attention_level ? <span className={`ask-lifeos-attention attention-${result.attention_level}`}>{result.attention_level} attention</span> : null}
       </div> : null}
@@ -679,6 +690,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
 export function AskLifeOSPage() {
   const session = useSession();
   const [query, setQuery] = useState("");
+  const [modelTier, setModelTier] = useState<AskModelTier>("normal");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<ConversationItem[]>([]);
@@ -791,6 +803,7 @@ export function AskLifeOSPage() {
         query: text,
         clarification_context: clarificationContext,
         selected_context: contextSnapshot,
+        model_tier: modelTier,
       });
       const responseText = result.answer
         || result.clarification
@@ -908,6 +921,13 @@ export function AskLifeOSPage() {
           </button>
           {selectedContext ? <button type="button" className="ask-lifeos-context-clear" onClick={() => chooseContext(null)} aria-label="Clear selected context">×</button> : null}
 
+          <label className="ask-lifeos-model-tier" title={askModelTierOptions.find((option) => option.value === modelTier)?.description}>
+            <span>Model</span>
+            <select value={modelTier} onChange={(event) => setModelTier(event.target.value as AskModelTier)} disabled={busy} aria-label="Ask LifeOS model">
+              {askModelTierOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+
           {contextPickerOpen ? <div className="ask-lifeos-context-picker">
             <div className="ask-lifeos-context-picker-head">
               <div><strong>Ask about</strong><span>Choose one verified LifeOS context</span></div>
@@ -949,7 +969,7 @@ export function AskLifeOSPage() {
           </button>
         </div>
         <div className="ask-lifeos-composer-footer">
-          <span>{selectedContext ? `${selectedContext.type.replace("_", " ")} context · ` : ""}Enter to send · Shift + Enter for a new line</span>
+          <span>{selectedContext ? `${selectedContext.type.replace("_", " ")} context · ` : ""}{askModelTierOptions.find((option) => option.value === modelTier)?.label} · Enter to send · Shift + Enter for a new line</span>
           <span>{query.length}/1200</span>
         </div>
       </form>

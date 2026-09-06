@@ -25,6 +25,7 @@ from services.ai_operation_lock_service import (
 )
 
 from services.lifeos_activity_service import add_activity_event
+from services.langsmith_observability_service import trace_lifeos_span
 
 from services.document_analysis_service import (
     DOCUMENT_ANALYSIS_SCHEMA_VERSION,
@@ -70,6 +71,19 @@ class SavedDocumentAnalysis:
     reused_existing: bool
 
 
+@trace_lifeos_span(
+    name="LifeOS document analysis",
+    feature="document_analysis",
+    metadata_builder=lambda values: {
+        "document_id": values.get("document_id"),
+        "force": bool(values.get("force", False)),
+        "confirmed_type_supplied": bool(values.get("confirmed_document_type")),
+    },
+    output_metadata_builder=lambda result: {
+        "reused_existing": bool(result.reused_existing),
+        "document_id": result.document.id,
+    },
+)
 def analyse_owned_document(
     *,
     document_id: int,

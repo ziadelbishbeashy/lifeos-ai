@@ -19,6 +19,7 @@ from database import db
 from models import Document, DocumentChunk
 from services.ai_pricing_service import calculate_usage_cost
 from services.ai_usage_service import record_embedding_usage
+from services.langsmith_observability_service import trace_embedding_call
 from services.resource_limit_service import (
     ResourceLimitError,
     get_resource_limits,
@@ -582,14 +583,40 @@ def _generate_embeddings(
 
     started = time.perf_counter()
     prompt_characters = sum(len(str(text or "")) for text in texts)
-    try:
-        response = client.models.embed_content(
+
+    def _usage_from_response(response) -> ProviderUsage:
+        prompt_tokens, token_count_source = _embedding_input_tokens(
+            client=client,
             model=model,
             contents=separate_contents,
-            config=types.EmbedContentConfig(
-                output_dimensionality=dimensions,
-            ),
+            response=response,
         )
+        return ProviderUsage(
+            input_tokens=prompt_tokens,
+            total_tokens=prompt_tokens,
+            raw={
+                "prompt_token_count": prompt_tokens,
+                "token_count_source": token_count_source,
+            },
+        )
+
+    try:
+        traced = trace_embedding_call(
+            provider=EMBEDDING_PROVIDER,
+            model=model,
+            feature=usage_feature,
+            prompt_characters=prompt_characters,
+            provider_call=lambda: client.models.embed_content(
+                model=model,
+                contents=separate_contents,
+                config=types.EmbedContentConfig(
+                    output_dimensionality=dimensions,
+                ),
+            ),
+            usage_builder=_usage_from_response,
+        )
+        response = traced.response
+        usage = traced.usage
     except Exception as error:
         latency_ms = round((time.perf_counter() - started) * 1000)
         usage = ProviderUsage()
@@ -607,21 +634,6 @@ def _generate_embeddings(
             user_id=usage_user_id,
         )
         raise
-
-    prompt_tokens, token_count_source = _embedding_input_tokens(
-        client=client,
-        model=model,
-        contents=separate_contents,
-        response=response,
-    )
-    usage = ProviderUsage(
-        input_tokens=prompt_tokens,
-        total_tokens=prompt_tokens,
-        raw={
-            "prompt_token_count": prompt_tokens,
-            "token_count_source": token_count_source,
-        },
-    )
     latency_ms = round((time.perf_counter() - started) * 1000)
     record_embedding_usage(
         provider=EMBEDDING_PROVIDER,
@@ -633,6 +645,7 @@ def _generate_embeddings(
         cost=calculate_usage_cost(provider=EMBEDDING_PROVIDER, model=model, usage=usage),
         latency_ms=latency_ms,
         success=True,
+        langsmith_run_id=traced.run_id,
         user_id=usage_user_id,
     )
 

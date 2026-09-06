@@ -173,6 +173,7 @@ def record_embedding_usage(
     latency_ms: int,
     success: bool,
     error_category: str | None = None,
+    langsmith_run_id: str | None = None,
     user_id: int | None = None,
 ) -> None:
     _persist_usage(
@@ -187,6 +188,7 @@ def record_embedding_usage(
         latency_ms=latency_ms,
         success=success,
         error_category=error_category,
+        langsmith_run_id=langsmith_run_id,
         user_id=user_id,
     )
 
@@ -297,10 +299,12 @@ def summarize_owned_usage(*, user_id: int, days: int = 30) -> dict[str, Any]:
                 "known_cost_usd": Decimal("0"),
                 "calls_with_known_cost": 0,
                 "operations": set(),
+                "models": set(),
             },
         )
         bucket["calls"] += 1
         bucket["operations"].add(str(row.operation or "unknown"))
+        bucket["models"].add(str(row.model or "unknown"))
         bucket["total_tokens"] += max(0, int(row.total_tokens or 0))
         bucket["thinking_tokens"] += max(0, int(row.thinking_tokens or 0))
         if row.total_cost_usd is not None:
@@ -320,6 +324,7 @@ def summarize_owned_usage(*, user_id: int, days: int = 30) -> dict[str, Any]:
                 "thinking_tokens": 0,
                 "known_cost_usd": Decimal("0"),
                 "features": set(),
+                "models": set(),
                 "created_at": row.created_at,
             },
         )
@@ -328,6 +333,7 @@ def summarize_owned_usage(*, user_id: int, days: int = 30) -> dict[str, Any]:
         operation_bucket["total_tokens"] += max(0, int(row.total_tokens or 0))
         operation_bucket["thinking_tokens"] += max(0, int(row.thinking_tokens or 0))
         operation_bucket["features"].add(feature)
+        operation_bucket["models"].add(str(row.model or "unknown"))
         if row.total_cost_usd is not None:
             operation_bucket["known_cost_usd"] += Decimal(row.total_cost_usd)
             operation_bucket["calls_with_known_cost"] += 1
@@ -338,6 +344,7 @@ def summarize_owned_usage(*, user_id: int, days: int = 30) -> dict[str, Any]:
         {
             "feature": name,
             "operations": sorted(data["operations"]),
+            "models": sorted(data["models"]),
             "calls": data["calls"],
             "total_tokens": data["total_tokens"],
             "thinking_tokens": data["thinking_tokens"],
@@ -375,6 +382,7 @@ def summarize_owned_usage(*, user_id: int, days: int = 30) -> dict[str, Any]:
                 "request_id": data["request_id"],
                 "endpoint": data["endpoint"],
                 "features": sorted(data["features"]),
+                "models": sorted(data["models"]),
                 "calls": data["calls"],
                 "total_tokens": data["total_tokens"],
                 "thinking_tokens": data["thinking_tokens"],

@@ -5,6 +5,8 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 from flask_login import current_user
 
+from ai.model_router import model_tier_override, normalize_model_tier
+
 from lifeos.api.v1.common import api_auth_required, json_body, not_found, validation_error
 from services.intelligence_ask_service import ask_lifeos
 from services.agent_planner_service import AgentPlannerError, plan_owned_agent_goal
@@ -16,8 +18,8 @@ from services.agent_runtime_service import (
     list_owned_agent_runs,
     prepare_agent_action_proposal,
     require_owned_agent_run,
-    run_owned_agent_goal,
 )
+from services.agent_execution_service import run_owned_agent_goal
 from services.intelligence_context_service import collect_owned_project_context
 from services.intelligence_intent_router_service import IntelligenceRouterError
 from services.intelligence_request_service import handle_intelligence_request
@@ -74,6 +76,15 @@ from services.structured_memory_service import (
 )
 
 
+
+
+def _optional_model_tier(payload: dict) -> str | None:
+    try:
+        return normalize_model_tier(payload.get("model_tier"), allow_none=True)
+    except ValueError as error:
+        raise AskContextValidationError(str(error)) from error
+
+
 intelligence_api_bp = Blueprint(
     "api_v1_intelligence",
     __name__,
@@ -88,18 +99,24 @@ def ask_lifeos_route():
 
     payload = json_body()
     try:
-        result = ask_lifeos(
-            query=payload.get("query") or "",
-            owner_id=current_user.id,
-            clarification_context=payload.get("clarification_context"),
-            selected_context=payload.get("selected_context"),
-        )
+        requested_tier = _optional_model_tier(payload)
+        with model_tier_override(requested_tier):
+            result = ask_lifeos(
+                query=payload.get("query") or "",
+                owner_id=current_user.id,
+                clarification_context=payload.get("clarification_context"),
+                selected_context=payload.get("selected_context"),
+                model_tier=requested_tier,
+            )
     except (IntelligenceRouterError, AskContextValidationError) as error:
         return validation_error(str(error))
     except (WorkspaceContextNotFoundError, AskContextNotFoundError):
         return not_found("The requested LifeOS scope was not found.")
 
-    return jsonify(result.to_dict())
+    response = result.to_dict()
+    # Public API exposes the user-facing reasoning tier, not provider/model details.
+    response["reasoning_tier"] = requested_tier
+    return jsonify(response)
 
 
 @intelligence_api_bp.get("/context-options")
@@ -136,11 +153,13 @@ def goal_run_route():
 
     payload = json_body()
     try:
-        run = run_owned_agent_goal(
-            owner_id=current_user.id,
-            goal=payload.get("goal"),
-            selected_context=payload.get("selected_context"),
-        )
+        requested_tier = _optional_model_tier(payload)
+        with model_tier_override(requested_tier):
+            run = run_owned_agent_goal(
+                owner_id=current_user.id,
+                goal=payload.get("goal"),
+                selected_context=payload.get("selected_context"),
+            )
     except (AgentPlannerError, AskContextValidationError) as error:
         return validation_error(str(error))
     except AskContextNotFoundError:

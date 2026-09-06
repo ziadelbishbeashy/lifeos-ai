@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from services.langsmith_observability_service import trace_lifeos_span
 from services.intelligence_claim_verifier_service import (
     IntelligenceVerificationProviderError,
     IntelligenceVerificationResult,
@@ -434,6 +435,23 @@ def _goal_plan_context(explicit_context: AskContextOption | None, route: Intelli
     return None
 
 
+@trace_lifeos_span(
+    name="LifeOS Ask LifeOS",
+    feature="ask_lifeos",
+    metadata_builder=lambda values: {
+        "query_characters": len(str(values.get("query") or "")),
+        "has_selected_context": isinstance(values.get("selected_context"), dict),
+        "has_clarification_context": isinstance(values.get("clarification_context"), dict),
+        "verification_policy": str(values.get("verification_policy") or "full"),
+        "requested_model_tier": str(values.get("model_tier") or "auto"),
+    },
+    output_metadata_builder=lambda result: {
+        "status": result.status,
+        "response_mode": result.response_mode,
+        "intent": result.route.intent,
+        "scope_type": result.route.scope_type,
+    },
+)
 def ask_lifeos(
     *,
     query: str,
@@ -441,6 +459,7 @@ def ask_lifeos(
     clarification_context: dict[str, Any] | None = None,
     selected_context: dict[str, Any] | None = None,
     verification_policy: str = "full",
+    model_tier: str | None = None,
 ) -> AskLifeOSResult:
     """Route and answer verified workflows, preserving safe clarification context."""
 

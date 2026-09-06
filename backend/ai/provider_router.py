@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from ai.model_router import ModelRoute, resolve_model_route
 from ai.providers import GeminiProvider, OpenAIProvider, ProviderRequestError
 from ai.providers.base import ProviderGeneration, ProviderUsage
 from services.ai_pricing_service import UsageCost, calculate_usage_cost
@@ -154,7 +155,13 @@ def _record_attempt(
     )
 
 
-def _execute(config: ProviderConfig, prompt: str, *, feature: str) -> str:
+def _execute(
+    config: ProviderConfig,
+    prompt: str,
+    *,
+    feature: str,
+    model_route: ModelRoute | None = None,
+) -> str:
     try:
         call_index = guard_generation_request(
             provider=config.name,
@@ -173,6 +180,9 @@ def _execute(config: ProviderConfig, prompt: str, *, feature: str) -> str:
             model=config.model,
             feature=feature,
             prompt_characters=len(str(prompt or "")),
+            model_tier=model_route.tier if model_route else None,
+            requested_model=model_route.requested_model if model_route else None,
+            model_tier_source=model_route.tier_source if model_route else None,
             provider_call=lambda: _normalize_generation(
                 provider.generate_text(model=config.model, prompt=prompt)
             ),
@@ -236,7 +246,8 @@ def generate_text(
 ) -> str:
     """Generate through the requested provider and optional configured fallback.
 
-    ``feature`` is observability metadata only. It never changes model behavior.
+    ``feature`` is used by the deterministic model router to select a configured
+    CHEAP/NORMAL/DEEP model tier and is also recorded as observability metadata.
     The API key is never logged or included in errors.
     """
 
@@ -251,8 +262,23 @@ def generate_text(
         )
 
     safe_feature = str(feature or "unknown").strip().lower().replace(" ", "_")[:80] or "unknown"
+    primary_route = resolve_model_route(
+        feature=safe_feature,
+        provider=primary.name,
+        requested_model=primary.model,
+    )
+    routed_primary = ProviderConfig(
+        name=primary.name,
+        api_key=primary.api_key,
+        model=primary_route.selected_model,
+    )
     try:
-        result = _execute(primary, prompt, feature=safe_feature)
+        result = _execute(
+            routed_primary,
+            prompt,
+            feature=safe_feature,
+            model_route=primary_route,
+        )
         if not result:
             raise AIProviderRouterError(empty_message)
         return result
@@ -264,8 +290,23 @@ def generate_text(
         fallback = fallback_provider_config(primary.name)
         if fallback is None:
             raise
+        fallback_route = resolve_model_route(
+            feature=safe_feature,
+            provider=fallback.name,
+            requested_model=fallback.model,
+        )
+        routed_fallback = ProviderConfig(
+            name=fallback.name,
+            api_key=fallback.api_key,
+            model=fallback_route.selected_model,
+        )
         try:
-            result = _execute(fallback, prompt, feature=safe_feature)
+            result = _execute(
+                routed_fallback,
+                prompt,
+                feature=safe_feature,
+                model_route=fallback_route,
+            )
             if not result:
                 raise AIProviderRouterError(empty_message)
             return result

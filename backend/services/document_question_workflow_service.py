@@ -51,6 +51,8 @@ from services.document_evidence_preview_service import (
     build_focused_evidence_preview,
 )
 
+from services.langsmith_observability_service import trace_lifeos_span
+
 from services.document_rag_logging_service import (
     build_retrieval_log_summary,
     create_document_rag_trace_id,
@@ -96,6 +98,21 @@ class SavedDocumentQuestion:
     reused_existing: bool
 
 
+@trace_lifeos_span(
+    name="LifeOS document question",
+    feature="document_question",
+    metadata_builder=lambda values: {
+        "document_id": values.get("document_id"),
+        "force": bool(values.get("force", False)),
+        "question_characters": len(str(values.get("question_text") or "")),
+        "selected_context_characters": len(str(values.get("selected_context_text") or "")),
+        "selected_context_page_supplied": values.get("selected_context_page") not in (None, ""),
+    },
+    output_metadata_builder=lambda result: {
+        "reused_existing": bool(result.reused_existing),
+        "document_id": result.document.id,
+    },
+)
 def ask_owned_document(
     *,
     document_id: int,

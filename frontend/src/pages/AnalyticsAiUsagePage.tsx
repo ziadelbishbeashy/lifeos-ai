@@ -42,6 +42,9 @@ export function AnalyticsAiUsagePage() {
 
   const usage = ai.data;
   const u = usage.totals || {};
+  const langsmith = usage.langsmith || {};
+  const modelRouter = usage.model_router || {};
+  const langsmithLabel = langsmith.state === "enabled" ? "Configured" : langsmith.state === "needs_api_key" ? "Needs API key" : langsmith.state === "sdk_unavailable" ? "SDK unavailable" : "Disabled";
 
   return <section className="analytics-page">
     <header className="analytics-hero">
@@ -71,13 +74,25 @@ export function AnalyticsAiUsagePage() {
     </section>
 
     <section className="analytics-panel">
+      <div className="analytics-panel-heading"><div><span>LangSmith</span><h2>Tracing status</h2></div><strong className="analytics-panel-total">{langsmithLabel}</strong></div>
+      <div className="analytics-table-wrap"><table className="analytics-project-table"><thead><tr><th>Project</th><th>Sampling</th><th>Privacy</th><th>SDK</th></tr></thead><tbody><tr><td><strong>{langsmith.project || "lifeos-development"}</strong></td><td><strong>{Math.round(Number(langsmith.sampling_rate ?? 1) * 100)}%</strong></td><td><strong>{langsmith.raw_content_logged ? "Content logging enabled" : "Metadata only"}</strong></td><td><strong>{langsmith.sdk_available ? "Available" : "Unavailable"}</strong></td></tr></tbody></table></div>
+      {langsmith.state === "needs_api_key" ? <div className="analytics-empty">Set LANGSMITH_API_KEY in backend/.env to start tracing.</div> : null}
+    </section>
+
+    <section className="analytics-panel">
+      <div className="analytics-panel-heading"><div><span>Model router</span><h2>AI model tiers</h2></div><strong className="analytics-panel-total">{modelRouter.enabled ? "Enabled" : "Disabled"}</strong></div>
+      {modelRouter.tiers?.length ? <div className="analytics-table-wrap"><table className="analytics-project-table"><thead><tr><th>Tier</th><th>Provider</th><th>Selected model</th><th>Configuration</th></tr></thead><tbody>{modelRouter.tiers.map((x: any) => <tr key={x.tier}><td><strong>{String(x.tier || "normal").toUpperCase()}</strong></td><td><strong>{modelRouter.provider || "—"}</strong></td><td><strong>{x.model || "—"}</strong></td><td><strong>{x.source === "requested_model" ? "Inherited" : x.source === "disabled" ? "Routing disabled" : "Tier override"}</strong></td></tr>)}</tbody></table></div> : <div className="analytics-empty">Model routing configuration is unavailable.</div>}
+      <div className="analytics-empty">Unknown/new AI features default to NORMAL. Routing is deterministic and does not make an extra AI call.</div>
+    </section>
+
+    <section className="analytics-panel">
       <div className="analytics-panel-heading"><div><span>Feature breakdown</span><h2>Where AI usage is going</h2></div><strong className="analytics-panel-total">${Number(u.known_cost_usd || 0).toFixed(4)}</strong></div>
-      {usage.by_feature?.length ? <div className="analytics-table-wrap"><table className="analytics-project-table"><thead><tr><th>AI feature</th><th>Calls</th><th>Avg tokens</th><th>Avg thinking</th><th>Total tokens</th><th>Avg cost / call</th><th>Known cost</th></tr></thead><tbody>{usage.by_feature.slice(0, 20).map((x: any) => <tr key={x.feature}><td><strong>{friendly(x.feature)}</strong></td><td><strong>{x.calls ?? 0}</strong></td><td><strong>{Number(x.average_tokens_per_call || 0).toLocaleString()}</strong></td><td><strong>{Number(x.average_thinking_tokens_per_call || 0).toLocaleString()}</strong></td><td><strong>{Number(x.total_tokens || 0).toLocaleString()}</strong></td><td><strong>{x.average_known_cost_usd == null ? "—" : `$${Number(x.average_known_cost_usd).toFixed(4)}`}</strong></td><td><strong>${Number(x.known_cost_usd || 0).toFixed(4)}</strong></td></tr>)}</tbody></table></div> : <div className="analytics-empty">Use an AI feature to begin collecting exact provider usage.</div>}
+      {usage.by_feature?.length ? <div className="analytics-table-wrap"><table className="analytics-project-table"><thead><tr><th>AI feature</th><th>Model(s)</th><th>Calls</th><th>Avg tokens</th><th>Avg thinking</th><th>Total tokens</th><th>Avg cost / call</th><th>Known cost</th></tr></thead><tbody>{usage.by_feature.slice(0, 20).map((x: any) => <tr key={x.feature}><td><strong>{friendly(x.feature)}</strong></td><td><strong>{Array.isArray(x.models) && x.models.length ? x.models.join(", ") : "—"}</strong></td><td><strong>{x.calls ?? 0}</strong></td><td><strong>{Number(x.average_tokens_per_call || 0).toLocaleString()}</strong></td><td><strong>{Number(x.average_thinking_tokens_per_call || 0).toLocaleString()}</strong></td><td><strong>{Number(x.total_tokens || 0).toLocaleString()}</strong></td><td><strong>{x.average_known_cost_usd == null ? "—" : `$${Number(x.average_known_cost_usd).toFixed(4)}`}</strong></td><td><strong>${Number(x.known_cost_usd || 0).toFixed(4)}</strong></td></tr>)}</tbody></table></div> : <div className="analytics-empty">Use an AI feature to begin collecting exact provider usage.</div>}
     </section>
 
     <section className="analytics-panel">
       <div className="analytics-panel-heading"><div><span>Operation cost</span><h2>Recent user operations</h2></div><strong className="analytics-panel-total">{u.operations ?? 0} operations</strong></div>
-      {usage.recent_operations?.length ? <div className="analytics-table-wrap"><table className="analytics-project-table"><thead><tr><th>Operation</th><th>Provider calls</th><th>Tokens</th><th>Thinking</th><th>Cost</th><th>Metering</th></tr></thead><tbody>{usage.recent_operations.slice(0, 20).map((x: any) => <tr key={x.request_id}><td><strong>{operationLabel(x.endpoint, x.features)}</strong></td><td><strong>{x.calls ?? 0}</strong></td><td><strong>{Number(x.total_tokens || 0).toLocaleString()}</strong></td><td><strong>{Number(x.thinking_tokens || 0).toLocaleString()}</strong></td><td><strong>${Number(x.known_cost_usd || 0).toFixed(4)}</strong></td><td><strong>{x.cost_complete ? "Complete" : "Partial"}</strong></td></tr>)}</tbody></table></div> : <div className="analytics-empty">No AI operations have been recorded in this period.</div>}
+      {usage.recent_operations?.length ? <div className="analytics-table-wrap"><table className="analytics-project-table"><thead><tr><th>Operation</th><th>Model(s)</th><th>Provider calls</th><th>Tokens</th><th>Thinking</th><th>Cost</th><th>Metering</th></tr></thead><tbody>{usage.recent_operations.slice(0, 20).map((x: any) => <tr key={x.request_id}><td><strong>{operationLabel(x.endpoint, x.features)}</strong></td><td><strong>{Array.isArray(x.models) && x.models.length ? x.models.join(", ") : "—"}</strong></td><td><strong>{x.calls ?? 0}</strong></td><td><strong>{Number(x.total_tokens || 0).toLocaleString()}</strong></td><td><strong>{Number(x.thinking_tokens || 0).toLocaleString()}</strong></td><td><strong>${Number(x.known_cost_usd || 0).toFixed(4)}</strong></td><td><strong>{x.cost_complete ? "Complete" : "Partial"}</strong></td></tr>)}</tbody></table></div> : <div className="analytics-empty">No AI operations have been recorded in this period.</div>}
     </section>
   </section>;
 }

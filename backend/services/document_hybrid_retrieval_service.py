@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from services.langsmith_observability_service import trace_lifeos_span
 from services.resource_limit_service import effective_context_limit, get_resource_limits
 from models import (
     Document,
@@ -371,6 +372,21 @@ class _FusionCandidate:
     matched_terms: tuple[str, ...] = ()
 
 
+@trace_lifeos_span(
+    name="LifeOS document hybrid retrieval",
+    feature="document_hybrid_retrieval",
+    run_type="retriever",
+    metadata_builder=lambda values: {
+        "document_id": values.get("document_id"),
+        "query_characters": len(str(values.get("query") or "")),
+        "limit": values.get("limit"),
+        "force_embeddings": bool(values.get("force_embeddings", False)),
+    },
+    output_metadata_builder=lambda result: {
+        "result_count": len(result.chunks),
+        "mode": result.mode,
+    },
+)
 def retrieve_owned_document_chunks_hybrid(
     *,
     document_id: int,

@@ -6,6 +6,8 @@ from flask_login import current_user
 
 from lifeos.api.v1.common import api_auth_required, validation_error
 from services.ai_usage_service import list_owned_usage_events, summarize_owned_usage
+from services.langsmith_observability_service import langsmith_status
+from ai.model_router import model_router_status
 
 
 ai_usage_api_bp = Blueprint("api_v1_ai_usage", __name__, url_prefix="/api/v1/ai-usage")
@@ -19,7 +21,10 @@ def ai_usage_summary_route():
         days = int(raw_days)
     except (TypeError, ValueError):
         return validation_error("Invalid AI usage period.")
-    return jsonify(summarize_owned_usage(user_id=current_user.id, days=days))
+    payload = summarize_owned_usage(user_id=current_user.id, days=days)
+    payload["langsmith"] = langsmith_status()
+    payload["model_router"] = model_router_status()
+    return jsonify(payload)
 
 
 @ai_usage_api_bp.get("/recent")

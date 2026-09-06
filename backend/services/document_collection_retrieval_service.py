@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any
 
+from services.langsmith_observability_service import trace_lifeos_span
 from services.resource_limit_service import (
     ResourceLimitError,
     effective_context_limit,
@@ -139,6 +140,21 @@ class CollectionRetrievalResult:
     reused_count: int
 
 
+@trace_lifeos_span(
+    name="LifeOS collection retrieval",
+    feature="collection_retrieval",
+    run_type="retriever",
+    metadata_builder=lambda values: {
+        "collection_id": values.get("collection_id"),
+        "query_characters": len(str(values.get("query") or "")),
+        "limit": values.get("limit"),
+        "force_embeddings": bool(values.get("force_embeddings", False)),
+    },
+    output_metadata_builder=lambda result: {
+        "result_count": len(result.chunks),
+        "mode": result.mode,
+    },
+)
 def retrieve_owned_collection_chunks(
     *,
     collection_id: int,

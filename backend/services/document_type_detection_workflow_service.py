@@ -15,6 +15,7 @@ from services.ai_operation_lock_service import (
     AIOperationAlreadyRunningError,
     ai_operation_lock,
 )
+from services.langsmith_observability_service import trace_lifeos_span
 from services.document_type_detection_service import (
     DocumentTypeDetectionError,
     DocumentTypeDetectionResult,
@@ -108,6 +109,19 @@ def _save_detection_cache(
         return
 
 
+@trace_lifeos_span(
+    name="LifeOS document type detection",
+    feature="document_type_detection",
+    metadata_builder=lambda values: {
+        "document_id": values.get("document_id"),
+        "force": bool(values.get("force", False)),
+    },
+    output_metadata_builder=lambda result: {
+        "reused_existing": bool(result.reused_existing),
+        "document_id": result.document.id,
+        "confidence": result.detection.confidence,
+    },
+)
 def detect_owned_document_type(
     *,
     document_id: int,

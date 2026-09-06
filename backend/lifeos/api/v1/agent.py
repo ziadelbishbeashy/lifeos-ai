@@ -15,8 +15,8 @@ from services.agent_runtime_service import (
     list_owned_agent_runs,
     prepare_agent_action_proposal,
     require_owned_agent_run,
-    run_owned_agent_goal,
 )
+from services.agent_execution_service import run_owned_agent_goal
 from services.ask_context_picker_service import AskContextNotFoundError, AskContextValidationError
 from services.intelligence_action_service import proposal_to_dict
 

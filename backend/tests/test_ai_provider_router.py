@@ -48,3 +48,33 @@ def test_router_returns_friendly_error(monkeypatch):
             empty_message="empty",
         )
     assert "temporarily experiencing high demand" in str(captured.value)
+
+
+def test_router_applies_feature_tier_model_override(monkeypatch):
+    monkeypatch.setitem(provider_router._PROVIDER_FACTORIES, "gemini", FakeProvider)
+    monkeypatch.setenv("AI_MODEL_ROUTER_ENABLED", "true")
+    monkeypatch.setenv("GEMINI_CHEAP_MODEL", "gemini-2.5-flash-lite")
+    result = provider_router.generate_text(
+        provider="gemini",
+        api_key="secret",
+        model="gemini-2.5-flash",
+        prompt="classify",
+        empty_message="empty",
+        feature="document_type_detection",
+    )
+    assert result == "gemini-2.5-flash-lite:classify"
+
+
+def test_router_keeps_normal_feature_on_requested_model_without_override(monkeypatch):
+    monkeypatch.setitem(provider_router._PROVIDER_FACTORIES, "gemini", FakeProvider)
+    monkeypatch.setenv("AI_MODEL_ROUTER_ENABLED", "true")
+    monkeypatch.delenv("GEMINI_NORMAL_MODEL", raising=False)
+    result = provider_router.generate_text(
+        provider="gemini",
+        api_key="secret",
+        model="gemini-2.5-flash",
+        prompt="analyze",
+        empty_message="empty",
+        feature="ai_service.analyze_document",
+    )
+    assert result == "gemini-2.5-flash:analyze"

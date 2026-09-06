@@ -4261,3 +4261,46 @@ html[data-theme="light"] .analysis-tabs { background: rgba(255,255,255,.92) !imp
 .profile-dropdown-item{display:flex;justify-content:space-between;gap:12px;align-items:center;text-decoration:none;color:inherit}
 .profile-dropdown-item small{color:var(--text-muted,#8f96aa)}
 @media(max-width:760px){.experience-choice-grid{grid-template-columns:1fr}.experience-onboarding-card{padding:22px}.experience-onboarding-footer{align-items:stretch;flex-direction:column}.experience-onboarding-footer .authentication-submit{width:100%}.experience-settings-summary{grid-template-columns:1fr 1fr}.experience-settings-summary .primary-button{grid-column:1/-1}.experience-registration-page{display:block}.experience-registration-card{max-width:none}}
+
+/* Ask LifeOS model tier selector — provider-agnostic Fast / Balanced / Deep. */
+.ask-lifeos-model-tier {
+  min-height: 34px;
+  margin-left: auto;
+  padding: 0 8px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-card-bg-soft);
+  color: var(--app-text-muted);
+  font-size: 9px;
+  font-weight: 760;
+}
+.ask-lifeos-model-tier select {
+  min-width: 88px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--app-text-primary);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ask-lifeos-model-tier select:disabled { cursor: default; opacity: .6; }
+@media (max-width: 720px) {
+  .ask-lifeos-model-tier { margin-left: 0; }
+}
+.ask-lifeos-model-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-card-bg-soft);
+  color: var(--app-text-secondary);
+  font-size: 9px;
+  font-weight: 780;
+}

@@ -23,6 +23,7 @@ from werkzeug.utils import secure_filename
 from database import db
 from models import DocumentChunk, LearningModule, LifeOSActionProposal, ModuleAssessment
 from services.academic_schedule_ai_service import AcademicScheduleAIError, AcademicScheduleAIValidationError, extract_academic_schedule_items
+from services.langsmith_observability_service import trace_lifeos_span
 from services.document_access_service import DocumentNotFoundError, require_owned_document
 from services.document_hybrid_retrieval_service import DocumentHybridRetrievalError, retrieve_owned_document_chunks_hybrid
 from services.document_ocr_workflow_service import DocumentOCRWorkflowError, process_owned_document_ocr
@@ -267,6 +268,18 @@ def _proposal_payload(candidate: dict[str, Any], *, module_id: int | None, sourc
     return payload
 
 
+@trace_lifeos_span(
+    name="LifeOS academic schedule import",
+    feature="academic_schedule_import",
+    metadata_builder=lambda values: {
+        "max_bytes": values.get("max_bytes"),
+        "upload_supplied": values.get("upload") is not None,
+    },
+    output_metadata_builder=lambda result: {
+        "document_id": result.document_id,
+        "proposal_count": len(result.proposals),
+    },
+)
 def import_academic_schedule_upload(*, upload: FileStorage | None, user_id: int, max_bytes: int, storage: StorageService | None = None) -> AcademicScheduleImportResult:
     prepared, original_name = _prepare_upload(upload, max_bytes=max_bytes)
     try:
