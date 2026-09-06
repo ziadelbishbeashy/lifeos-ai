@@ -18,6 +18,7 @@ import {
   uploadModuleDocument,
 } from "../features/modules/api";
 import { ContextConnectionsPanel } from "../components/ContextConnectionsPanel";
+import { ModuleAssessmentsPanel } from "../features/modules/ModuleAssessmentsPanel";
 
 function SourceList({ question }: { question: ModuleQuestion }) {
   if (!question.sources?.length) return null;
@@ -180,6 +181,7 @@ export function ModuleDetailsPage() {
 
     <div className="module-summary-strip">
       <span><strong>{module.counts.lectures}</strong> lectures</span>
+      <span><strong>{module.counts.assessments || 0}</strong> assessments</span>
       <span><strong>{module.counts.documents}</strong> documents</span>
       <span><strong>{module.counts.notes}</strong> notes</span>
       <span><strong>{module.counts.tasks}</strong> study tasks</span>
@@ -226,6 +228,8 @@ export function ModuleDetailsPage() {
           </form>
           <QuestionHistory items={data.question_history} empty="Ask a question once the module has at least one searchable document." />
         </article>
+
+        <ModuleAssessmentsPanel moduleId={module.id} assessments={module.assessments || []} refresh={refresh} />
 
         <article className="module-panel">
           <div className="module-section-heading"><div><span className="workspace-eyebrow">Study material</span><h2>Documents</h2><p>Attach an existing PDF or upload lecture material directly to the module.</p></div><span>{module.documents.length}</span></div>

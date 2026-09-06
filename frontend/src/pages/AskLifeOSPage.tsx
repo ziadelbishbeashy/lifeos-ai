@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { ApiError, apiGet, apiPost } from "../api/client";
+import { useSession } from "../auth/session";
+import type { AgentActionSuggestion, AgentPlan, AgentRun } from "../api/types";
 
 type AskScope = {
   type: string;
@@ -247,6 +249,7 @@ type AskLifeOSResponse = {
   memory?: MemoryResult | null;
   grounded?: GroundedAskResult | null;
   memory_suggestion?: ConversationMemorySuggestion | null;
+  goal_plan?: AgentPlan | null;
   read_only: boolean;
 };
 
@@ -262,18 +265,59 @@ type ClarificationContext = {
   intent: string;
 };
 
-const suggestions = [
+const generalSuggestions = [
   "What should I do today?",
   "Which tasks are overdue?",
-  "Which documents need review?",
-  "What should I study next?",
+  "Help me get this project ready for deployment.",
   "What changed in LifeOS this week?",
-  "What is connected to my latest task?",
-  "What do you remember about my workspace?",
+  "Which documents need review?",
+  "Help me make meaningful progress this week.",
+  "What should I study next?",
   "Review my project and tell me what needs attention",
 ];
 
+function friendlyGoalTool(name: string) {
+  const labels: Record<string, string> = {
+    "workspace.get_home": "Check current priorities and deadlines",
+    "workspace.get_recent_activity": "Check recent workspace changes",
+    "workspace.get_portfolio_review": "Review project risks across LifeOS",
+    "project.get_summary": "Read the project state",
+    "project.get_tasks": "Check tasks, blockers and deadlines",
+    "project.review": "Review project priorities and risks",
+    "project.get_documents": "Inspect related document intelligence",
+    "project.get_recent_notes": "Read recent project notes and decisions",
+    "knowledge.ask_context": "Use grounded knowledge from the selected context",
+  };
+  return labels[name] ?? name.replace(/[._]/g, " ");
+}
+
+function goalActionLabel(type: string) {
+  if (type === "create_task") return "Create task";
+  if (type === "create_note") return "Save note";
+  if (type === "refresh_document_analysis") return "Refresh analysis";
+  return type.replace(/_/g, " ");
+}
+
+function goalEvidenceGroups(evidence: AgentRun["output"]["evidence"] = []) {
+  const groups = new Map<string, { label: string; items: NonNullable<AgentRun["output"]["evidence"]> }>();
+  for (const entry of evidence || []) {
+    const sourceRef = entry.source_refs?.find((ref) => typeof ref?.label === "string" || typeof ref?.filename === "string");
+    const label = typeof sourceRef?.label === "string"
+      ? sourceRef.label
+      : typeof sourceRef?.filename === "string"
+        ? sourceRef.filename
+        : entry.project_title || "LifeOS workspace";
+    const current = groups.get(label) || { label, items: [] };
+    current.items.push(entry);
+    groups.set(label, current);
+  }
+  return Array.from(groups.values());
+}
+
 function TrustBadge({ result }: { result: AskLifeOSResponse }) {
+  if (result.response_mode === "goal_plan") {
+    return <span className="ask-lifeos-trust verified"><i />Safe plan · nothing run yet</span>;
+  }
   if (result.response_mode === "grounded_rag_verified" && result.verification?.status === "verified") {
     return <span className="ask-lifeos-trust verified"><i />Grounded in selected context</span>;
   }
@@ -305,20 +349,21 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
   const memory = result?.memory;
   const grounded = result?.grounded;
   const memorySuggestion = result?.memory_suggestion;
+  const goalPlan = result?.goal_plan || null;
   const [showAllPriorities, setShowAllPriorities] = useState(false);
   const [proposal, setProposal] = useState<ActionProposal | null>(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [showMemorySuggestion, setShowMemorySuggestion] = useState(true);
-  const visiblePriorities = showAllPriorities ? priorities : priorities.slice(0, 3);
-  const documentGroupCounts = priorities.reduce<Record<string, number>>((counts, priority) => {
-    const source = priority.evidence?.find((item) => item.source_type === "document" && item.label);
-    if (!source) return counts;
-    const key = `${priority.project_id}:${source.label}`;
-    counts[key] = (counts[key] || 0) + 1;
-    return counts;
-  }, {});
-  let previousDocumentGroup = "";
+  const [goalRun, setGoalRun] = useState<AgentRun | null>(null);
+  const [goalRunBusy, setGoalRunBusy] = useState(false);
+  const [goalRunError, setGoalRunError] = useState<string | null>(null);
+  const [showGoalEvidence, setShowGoalEvidence] = useState(false);
+  const [showGoalTechnical, setShowGoalTechnical] = useState(false);
+  const [showPriorityEvidence, setShowPriorityEvidence] = useState(false);
+  const topPriority = priorities[0] || null;
+  const goalSummary = goalRun?.output.goal_summary || null;
+  const goalEvidence = goalEvidenceGroups(goalRun?.output.evidence || []);
 
   async function createProposal(priority: AgentPriority, actionType: string) {
     if (proposalBusy || proposal?.status === "pending" || proposal?.status === "executing") return;
@@ -365,6 +410,48 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
     }
   }
 
+  async function startGoalReview() {
+    if (!goalPlan || goalRunBusy) return;
+    setGoalRunBusy(true);
+    setGoalRunError(null);
+    setGoalRun(null);
+    setProposal(null);
+    try {
+      const selectedContext = goalPlan.scope.type === "workspace" || goalPlan.scope.id == null
+        ? null
+        : { type: goalPlan.scope.type, id: goalPlan.scope.id };
+      const response = await apiPost<{ run: AgentRun }>("/api/v1/intelligence/goal-runs", {
+        goal: goalPlan.goal,
+        selected_context: selectedContext,
+      });
+      setGoalRun(response.run);
+      if (response.run.status === "failed") {
+        setGoalRunError(response.run.failure_message || "LifeOS could not complete this goal review.");
+      }
+    } catch (err) {
+      setGoalRunError(err instanceof ApiError ? err.message : "LifeOS could not complete this goal review.");
+    } finally {
+      setGoalRunBusy(false);
+    }
+  }
+
+  async function prepareGoalProposal(suggestion: AgentActionSuggestion, actionType: string) {
+    if (!goalRun || proposalBusy) return;
+    setProposalBusy(true);
+    setProposalError(null);
+    try {
+      const response = await apiPost<{ proposal: ActionProposal }>(`/api/v1/intelligence/goal-runs/${goalRun.id}/proposals`, {
+        suggestion_id: suggestion.id,
+        action_type: actionType,
+      });
+      setProposal(response.proposal);
+    } catch (err) {
+      setProposalError(err instanceof ApiError ? err.message : "LifeOS could not prepare that action.");
+    } finally {
+      setProposalBusy(false);
+    }
+  }
+
   return <div className="ask-lifeos-message assistant-message">
     <div className="ask-lifeos-avatar lifeos-avatar" aria-hidden="true">L</div>
     <div className="ask-lifeos-message-body">
@@ -374,35 +461,109 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
         {candidates.map((candidate) => <button type="button" key={candidate.id} onClick={() => onReply(candidate.label)}>{candidate.label}</button>)}
         <button type="button" className="all-projects" onClick={() => onReply("all")}>All projects</button>
       </div> : null}
-      {priorities.length ? <div className="ask-lifeos-priority-list">
-        {visiblePriorities.map((priority, index) => {
-          const source = priority.evidence?.find((item) => item.source_type === "document" && item.label);
-          const groupKey = source ? `${priority.project_id}:${source.label}` : "";
-          const showGroupHeader = Boolean(groupKey && groupKey !== previousDocumentGroup && (documentGroupCounts[groupKey] || 0) > 1);
-          previousDocumentGroup = groupKey;
-          return <div className="ask-lifeos-priority-block" key={`${priority.project_id}-${priority.category}-${index}`}>
-            {showGroupHeader ? <div className="ask-lifeos-source-group">
-              <span className="ask-lifeos-source-icon" aria-hidden="true">D</span>
-              <div><strong>{source?.label}</strong><span>{documentGroupCounts[groupKey]} related priorities</span></div>
+      {goalPlan ? <section className={`ask-lifeos-goal-review ${goalRun?.status === "succeeded" ? "completed" : ""}`}>
+        <div className="ask-lifeos-goal-heading">
+          <div><span>Goal review</span><strong>{goalPlan.scope.label}</strong></div>
+          <span className="ask-lifeos-goal-safety">Read-only checks</span>
+        </div>
+        {!goalRun ? <div className="ask-lifeos-goal-plan">
+          {goalPlan.steps.map((step, index) => <div className="ask-lifeos-goal-step state-ready" key={step.step_id}>
+            <span className="ask-lifeos-goal-step-state">{index + 1}</span>
+            <div><strong>{friendlyGoalTool(step.tool_name)}</strong><small>{step.purpose}</small></div>
+          </div>)}
+        </div> : null}
+        {!goalRun ? <div className="ask-lifeos-goal-start">
+          <p>LifeOS has not run these checks yet. Starting the review can read only your owned workspace; any later change still needs I9 confirmation.</p>
+          <button type="button" className="primary" disabled={goalRunBusy} onClick={() => void startGoalReview()}>{goalRunBusy ? "Reviewing…" : "Start review"}</button>
+        </div> : null}
+        {goalRunBusy ? <div className="ask-lifeos-goal-running"><span/><div><strong>Reviewing the goal with trusted LifeOS context…</strong><small>Checking project state, tasks, priorities and relevant knowledge. No workspace changes can happen during this review.</small></div></div> : null}
+        {goalRunError ? <div className="ask-lifeos-goal-retry"><div className="ask-lifeos-action-error standalone">{goalRunError}</div><button type="button" disabled={goalRunBusy} onClick={() => void startGoalReview()}>Try review again</button></div> : null}
+        {goalRun?.status === "succeeded" ? <div className="ask-lifeos-goal-result">
+          <div className="ask-lifeos-goal-executive-head">
+            <div>
+              <span className="ask-lifeos-goal-result-kicker">Goal assessment</span>
+              <strong>{goalSummary?.headline || "LifeOS completed the trusted checks for this goal."}</strong>
+            </div>
+            {goalSummary?.status_label ? <span className={`ask-lifeos-goal-status status-${goalSummary.status}`}>{goalSummary.status_label}</span> : null}
+          </div>
+
+          {goalSummary?.biggest_blocker ? <section className="ask-lifeos-goal-blocker">
+            <span>Biggest blocker</span>
+            <strong>{goalSummary.biggest_blocker.title}</strong>
+            {goalSummary.biggest_blocker.why ? <p>{goalSummary.biggest_blocker.why}</p> : null}
+          </section> : <div className="ask-lifeos-goal-answer">{goalRun.output.answer || "LifeOS completed the review but did not produce a stronger conclusion."}</div>}
+
+          {goalSummary?.other_risks?.length ? <section className="ask-lifeos-goal-other-risks">
+            <strong>Other important risks</strong>
+            <div>{goalSummary.other_risks.slice(0, 3).map((risk) => <article key={`${risk.evidence_id || risk.title}`}>
+              <span className={`risk-${risk.severity || "medium"}`} aria-hidden="true" />
+              <div><b>{risk.title}</b>{risk.why ? <p>{risk.why}</p> : null}</div>
+            </article>)}</div>
+          </section> : null}
+
+          <section className="ask-lifeos-goal-conclusion">
+            <details>
+              <summary>LifeOS conclusion</summary>
+              <div className="ask-lifeos-goal-answer">{goalRun.output.answer || "LifeOS completed the review but did not produce a stronger conclusion."}</div>
+            </details>
+          </section>
+
+          {(goalSummary?.focus_steps?.length || goalRun.output.recommendations?.length) ? <div className="ask-lifeos-goal-recommendations">
+            <strong>What I would do next</strong>
+            <ol>{(goalSummary?.focus_steps?.length ? goalSummary.focus_steps : (goalRun.output.recommendations || []).map((entry) => entry.text)).slice(0, 3).map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}</ol>
+          </div> : null}
+
+          {goalRun.output.action_suggestions?.length ? <div className="ask-lifeos-goal-actions">
+            <div><strong>Suggested actions</strong><span>LifeOS will ask before changing anything.</span></div>
+            {goalRun.output.action_suggestions.slice(0, 2).map((suggestion) => <article key={suggestion.id}>
+              <div><strong>{suggestion.title}</strong><p>{suggestion.recommended_action || suggestion.reason}</p></div>
+              <div className="ask-lifeos-goal-action-buttons">{suggestion.options.slice(0, 2).map((option) => <button type="button" key={option.type} disabled={proposalBusy || proposal?.status === "pending"} onClick={() => void prepareGoalProposal(suggestion, option.type)}>{goalActionLabel(option.type)}</button>)}</div>
+            </article>)}
+          </div> : null}
+
+          {goalRun.output.evidence?.length ? <div className="ask-lifeos-goal-disclosure">
+            <button type="button" onClick={() => setShowGoalEvidence((value) => !value)}>{showGoalEvidence ? "Hide evidence" : `View evidence · ${goalSummary?.source_count ?? goalEvidence.length} ${((goalSummary?.source_count ?? goalEvidence.length) === 1) ? "source" : "sources"} · ${goalSummary?.finding_count ?? goalRun.output.evidence.length} findings`}</button>
+            {showGoalEvidence ? <div className="ask-lifeos-goal-evidence grouped">{goalEvidence.slice(0, 8).map((group) => <section key={group.label}>
+              <div className="ask-lifeos-goal-evidence-source"><span>D</span><strong>{group.label}</strong><small>{group.items.length} {group.items.length === 1 ? "finding" : "findings"}</small></div>
+              <div>{group.items.slice(0, 5).map((entry) => <article key={entry.id}><strong>{entry.label}</strong>{entry.detail ? <p>{entry.detail}</p> : null}</article>)}</div>
+            </section>)}</div> : null}
+          </div> : null}
+
+          <div className="ask-lifeos-goal-disclosure technical">
+            <button type="button" onClick={() => setShowGoalTechnical((value) => !value)}>{showGoalTechnical ? "Hide technical details" : "Advanced · review details"}</button>
+            {showGoalTechnical ? <div className="ask-lifeos-goal-technical">
+              <span>{goalRun.metrics.tool_calls} tool calls</span><span>{goalRun.metrics.provider_calls} AI calls</span><span>{goalRun.output.verification_status || "verified boundary"}</span>
+              {goalRun.trace.map((step) => <div key={step.step_id}><strong>{friendlyGoalTool(step.tool_name)}</strong><span>{step.status} · {Math.round(step.duration_ms)} ms</span></div>)}
             </div> : null}
-            <article className={`ask-lifeos-priority ask-lifeos-priority-${priority.severity}`}>
-              <div className="ask-lifeos-priority-rank">{index + 1}</div>
-              <div className="ask-lifeos-priority-copy">
-                <div className="ask-lifeos-priority-topline"><strong>{priority.title}</strong>{result?.route.scope?.type === "portfolio" ? <span>{priority.project_title}</span> : null}</div>
-                <p>{priority.reason}</p>
-                <div className="ask-lifeos-priority-next"><b>Next:</b> {priority.recommended_action}</div>
-                {priority.actions?.length ? <div className="ask-lifeos-priority-actions">
-                  {priority.actions.map((action) => <button type="button" key={action.type} disabled={proposalBusy || proposal?.status === "pending" || proposal?.status === "executing"} onClick={() => void createProposal(priority, action.type)}>
-                    {action.label}
-                  </button>)}
-                </div> : null}
-              </div>
-            </article>
-          </div>;
-        })}
-        {priorities.length > 3 ? <button type="button" className="ask-lifeos-priority-toggle" onClick={() => setShowAllPriorities((value) => !value)}>
-          {showAllPriorities ? "Show top 3" : `Show all ${priorities.length} priorities`}
+          </div>
+        </div> : null}
+      </section> : null}
+      {priorities.length && topPriority ? <div className="ask-lifeos-priority-list compact">
+        <article className={`ask-lifeos-priority-focus ask-lifeos-priority-${topPriority.severity}`}>
+          <div className="ask-lifeos-priority-focus-head"><span>Top focus</span>{result?.route.scope?.type === "portfolio" ? <small>{topPriority.project_title}</small> : null}</div>
+          <strong>{topPriority.title}</strong>
+          <p>{topPriority.reason}</p>
+          <div className="ask-lifeos-priority-next"><b>Next:</b> {topPriority.recommended_action}</div>
+          {topPriority.actions?.length ? <div className="ask-lifeos-priority-actions consolidated">
+            {topPriority.actions.slice(0, 2).map((action) => <button type="button" key={action.type} disabled={proposalBusy || proposal?.status === "pending" || proposal?.status === "executing"} onClick={() => void createProposal(topPriority, action.type)}>{action.label}</button>)}
+          </div> : null}
+        </article>
+
+        {priorities.length > 1 ? <button type="button" className="ask-lifeos-priority-toggle" onClick={() => setShowAllPriorities((value) => !value)}>
+          {showAllPriorities ? "Hide other findings" : `View ${priorities.length - 1} other ${priorities.length - 1 === 1 ? "finding" : "findings"}`}
         </button> : null}
+
+        {showAllPriorities ? <div className="ask-lifeos-priority-secondary-list">{priorities.slice(1).map((priority, index) => <article key={`${priority.project_id}-${priority.category}-${index}`}>
+          <span>{index + 2}</span>
+          <div><strong>{priority.title}</strong><p>{priority.reason}</p>{result?.route.scope?.type === "portfolio" ? <small>{priority.project_title}</small> : null}</div>
+        </article>)}</div> : null}
+
+        {priorities.some((priority) => priority.evidence?.length) ? <div className="ask-lifeos-priority-evidence-toggle">
+          <button type="button" onClick={() => setShowPriorityEvidence((value) => !value)}>{showPriorityEvidence ? "Hide evidence" : "View evidence"}</button>
+          {showPriorityEvidence ? <div className="ask-lifeos-priority-evidence">{priorities.flatMap((priority, priorityIndex) => (priority.evidence || []).map((entry, evidenceIndex) => <article key={`${priorityIndex}-${evidenceIndex}-${entry.source_type}-${entry.source_id ?? entry.label}`}>
+            <strong>{entry.label}</strong><span>{priority.title}</span>{entry.field ? <small>{entry.field}</small> : null}
+          </article>))}</div> : null}
+        </div> : null}
       </div> : null}
       {insight ? <div className="ask-lifeos-insight-list">
         <div className="ask-lifeos-insight-heading">
@@ -516,6 +677,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
 }
 
 export function AskLifeOSPage() {
+  const session = useSession();
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -530,6 +692,10 @@ export function AskLifeOSPage() {
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const nextId = useRef(1);
   const hasConversation = conversation.length > 0;
+  const suggestions = useMemo(() => {
+    const tailored = session.data?.user?.experience.ui.ask_prompts || [];
+    return [...new Set([...tailored, ...generalSuggestions])].slice(0, 8);
+  }, [session.data?.user?.experience.primary_experience, session.data?.user?.experience.enabled_experiences.join("|")]);
 
   useEffect(() => {
     let cancelled = false;
@@ -667,8 +833,8 @@ export function AskLifeOSPage() {
     <header className="ask-lifeos-hero">
       <div className="ask-lifeos-hero-copy">
         <span className="ask-lifeos-eyebrow"><i />LifeOS Intelligence</span>
-        <h1>Ask your workspace, not just your documents.</h1>
-        <p>Choose exactly what LifeOS should use, ask naturally, and save reusable preferences only when you explicitly confirm them.</p>
+        <h1>Ask a question or give LifeOS a goal.</h1>
+        <p>Simple questions answer directly. Bigger goals can become a safe multi-step review inside the same conversation, using only approved LifeOS context and asking before any change.</p>
       </div>
       <div className="ask-lifeos-safety-card">
         <span className="ask-lifeos-safety-icon" aria-hidden="true">
@@ -682,8 +848,8 @@ export function AskLifeOSPage() {
       <div className="ask-lifeos-thread" aria-live="polite">
         {!hasConversation ? <div className="ask-lifeos-empty">
           <div className="ask-lifeos-orb" aria-hidden="true"><span>L</span></div>
-          <h2>What do you want to understand?</h2>
-          <p>Select a project, PDF, module, lecture, or collection when you want a bounded conversation. Leave it on All LifeOS for workspace-wide questions.</p>
+          <h2>What do you want to understand or accomplish?</h2>
+          <p>Ask normally, or describe a goal. LifeOS will choose the smallest trusted path: structured facts, grounded RAG, or a bounded multi-step review when the request really needs one.</p>
           <div className="ask-lifeos-suggestion-grid">
             {suggestions.map((item) => <button type="button" key={item} onClick={() => void submit(item)} disabled={busy}>
               <span>{item}</span><em>→</em>

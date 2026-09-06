@@ -167,6 +167,7 @@ def verify_document_comparison_draft(
             provider=config["provider"],
             api_key=config["api_key"],
             model=config["model"],
+            feature="document_comparison_verifier",
             prompt=prompt,
             empty_message=(
                 "The AI provider returned an empty comparison "

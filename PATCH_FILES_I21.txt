@@ -1,0 +1,14 @@
+backend/models.py
+backend/services/module_assessment_service.py
+backend/lifeos/api/v1/modules.py
+backend/lifeos/api/v1/serializers.py
+backend/migrations/versions/20260901_0002_add_module_assessments.py
+backend/tests/test_module_assessments_i21.py
+frontend/src/api/types.ts
+frontend/src/features/modules/api.ts
+frontend/src/features/modules/ModuleAssessmentsPanel.tsx
+frontend/src/pages/ModuleDetailsPage.tsx
+frontend/src/pages/ModulesPage.tsx
+frontend/src/styles/modules-v1.css
+I21_ACADEMIC_SCHEDULE.md
+PATCH_FILES_I21.txt

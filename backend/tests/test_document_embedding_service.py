@@ -91,6 +91,8 @@ def fake_vectors_for_texts(
     model,
     dimensions,
     texts,
+    usage_user_id=None,
+    usage_feature="document_embedding",
 ):
     """Return deterministic vectors without calling Gemini."""
 
@@ -541,3 +543,38 @@ def test_provider_failure_does_not_save_partial_embeddings(
             for chunk in chunks
         )
         
+
+def test_embedding_usage_falls_back_to_exact_count_tokens(monkeypatch):
+    from types import SimpleNamespace
+
+    captured = []
+
+    class FakeModels:
+        def embed_content(self, *, model, contents, config):
+            return SimpleNamespace(
+                embeddings=[SimpleNamespace(values=[1.0, 0.0])],
+                usage_metadata=None,
+            )
+
+        def count_tokens(self, *, model, contents):
+            return SimpleNamespace(total_tokens=321)
+
+    fake_client = SimpleNamespace(models=FakeModels())
+    monkeypatch.setattr(embedding_service, "guard_embedding_request", lambda **kwargs: 1)
+    monkeypatch.setattr(embedding_service, "record_embedding_usage", lambda **kwargs: captured.append(kwargs))
+
+    vectors = embedding_service._generate_embeddings(
+        client=fake_client,
+        model="gemini-embedding-2",
+        dimensions=2,
+        texts=["LifeOS embedding test"],
+        usage_user_id=7,
+        usage_feature="document_chunk_embedding",
+    )
+
+    assert vectors == [[1.0, 0.0]]
+    assert len(captured) == 1
+    assert captured[0]["usage"].input_tokens == 321
+    assert captured[0]["usage"].total_tokens == 321
+    assert captured[0]["usage"].raw["token_count_source"] == "count_tokens"
+    assert captured[0]["cost"].total_cost_usd is not None

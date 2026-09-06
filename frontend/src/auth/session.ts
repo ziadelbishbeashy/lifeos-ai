@@ -27,6 +27,7 @@ export async function register(input: {
   email: string;
   password: string;
   confirm_password: string;
+  primary_experience: string;
 }) {
   resetCsrfToken();
   return apiPost<SessionState>("/api/v1/auth/register", input);

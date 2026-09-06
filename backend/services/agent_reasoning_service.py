@@ -160,6 +160,7 @@ LIFEOS EVIDENCE:
             provider=config["provider"],
             api_key=config["api_key"],
             model=config["model"],
+            feature="agent_reasoning",
             prompt=prompt,
             empty_message="The AI provider returned an empty agent answer.",
         )

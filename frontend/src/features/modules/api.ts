@@ -75,3 +75,38 @@ export function askModule(moduleId: number, question: string, lectureId?: number
     lecture_id: lectureId ?? null,
   });
 }
+
+export function createModuleAssessment(moduleId: number, input: Record<string, unknown>) {
+  return apiPost<{ item: import("../../api/types").ModuleAssessment }>(`/api/v1/modules/${moduleId}/assessments`, input);
+}
+
+export function updateModuleAssessment(moduleId: number, assessmentId: number, input: Record<string, unknown>) {
+  return apiPatch<{ item: import("../../api/types").ModuleAssessment }>(`/api/v1/modules/${moduleId}/assessments/${assessmentId}`, input);
+}
+
+export function deleteModuleAssessment(moduleId: number, assessmentId: number) {
+  return apiDelete<{ deleted: boolean; title: string }>(`/api/v1/modules/${moduleId}/assessments/${assessmentId}`);
+}
+
+export function importAcademicSchedule(file: File) {
+  const form = new FormData();
+  form.append("document", file);
+  return apiPostForm<{ document: { id: number; filename: string; original_upload_name: string }; proposals: import("../../api/types").AssessmentImportProposal[] }>("/api/v1/modules/assessment-imports", form);
+}
+
+export function fetchAssessmentImportProposals(sourceDocumentId?: number) {
+  const query = sourceDocumentId ? `?source_document_id=${sourceDocumentId}` : "";
+  return apiGet<{ proposals: import("../../api/types").AssessmentImportProposal[] }>(`/api/v1/modules/assessment-proposals${query}`);
+}
+
+export function updateAssessmentImportProposal(proposalId: number, input: Record<string, unknown>) {
+  return apiPatch<{ proposal: import("../../api/types").AssessmentImportProposal }>(`/api/v1/modules/assessment-proposals/${proposalId}`, input);
+}
+
+export function dismissAssessmentImportProposal(proposalId: number) {
+  return apiPost<{ proposal: import("../../api/types").AssessmentImportProposal }>(`/api/v1/modules/assessment-proposals/${proposalId}/dismiss`, {});
+}
+
+export function confirmSelectedAssessmentImportProposals(proposalIds: number[]) {
+  return apiPost<{ confirmed: import("../../api/types").AssessmentImportProposal[]; failed: Array<{ id: number; message: string }>; changed: boolean }>("/api/v1/modules/assessment-proposals/confirm-selected", { proposal_ids: proposalIds });
+}

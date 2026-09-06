@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { apiGet, apiPost, apiPostForm, ApiError } from "../api/client";
 import { PageState, VerifyButton, type Evidence } from "../components/NativeUi";
 import { DocumentPdfWorkspace } from "../features/documentBrain/DocumentPdfWorkspace";
@@ -39,6 +39,10 @@ type Detail = {
   document_type_choices: any[];
   version_history: any;
   pdf_url: string;
+  ai_operations?: {
+    analysis_running?: boolean;
+    type_detection_running?: boolean;
+  };
 };
 
 type Detection = {
@@ -136,6 +140,7 @@ export function DocumentDetailsPage() {
   const [pdfPage, setPdfPage] = useState<number | null>(Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : null);
   const [searchResults, setSearchResults] = useState<SearchData | null>(null);
   const [selectedPdfContext, setSelectedPdfContext] = useState<SelectedPdfContext | null>(null);
+  const aiSubmitGuard = useRef<"detect" | "analyze" | null>(null);
 
   const query = useQuery({
     queryKey: ["document", id],
@@ -144,7 +149,8 @@ export function DocumentDetailsPage() {
     refetchInterval: (activeQuery) => {
       const current = activeQuery.state.data as Detail | undefined;
       const status = String(current?.document?.ocr?.status || "");
-      return status === "queued" || status === "processing" ? 2000 : false;
+      const aiBusy = Boolean(current?.ai_operations?.analysis_running || current?.ai_operations?.type_detection_running);
+      return status === "queued" || status === "processing" || aiBusy ? 2000 : false;
     },
   });
 
@@ -190,12 +196,18 @@ export function DocumentDetailsPage() {
   }, [tab, pdfPage, id]);
 
   const detect = useMutation({
-    mutationFn: () => apiPost<{ detection: Detection }>(`/api/v1/documents/${id}/detect-type`),
+    mutationFn: () => apiPost<{ detection: Detection; reused_existing?: boolean }>(`/api/v1/documents/${id}/detect-type`),
     onSuccess: (result) => {
       setDetection(result.detection);
       setError(null);
     },
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "Type detection failed."),
+    onError: async (failure) => {
+      setError(failure instanceof ApiError ? failure.message : "Type detection failed.");
+      if (failure instanceof ApiError && failure.code === "operation_in_progress") await refresh();
+    },
+    onSettled: () => {
+      if (aiSubmitGuard.current === "detect") aiSubmitGuard.current = null;
+    },
   });
 
   const analyze = useMutation({
@@ -203,10 +215,29 @@ export function DocumentDetailsPage() {
     onSuccess: async () => {
       setDetection(null);
       setTab("overview");
+      setError(null);
       await refresh();
     },
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "Analysis failed."),
+    onError: async (failure) => {
+      setError(failure instanceof ApiError ? failure.message : "Analysis failed.");
+      if (failure instanceof ApiError && failure.code === "operation_in_progress") await refresh();
+    },
+    onSettled: () => {
+      if (aiSubmitGuard.current === "analyze") aiSubmitGuard.current = null;
+    },
   });
+
+  function startDetection() {
+    if (aiSubmitGuard.current || detect.isPending || analyze.isPending) return;
+    aiSubmitGuard.current = "detect";
+    detect.mutate();
+  }
+
+  function startAnalysis(payload: any) {
+    if (aiSubmitGuard.current || detect.isPending || analyze.isPending) return;
+    aiSubmitGuard.current = "analyze";
+    analyze.mutate(payload);
+  }
 
   const runOcr = useMutation({
     mutationFn: () => apiPost<{ ocr: OCRStatus; job_id: string | null; queued: boolean }>(
@@ -272,6 +303,11 @@ export function DocumentDetailsPage() {
   }
 
   const data = query.data;
+  const backendAnalysisRunning = Boolean(data.ai_operations?.analysis_running);
+  const backendDetectionRunning = Boolean(data.ai_operations?.type_detection_running);
+  const analysisBusy = analyze.isPending || backendAnalysisRunning;
+  const detectionBusy = detect.isPending || backendDetectionRunning;
+  const documentAiBusy = analysisBusy || detectionBusy;
   const ocr = data.document?.ocr as OCRStatus | undefined;
   const ocrStatus = String(ocr?.status || "");
   const ocrActive = ocrStatus === "queued" || ocrStatus === "processing";
@@ -392,8 +428,8 @@ export function DocumentDetailsPage() {
             </button>
           ) : null}
           <a className="workspace-secondary-button" href={`${data.pdf_url}?download=1`}>Download PDF</a>
-          <button className="workspace-primary-button" onClick={() => detect.mutate()} disabled={detect.isPending}>
-            {detect.isPending ? "Detecting…" : data.analysis ? "Re-analyse" : "Analyse document"}
+          <button className="workspace-primary-button" onClick={startDetection} disabled={documentAiBusy}>
+            {analysisBusy ? "Analysing…" : detectionBusy ? "Detecting…" : data.analysis ? "Re-analyse" : "Analyse document"}
           </button>
         </div>
       </header>
@@ -421,15 +457,15 @@ export function DocumentDetailsPage() {
               className="workspace-primary-button"
               onClick={() => {
                 const element = document.getElementById("confirmed-document-type") as HTMLSelectElement | null;
-                analyze.mutate({
+                startAnalysis({
                   confirmed_document_type: element?.value || detection.document_type_key,
                   detected_document_type: detection.document_type_key,
                   detection_confidence: detection.confidence,
                 });
               }}
-              disabled={analyze.isPending}
+              disabled={documentAiBusy}
             >
-              {analyze.isPending ? "Analysing…" : "Confirm & analyse"}
+              {analysisBusy ? "Analysing…" : detectionBusy ? "Detecting…" : "Confirm & analyse"}
             </button>
           </div>
         </article>

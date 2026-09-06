@@ -35,6 +35,23 @@ from services.module_assessment_service import (
     list_owned_module_assessments,
     update_owned_module_assessment,
 )
+from services.module_assessment_import_service import (
+    ModuleAssessmentImportError,
+    ModuleAssessmentImportNotFoundError,
+    ModuleAssessmentImportValidationError,
+    import_academic_schedule_upload,
+    list_owned_assessment_import_proposals,
+    update_owned_assessment_import_proposal,
+)
+from services.intelligence_action_service import (
+    IntelligenceActionExecutionError,
+    IntelligenceActionNotFoundError,
+    IntelligenceActionValidationError,
+    confirm_owned_action_proposal,
+    dismiss_owned_action_proposal,
+    proposal_to_dict,
+    require_owned_proposal,
+)
 from services.module_question_workflow_service import (
     ModuleQuestionNotFoundError,
     ModuleQuestionNotReadyError,
@@ -162,6 +179,112 @@ def create_module_route():
         current_app.logger.exception("LifeOS API could not create a module.")
         return persistence_error("The module could not be created.")
     return jsonify({"item": serialize_module(module, include_resources=True)}), 201
+
+
+@modules_api_bp.post("/assessment-imports")
+@api_auth_required
+def import_academic_schedule_route():
+    """Upload one timetable/photo/PDF and return review-only I9 proposals."""
+    try:
+        result = import_academic_schedule_upload(
+            upload=request.files.get("document"),
+            user_id=current_user.id,
+            max_bytes=_max_upload_bytes(),
+        )
+    except ModuleAssessmentImportValidationError as error:
+        return validation_error(str(error))
+    except (PDFValidationError, DocumentValidationError, ModuleValidationError) as error:
+        return validation_error(str(error))
+    except (
+        ModuleAssessmentImportError, DocumentPersistenceError, DocumentUploadError,
+        ModulePersistenceError, StorageError,
+    ) as error:
+        current_app.logger.exception("Academic schedule import failed")
+        return jsonify({"error": "academic_schedule_import_failed", "message": str(error) or "LifeOS could not import the academic schedule."}), 503
+    return jsonify({
+        "document": {
+            "id": result.document_id,
+            "filename": result.document_filename,
+            "original_upload_name": result.original_upload_name,
+        },
+        "proposals": [proposal_to_dict(item) for item in result.proposals],
+    }), 201
+
+
+@modules_api_bp.get("/assessment-proposals")
+@api_auth_required
+def list_assessment_import_proposals_route():
+    raw_source = request.args.get("source_document_id")
+    source_document_id = None
+    if raw_source not in (None, ""):
+        try:
+            source_document_id = int(raw_source)
+        except (TypeError, ValueError):
+            return validation_error("Select a valid source document.")
+    rows = list_owned_assessment_import_proposals(
+        user_id=current_user.id, source_document_id=source_document_id,
+    )
+    return jsonify({"proposals": [proposal_to_dict(item) for item in rows]})
+
+
+@modules_api_bp.patch("/assessment-proposals/<int:proposal_id>")
+@api_auth_required
+def update_assessment_import_proposal_route(proposal_id: int):
+    try:
+        proposal = update_owned_assessment_import_proposal(
+            proposal_id=proposal_id, user_id=current_user.id, changes=json_body(),
+        )
+    except ModuleAssessmentImportNotFoundError:
+        return not_found("Assessment proposal not found.")
+    except ModuleAssessmentImportValidationError as error:
+        return validation_error(str(error))
+    except ModuleAssessmentImportError as error:
+        return jsonify({"error": "assessment_proposal_update_failed", "message": str(error)}), 503
+    return jsonify({"proposal": proposal_to_dict(proposal)})
+
+
+@modules_api_bp.post("/assessment-proposals/<int:proposal_id>/dismiss")
+@api_auth_required
+def dismiss_assessment_import_proposal_route(proposal_id: int):
+    try:
+        proposal = dismiss_owned_action_proposal(proposal_id=proposal_id, owner_id=current_user.id)
+    except IntelligenceActionNotFoundError:
+        return not_found("Assessment proposal not found.")
+    except IntelligenceActionValidationError as error:
+        return validation_error(str(error))
+    except IntelligenceActionExecutionError as error:
+        return jsonify({"error": "assessment_proposal_dismiss_failed", "message": str(error)}), 503
+    return jsonify({"proposal": proposal_to_dict(proposal)})
+
+
+@modules_api_bp.post("/assessment-proposals/confirm-selected")
+@api_auth_required
+def confirm_selected_assessment_import_proposals_route():
+    raw_ids = json_body().get("proposal_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return validation_error("Select at least one assessment proposal to confirm.")
+    proposal_ids: list[int] = []
+    for value in raw_ids[:50]:
+        try:
+            proposal_id = int(value)
+        except (TypeError, ValueError):
+            return validation_error("Every selected assessment proposal must have a valid id.")
+        if proposal_id not in proposal_ids:
+            proposal_ids.append(proposal_id)
+
+    confirmed = []
+    failed = []
+    for proposal_id in proposal_ids:
+        try:
+            pending = require_owned_proposal(proposal_id=proposal_id, owner_id=current_user.id)
+            if pending.action_type != "create_module_assessment":
+                failed.append({"id": proposal_id, "message": "This proposal is not an academic assessment import."})
+                continue
+            proposal = confirm_owned_action_proposal(proposal_id=proposal_id, owner_id=current_user.id)
+            confirmed.append(proposal_to_dict(proposal))
+        except (IntelligenceActionNotFoundError, IntelligenceActionValidationError, IntelligenceActionExecutionError) as error:
+            failed.append({"id": proposal_id, "message": str(error)})
+    return jsonify({"confirmed": confirmed, "failed": failed, "changed": bool(confirmed)})
 
 
 @modules_api_bp.get("/<int:module_id>")

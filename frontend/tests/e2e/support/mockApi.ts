@@ -1,6 +1,18 @@
 import type { Page, Route } from "@playwright/test";
 
-const user = { id: 1, name: "Mariam", email: "mariam@example.com" };
+const user = {
+  id: 1,
+  name: "Mariam",
+  email: "mariam@example.com",
+  experience: {
+    primary_experience: "student",
+    enabled_experiences: ["student"],
+    onboarding_completed: true,
+    primary: { key: "student", label: "Student", short_label: "Study", description: "Classes, modules, deadlines, study planning and tutoring.", workspace_label: "Student workspace", module_label: "Modules", modules_visible: true, home_focus: "study_and_execution", ask_prompts: ["What should I study next?"] },
+    ui: { workspace_label: "Student workspace", module_label: "Modules", modules_visible: true, home_focus: "study_and_execution", ask_prompts: ["What should I study next?"] },
+    available_experiences: [],
+  },
+};
 
 const project1 = {
   id: 1,

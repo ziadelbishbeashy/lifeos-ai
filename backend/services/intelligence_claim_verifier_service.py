@@ -282,6 +282,7 @@ def verify_project_reasoning(
             provider=config["provider"],
             api_key=config["api_key"],
             model=config["model"],
+            feature="ask_lifeos_claim_verifier",
             prompt=prompt,
             empty_message="The AI provider returned an empty LifeOS verification result.",
         )

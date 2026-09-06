@@ -152,6 +152,38 @@ def _normalize_title(value: Any) -> str:
     return title
 
 
+
+
+def validate_module_assessment_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate proposal/API assessment fields without persisting a row.
+
+    I21.2 uses this to keep AI-extracted proposals subject to the same
+    deterministic date/time/type/weight rules as real ModuleAssessment writes.
+    Returned values are JSON-friendly so they can live safely in proposal payloads.
+    """
+    normalized = {
+        "title": _normalize_title(payload.get("title")),
+        "assessment_type": _normalize_type(payload.get("assessment_type")),
+        "assessment_date": _parse_date(payload.get("assessment_date"), "assessment_date"),
+        "assessment_time": _parse_time(payload.get("assessment_time"), "assessment_time"),
+        "due_date": _parse_date(payload.get("due_date"), "due_date"),
+        "due_time": _parse_time(payload.get("due_time"), "due_time"),
+        "weight_percent": _parse_weight(payload.get("weight_percent")),
+        "status": _normalize_status(payload.get("status", "Upcoming")),
+        "topics": _clean_optional_text(payload.get("topics")),
+        "estimated_study_minutes": _parse_estimated_minutes(payload.get("estimated_study_minutes")),
+        "notes": _clean_optional_text(payload.get("notes")),
+    }
+    return {
+        **normalized,
+        "assessment_date": normalized["assessment_date"].isoformat() if normalized["assessment_date"] else None,
+        "assessment_time": normalized["assessment_time"].isoformat(timespec="minutes") if normalized["assessment_time"] else None,
+        "due_date": normalized["due_date"].isoformat() if normalized["due_date"] else None,
+        "due_time": normalized["due_time"].isoformat(timespec="minutes") if normalized["due_time"] else None,
+        "weight_percent": float(normalized["weight_percent"]) if normalized["weight_percent"] is not None else None,
+    }
+
+
 def _commit(row: ModuleAssessment, message: str) -> ModuleAssessment:
     try:
         db.session.add(row)

@@ -23,15 +23,186 @@ export type ProactiveNotificationData = {
   delivery: "in_app" | string;
 };
 
+export type ExperienceKey = "student" | "self_learning" | "professional" | "personal";
+
+export type ExperienceDefinition = {
+  key: ExperienceKey;
+  label: string;
+  short_label: string;
+  description: string;
+  workspace_label: string;
+  module_label: string;
+  modules_visible: boolean;
+  home_focus: string;
+  ask_prompts: string[];
+};
+
+export type ExperienceProfile = {
+  primary_experience: ExperienceKey | null;
+  enabled_experiences: ExperienceKey[];
+  onboarding_completed: boolean;
+  primary: ExperienceDefinition | null;
+  ui: {
+    workspace_label: string;
+    module_label: string;
+    modules_visible: boolean;
+    home_focus: string;
+    ask_prompts: string[];
+  };
+  available_experiences: ExperienceDefinition[];
+};
+
 export type User = {
   id: number;
   name: string;
   email: string;
+  experience: ExperienceProfile;
 };
 
 export type SessionState = {
   authenticated: boolean;
   user: User | null;
+};
+
+export type AgentScope = {
+  type: string;
+  id: number | null;
+  label: string;
+  project_id?: number | null;
+};
+
+export type AgentPlanStep = {
+  step_id: string;
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  purpose: string;
+};
+
+export type AgentPlan = {
+  version: number;
+  goal: string;
+  scope: AgentScope;
+  planner_mode: string;
+  steps: AgentPlanStep[];
+  safety?: Record<string, unknown>;
+};
+
+export type AgentSourceRef = {
+  source_type?: string;
+  source_id?: number | null;
+  label?: string;
+  filename?: string;
+  field?: string;
+  freshness?: string;
+  page?: number | string | null;
+  section?: string | null;
+  [key: string]: unknown;
+};
+
+export type AgentEvidenceItem = {
+  id: string;
+  kind: string;
+  label: string;
+  detail?: string | null;
+  severity?: string | null;
+  project_id?: number | null;
+  project_title?: string | null;
+  attention_level?: string | null;
+  source_refs?: AgentSourceRef[];
+  [key: string]: unknown;
+};
+
+export type AgentActionOption = {
+  type: string;
+  label: string;
+  risk_level: string;
+};
+
+export type AgentActionSuggestion = {
+  id: string;
+  title: string;
+  reason: string;
+  recommended_action: string;
+  severity: string;
+  project_id: number;
+  project_title: string;
+  options: AgentActionOption[];
+  priority?: Record<string, unknown>;
+};
+
+export type AgentRecommendation = {
+  text: string;
+  evidence_ids?: string[];
+  [key: string]: unknown;
+};
+
+export type AgentGoalRisk = {
+  title: string;
+  why: string;
+  severity: string;
+  evidence_id?: string | null;
+  project_title?: string | null;
+};
+
+export type AgentGoalSummary = {
+  status: string;
+  status_label: string;
+  headline: string;
+  scope_label: string;
+  biggest_blocker: AgentGoalRisk | null;
+  other_risks: AgentGoalRisk[];
+  focus_steps: string[];
+  finding_count: number;
+  source_count: number;
+  source_labels: string[];
+};
+
+export type AgentTraceStep = {
+  index: number;
+  step_id: string;
+  tool_name: string;
+  purpose: string;
+  status: string;
+  duration_ms: number;
+  result?: Record<string, unknown>;
+  error?: string;
+};
+
+export type AgentRun = {
+  id: number;
+  goal: string;
+  scope: AgentScope;
+  status: string;
+  plan: AgentPlan;
+  trace: AgentTraceStep[];
+  output: {
+    answer: string | null;
+    goal_summary?: AgentGoalSummary | null;
+    claims?: Array<{ text: string; evidence_ids?: string[] }>;
+    recommendations?: AgentRecommendation[];
+    verification_status?: string | null;
+    reasoning_mode?: string | null;
+    provider_failure?: string | null;
+    evidence: AgentEvidenceItem[];
+    action_suggestions: AgentActionSuggestion[];
+    prepared_proposals?: IntelligenceActionProposal[];
+    read_only?: boolean;
+    workspace_mutation?: boolean;
+    confirmation_boundary?: string;
+    context_limited?: boolean;
+    [key: string]: unknown;
+  };
+  limits: Record<string, number | string | boolean>;
+  metrics: {
+    tool_calls: number;
+    provider_calls: number;
+    provider: string | null;
+    model: string | null;
+  };
+  failure_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  safety: Record<string, unknown>;
 };
 
 export type DashboardTask = {
@@ -454,6 +625,75 @@ export type DocumentCollectionSummary = {
   updated_at: string | null;
 };
 
+export type ModuleAssessment = {
+  id: number;
+  module_id: number;
+  title: string;
+  assessment_type: string;
+  assessment_date: string | null;
+  assessment_time: string | null;
+  due_date: string | null;
+  due_time: string | null;
+  target_date: string | null;
+  weight_percent: number | null;
+  status: string;
+  topics: string | null;
+  estimated_study_minutes: number | null;
+  notes: string | null;
+  days_until: number | null;
+  timing_label: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AssessmentImportProposal = {
+  id: number;
+  action_type: string;
+  status: string;
+  title: string;
+  reason: string | null;
+  target: { type: string; id: number | null };
+  payload: {
+    module_id: number | null;
+    title: string;
+    assessment_type: string;
+    assessment_date: string | null;
+    assessment_time: string | null;
+    due_date: string | null;
+    due_time: string | null;
+    weight_percent: number | null;
+    status: string;
+    topics: string | null;
+    estimated_study_minutes: number | null;
+    notes: string | null;
+    source_document_id: number;
+    source_document_filename: string;
+    source_original_upload_name: string;
+    source_module_text: string | null;
+    extraction_confidence: string;
+    module_match_confidence: string;
+    module_match_score: number;
+    review_state: string;
+    duplicate_assessment_id: number | null;
+  };
+  evidence: Array<{
+    document_id: number;
+    chunk_id: number;
+    page?: number | string | null;
+    section?: string | null;
+    content_type?: string;
+    table_id?: number | null;
+    excerpt?: string;
+    source_filename?: string;
+    original_upload_name?: string;
+  }>;
+  risk_level: string;
+  requires_confirmation: boolean;
+  failure_message: string | null;
+  created_at: string | null;
+  resolved_at: string | null;
+};
+
 export type LearningModule = {
   id: number;
   title: string;
@@ -464,6 +704,7 @@ export type LearningModule = {
   updated_at: string | null;
   counts: {
     lectures: number;
+    assessments: number;
     documents: number;
     notes: number;
     tasks: number;
@@ -477,6 +718,7 @@ export type ModuleTask = Task & { lecture_id: number | null };
 
 export type LearningModuleDetail = LearningModule & {
   lectures: Lecture[];
+  assessments: ModuleAssessment[];
   documents: ModuleDocument[];
   notes: ModuleNote[];
   tasks: ModuleTask[];
@@ -496,21 +738,100 @@ export type ModuleDetailData = {
   max_upload_bytes: number;
 };
 
-export type AutomationTriggerType = "schedule_daily" | "schedule_weekly" | "event" | string;
-export type AutomationActionType = "today_briefing" | "portfolio_review" | "project_review" | "risk_escalation" | "unhandled_followup" | "attention_notice" | string;
+export type AutomationTriggerType = "schedule_daily" | "schedule_weekly" | "event" | "manual" | string;
+export type AutomationActionType = "today_briefing" | "portfolio_review" | "project_review" | "risk_escalation" | "unhandled_followup" | "attention_notice" | "custom_ask" | string;
+export type AutomationVisualNodeId = string;
+export type AutomationVisualNodeCategory = "trigger" | "context" | "intelligence" | "condition" | "output" | "proposal" | (string & {});
+export type AutomationVisualCategory = AutomationVisualNodeCategory;
 
-export type AutomationVisualNodeId = "trigger" | "intelligence" | "delivery";
+export type AutomationVisualNode = {
+  id: string;
+  kind?: string;
+  type: string;
+  category: AutomationVisualNodeCategory;
+  position: { x: number; y: number };
+  config?: Record<string, unknown>;
+  semantic_type?: string;
+};
 
 export type AutomationVisualGraph = {
   version: number;
-  nodes: Array<{
-    id: AutomationVisualNodeId;
-    kind: AutomationVisualNodeId;
-    position: { x: number; y: number };
-    semantic_type?: string;
-  }>;
-  edges: Array<{ id: string; source: AutomationVisualNodeId; target: AutomationVisualNodeId }>;
-  safety?: { workspace_mutation: boolean; delivery: string; future_workspace_actions_require: string };
+  phase?: string;
+  nodes: AutomationVisualNode[];
+  edges: Array<{ id: string; source: string; target: string }>;
+  validation?: { valid: boolean; error?: string | null };
+  safety?: { workspace_mutation: boolean; delivery?: string; future_workspace_actions_require?: string; [key: string]: unknown };
+};
+
+export type AutomationVisualNodeDefinition = {
+  type: string;
+  category: AutomationVisualCategory;
+  label: string;
+  description: string;
+  icon?: string;
+  availability?: string;
+  binding: {
+    trigger_type?: AutomationTriggerType;
+    action_type?: AutomationActionType;
+    event_type?: string;
+    [key: string]: unknown;
+  };
+  compiler?: {
+    capability: string;
+    service_boundary?: string;
+    input_contract?: string;
+    output_contract?: string;
+    read_only?: boolean;
+    confirmation_boundary?: string;
+    [key: string]: unknown;
+  };
+  confirmation_boundary?: string;
+  [key: string]: unknown;
+};
+
+export type AutomationCompiledStep = {
+  index: number;
+  node_id: string;
+  node_type: string;
+  category: AutomationVisualCategory;
+  label: string;
+  capability: string;
+  service_boundary: string;
+  input_contract: string;
+  output_contract: string;
+  config: Record<string, unknown>;
+  read_only: boolean;
+  workspace_mutation: boolean;
+  confirmation_boundary?: string;
+  proposal_only?: boolean;
+};
+
+export type AutomationExecutionContract = {
+  mode: string;
+  run_now_available: boolean;
+  preview_available: boolean;
+  background_available: boolean;
+  required_next_phase?: string | null;
+  scheduled_visual_workflows_phase?: string | null;
+  [key: string]: unknown;
+};
+
+export type AutomationCompiledPlan = {
+  version: number;
+  phase: string;
+  plan_id: string;
+  source?: string;
+  graph_version?: number;
+  graph_phase?: string;
+  ordered_node_ids?: string[];
+  trigger?: Record<string, unknown>;
+  steps: AutomationCompiledStep[];
+  i17_binding?: Record<string, unknown>;
+  execution: AutomationExecutionContract;
+  diagnostics?: Record<string, unknown>;
+  safety?: Record<string, unknown>;
+  status?: string;
+  [key: string]: unknown;
 };
 
 export type LifeOSAutomation = {
@@ -522,6 +843,8 @@ export type LifeOSAutomation = {
   trigger: { type: AutomationTriggerType; config: Record<string, unknown> };
   action: { type: AutomationActionType; config: Record<string, unknown> };
   visual_graph: AutomationVisualGraph;
+  compiled_plan: AutomationCompiledPlan;
+  execution: AutomationExecutionContract;
   timezone: string;
   next_run_at: string | null;
   last_run_at: string | null;
@@ -540,19 +863,45 @@ export type AutomationTemplate = {
   action_config: Record<string, unknown>;
 };
 
+export type AutomationVisualTemplate = AutomationTemplate & {
+  visual_graph: AutomationVisualGraph;
+};
+
 export type AutomationRegistryData = {
   triggers: Array<{ type: AutomationTriggerType; label: string; description: string; fields: string[] }>;
   event_types: string[];
-  actions: Array<{ type: AutomationActionType; label: string; description: string; scope: string }>;
+  actions: Array<{ type: AutomationActionType; label: string; description: string; scope: string; visual_only?: boolean }>;
   templates: AutomationTemplate[];
+  visual_templates: AutomationVisualTemplate[];
   limits: { max_automations_per_user: number };
   visual_flow: {
     version: number;
-    node_order: AutomationVisualNodeId[];
+    phase?: string;
+    node_order: string[];
     delivery_type: string;
     connections_fixed: boolean;
     layout_persisted: boolean;
     execution_source: string;
+    compiler_source?: string;
+    graph_is_execution_source?: boolean;
+    compiler_is_execution_source?: boolean;
+    categories: Array<{ id: AutomationVisualCategory; label: string; description: string }>;
+    nodes: AutomationVisualNodeDefinition[];
+    connection_rules: Array<{ source: AutomationVisualCategory; target: AutomationVisualCategory }>;
+    constraints: {
+      max_nodes: number;
+      max_edges: number;
+      required_categories: AutomationVisualNodeCategory[];
+      max_per_category: Record<string, number>;
+      cycles_allowed?: boolean;
+      branching_allowed?: boolean;
+      compiler_available?: boolean;
+      rich_graph_execution_available?: boolean;
+      rich_graph_execution_phase?: string;
+      rich_graph_background_phase?: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
   };
   safety: {
     arbitrary_code: boolean;

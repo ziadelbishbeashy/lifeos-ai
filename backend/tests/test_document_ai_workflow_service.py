@@ -418,3 +418,37 @@ def test_suggestion_save_failure_rolls_back_and_is_recorded(
         assert "Suggestion building failed" in (
             failed_analysis.error_message
         )
+
+
+def test_duplicate_running_analysis_is_rejected_before_provider_call(
+    app,
+    user,
+    monkeypatch,
+):
+    from services.ai_operation_lock_service import AIOperationAlreadyRunningError
+    from services.document_ai_workflow_service import DocumentAnalysisInProgressError
+
+    with app.app_context():
+        document = create_document(
+            user_id=user,
+            extracted_text="--- Page 1 ---\nConcurrent analysis content.",
+        )
+        provider_calls = {"value": 0}
+
+        def provider(**kwargs):
+            provider_calls["value"] += 1
+            return fake_ai_result()
+
+        class BusyLock:
+            def __enter__(self):
+                raise AIOperationAlreadyRunningError("busy")
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        monkeypatch.setattr(workflow, "analyze_document", provider)
+        monkeypatch.setattr(workflow, "ai_operation_lock", lambda **kwargs: BusyLock())
+
+        with pytest.raises(DocumentAnalysisInProgressError, match="already being analysed"):
+            analyse_owned_document(document_id=document.id, user_id=user)
+
+        assert provider_calls["value"] == 0

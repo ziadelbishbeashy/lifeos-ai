@@ -24,15 +24,28 @@ from services.lifeos_activity_service import add_activity_event
 from services.context_connection_service import persist_confirmed_action_connections
 from services.note_service import NoteInput, NotePersistenceError, create_note
 from services.task_service import TaskInput, TaskPersistenceError, create_task
+from services.module_assessment_service import (
+    ModuleAssessmentPersistenceError,
+    ModuleAssessmentValidationError,
+    create_owned_module_assessment,
+)
+from services.module_assessment_import_service import (
+    ModuleAssessmentImportValidationError,
+    assessment_proposal_duplicate,
+    validate_assessment_proposal_evidence,
+)
+from services.module_service import ModuleNotFoundError, require_owned_module
 
 
 ACTION_CREATE_TASK = "create_task"
 ACTION_CREATE_NOTE = "create_note"
 ACTION_REFRESH_DOCUMENT_ANALYSIS = "refresh_document_analysis"
+ACTION_CREATE_MODULE_ASSESSMENT = "create_module_assessment"
 ALLOWED_ACTION_TYPES = frozenset({
     ACTION_CREATE_TASK,
     ACTION_CREATE_NOTE,
     ACTION_REFRESH_DOCUMENT_ANALYSIS,
+    ACTION_CREATE_MODULE_ASSESSMENT,
 })
 ALLOWED_PROPOSAL_STATUSES = frozenset({"pending", "executing", "confirmed", "dismissed", "failed"})
 
@@ -348,13 +361,91 @@ def _execute_confirmed_action(proposal: LifeOSActionProposal, owner_id: int) -> 
         result = analyse_owned_document(document_id=document.id, user_id=owner_id, force=True)
         return "document_analysis", int(result.analysis.id)
 
+    if proposal.action_type == ACTION_CREATE_MODULE_ASSESSMENT:
+        try:
+            module_id = int(payload.get("module_id"))
+        except (TypeError, ValueError) as error:
+            raise IntelligenceActionValidationError("Select a module before confirming this assessment.") from error
+        module = require_owned_module(module_id, owner_id)
+        if proposal.target_id is not None and int(proposal.target_id) != int(module.id):
+            raise IntelligenceActionValidationError("The assessment proposal target changed unexpectedly.")
+
+        source_document_id = payload.get("source_document_id")
+        try:
+            source_document = _owned_document(int(source_document_id), owner_id)
+        except (TypeError, ValueError) as error:
+            raise IntelligenceActionValidationError("The source academic document is no longer available.") from error
+        if not bool(getattr(source_document, "is_current_version", True)):
+            raise IntelligenceActionValidationError(
+                "This proposal came from an older document version. Import the current schedule again."
+            )
+        try:
+            validate_assessment_proposal_evidence(proposal=proposal, user_id=owner_id)
+        except ModuleAssessmentImportValidationError as error:
+            raise IntelligenceActionValidationError(str(error)) from error
+
+        duplicate = assessment_proposal_duplicate(proposal=proposal, user_id=owner_id)
+        if duplicate is not None:
+            raise IntelligenceActionValidationError(
+                f'An assessment that looks like “{duplicate.title}” already exists in {module.title}.'
+            )
+
+        assessment = create_owned_module_assessment(
+            module_id=module.id,
+            user_id=owner_id,
+            title=payload.get("title"),
+            assessment_type=payload.get("assessment_type"),
+            assessment_date=payload.get("assessment_date"),
+            assessment_time=payload.get("assessment_time"),
+            due_date=payload.get("due_date"),
+            due_time=payload.get("due_time"),
+            weight_percent=payload.get("weight_percent"),
+            status=payload.get("status", "Upcoming"),
+            topics=payload.get("topics"),
+            estimated_study_minutes=payload.get("estimated_study_minutes"),
+            notes=payload.get("notes"),
+        )
+        return "module_assessment", int(assessment.id)
+
     raise IntelligenceActionValidationError("This LifeOS action is not supported.")
+
+
+def _prevalidate_confirmable_action(proposal: LifeOSActionProposal, owner_id: int) -> None:
+    """Reject deterministic review problems before locking a proposal."""
+    if proposal.action_type != ACTION_CREATE_MODULE_ASSESSMENT:
+        return
+    payload = proposal.payload
+    try:
+        module_id = int(payload.get("module_id"))
+    except (TypeError, ValueError) as error:
+        raise IntelligenceActionValidationError("Select a module before confirming this assessment.") from error
+    module = require_owned_module(module_id, owner_id)
+    if proposal.target_id is not None and int(proposal.target_id) != int(module.id):
+        raise IntelligenceActionValidationError("The assessment proposal target changed unexpectedly.")
+    try:
+        source_document = _owned_document(int(payload.get("source_document_id")), owner_id)
+    except (TypeError, ValueError) as error:
+        raise IntelligenceActionValidationError("The source academic document is no longer available.") from error
+    if not bool(getattr(source_document, "is_current_version", True)):
+        raise IntelligenceActionValidationError(
+            "This proposal came from an older document version. Import the current schedule again."
+        )
+    try:
+        validate_assessment_proposal_evidence(proposal=proposal, user_id=owner_id)
+    except ModuleAssessmentImportValidationError as error:
+        raise IntelligenceActionValidationError(str(error)) from error
+    duplicate = assessment_proposal_duplicate(proposal=proposal, user_id=owner_id)
+    if duplicate is not None:
+        raise IntelligenceActionValidationError(
+            f'An assessment that looks like “{duplicate.title}” already exists in {module.title}.'
+        )
 
 
 def confirm_owned_action_proposal(*, proposal_id: int, owner_id: int) -> LifeOSActionProposal:
     proposal = require_owned_proposal(proposal_id=proposal_id, owner_id=owner_id)
     if proposal.status != "pending":
         raise IntelligenceActionValidationError("This action proposal is no longer waiting for confirmation.")
+    _prevalidate_confirmable_action(proposal, owner_id)
 
     # Persist the transition before executing.  Repeated/double-clicked confirm
     # requests cannot execute the same proposal twice.
@@ -368,7 +459,7 @@ def confirm_owned_action_proposal(*, proposal_id: int, owner_id: int) -> LifeOSA
 
     try:
         resource_type, resource_id = _execute_confirmed_action(proposal, owner_id)
-    except (IntelligenceActionError, TaskPersistenceError, NotePersistenceError, DocumentAnalysisWorkflowError, ValueError) as error:
+    except (IntelligenceActionError, TaskPersistenceError, NotePersistenceError, DocumentAnalysisWorkflowError, ModuleAssessmentPersistenceError, ModuleAssessmentValidationError, ModuleNotFoundError, ValueError) as error:
         _mark_failed(proposal, str(error))
         raise IntelligenceActionExecutionError(str(error)) from error
 
@@ -390,7 +481,7 @@ def confirm_owned_action_proposal(*, proposal_id: int, owner_id: int) -> LifeOSA
         object_type=resource_type,
         object_id=resource_id,
         project_id=proposal.project_id,
-        title=proposal.title.replace("Create task: ", "Created task: ").replace("Save note: ", "Saved note: ").replace("Refresh analysis: ", "Refreshed analysis: "),
+        title=proposal.title.replace("Create task: ", "Created task: ").replace("Save note: ", "Saved note: ").replace("Refresh analysis: ", "Refreshed analysis: ").replace("Import assessment: ", "Imported assessment: "),
         summary="The user confirmed a LifeOS intelligence action after reviewing its proposal.",
         changes={"action_type": proposal.action_type, "proposal_id": proposal.id},
         source_type="ask_lifeos",

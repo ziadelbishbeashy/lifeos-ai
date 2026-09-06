@@ -43,6 +43,8 @@ export function DashboardPage() {
   const home = homeQuery.data?.home;
   const today = home?.focus;
   const firstName = session.data?.user?.name?.split(/\s+/)[0] || "there";
+  const experience = session.data?.user?.experience;
+  const modulesVisible = Boolean(experience?.ui.modules_visible);
   const overdue = data.counts.overdue_tasks;
 
   async function createProposal(priority: TodayPriority, actionType: string) {
@@ -85,7 +87,7 @@ export function DashboardPage() {
   return <>
     <section className="dashboard-hero intelligent-home-hero">
       <div className="dashboard-hero-copy">
-        <span className="dashboard-eyebrow">Verified workspace intelligence · Welcome back, {firstName}</span>
+        <span className="dashboard-eyebrow">Verified workspace intelligence · {experience?.primary?.label || "LifeOS"} · Welcome back, {firstName}</span>
         <h1>Here’s what <span>matters today.</span></h1>
         <p>{home ? `${home.briefing.headline}. ${home.briefing.summary}` : "Your projects, tasks and execution signals are gathered here so you can focus on the next meaningful action."}</p>
         <div className="dashboard-hero-actions"><a href="/ask" className="dashboard-primary-action">Ask LifeOS</a><a href="/tasks" className="dashboard-secondary-action">Open Tasks</a><a href="/projects" className="dashboard-secondary-action">View Workspace</a></div>
@@ -119,7 +121,7 @@ export function DashboardPage() {
 
     {home ? <section className="home-intelligence-grid" aria-label="Today intelligence details">
       <HomeInsightCard title="Documents to Review" kicker="Document Brain" summary={home.documents.summary} items={home.documents.items} empty="No stale or missing document analysis right now." href="/documents" />
-      <HomeStudyCard home={home} />
+      {modulesVisible ? <HomeStudyCard home={home} /> : null}
       <HomeActivityCard items={home.activity.items} total={home.activity.total_items} />
     </section> : null}
 
@@ -128,7 +130,7 @@ export function DashboardPage() {
       <article className="dashboard-panel deadlines-panel"><div className="dashboard-panel-heading"><div><span className="panel-kicker">Verified next 7 days</span><h2>Upcoming Deadlines</h2></div><a className="panel-link" href="/ask">Ask about deadlines</a></div>{home?.deadlines.items.length ? <div className="deadline-list">{home.deadlines.items.map(item => <DeadlineInsightRow item={item} key={`${item.type}-${item.object_id}-${item.title}`} />)}</div> : data.upcoming_tasks.length ? <div className="deadline-list">{data.upcoming_tasks.map(task => { const d = formatDay(task.deadline); return <a href={task.project ? `/projects/${task.project.id}` : "/tasks"} className="deadline-row" key={task.id}><div className="deadline-date-box"><strong>{d.day}</strong><span>{d.month}</span></div><div className="deadline-main"><h3>{task.title}</h3><p>{scope(task)}</p></div><span className="deadline-status">{task.importance || task.status}</span></a>; })}</div> : <Empty title="No upcoming deadlines" text="LifeOS found no open task or project deadline in the next 7 days." />}</article>
     </section>
 
-    <section className="quick-actions-section"><div className="quick-actions-heading"><div><span className="panel-kicker">Move faster</span><h2>Quick Actions</h2></div><span>{data.counts.notes} notes · {data.counts.documents} documents</span></div><div className="quick-action-grid"><Quick href="/ask" symbol="L" title="Ask LifeOS" text="Review priorities, deadlines, gaps and changes." /><Quick href="/tasks" symbol="✓" title="Open Tasks" text="Review and move your execution queue." /><Quick href="/notes" symbol="N" title="AI Notes" text="Capture context and working knowledge." /><Quick href="/documents" symbol="D" title="Document Brain" text="Upload and question trusted evidence." /></div></section>
+    <section className="quick-actions-section"><div className="quick-actions-heading"><div><span className="panel-kicker">Move faster</span><h2>Quick Actions</h2></div><span>{experience?.primary?.label || "LifeOS"} experience · {data.counts.documents} documents</span></div><div className="quick-action-grid"><Quick href="/ask" symbol="L" title="Ask LifeOS" text={experience?.primary_experience === "student" ? "Plan study, review priorities or get grounded help." : experience?.primary_experience === "self_learning" ? "Plan learning, practice or get grounded help." : "Review priorities, deadlines, gaps and changes."} />{modulesVisible ? <Quick href="/modules" symbol="M" title={experience?.ui.module_label || "Modules"} text={experience?.primary_experience === "self_learning" ? "Continue your learning and connected resources." : "Continue modules, lectures and study context."} /> : <Quick href="/projects" symbol="P" title="Projects" text="Open the workspaces that move your priorities forward." />}<Quick href="/tasks" symbol="✓" title="Open Tasks" text="Review and move your execution queue." /><Quick href="/documents" symbol="D" title="Document Brain" text="Upload and question trusted evidence." /></div></section>
   </>;
 }
 

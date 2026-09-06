@@ -1336,6 +1336,13 @@ class Document(db.Model):
     )
     extracted_text = db.Column(db.UnicodeText, nullable=True)
 
+    # Development/runtime efficiency cache for lightweight type detection.
+    # This is never accepted workspace truth: the detected type remains a
+    # proposal that the user confirms or changes before full analysis.
+    type_detection_cache_json = db.Column(db.UnicodeText, nullable=True)
+    type_detection_fingerprint = db.Column(db.Unicode(64), nullable=True)
+    type_detection_updated_at = db.Column(db.DateTime, nullable=True)
+
     # Step 15 — OCR state is persisted independently from RAG/indexing state.
     # Native PDFs stay ``not_needed``; scanned or mixed PDFs become ``pending``
     # until the OCR workflow is queued and processed.
@@ -3192,3 +3199,70 @@ class LifeOSAutomationRun(db.Model):
         except (json.JSONDecodeError, TypeError):
             return {}
         return parsed if isinstance(parsed, dict) else {}
+
+
+class AIOperationLock(db.Model):
+    """Short-lived cross-worker idempotency lock for expensive AI work.
+
+    Locks are internal execution infrastructure only. They do not contain
+    prompts or model output and expire automatically if a worker crashes.
+    """
+
+    __tablename__ = "ai_operation_locks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    lock_key = db.Column(db.Unicode(64), nullable=False, unique=True, index=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+        index=True,
+    )
+    operation = db.Column(db.Unicode(80), nullable=False, index=True)
+    resource_type = db.Column(db.Unicode(40), nullable=False, index=True)
+    resource_id = db.Column(db.Integer, nullable=False, index=True)
+    fingerprint = db.Column(db.Unicode(64), nullable=True)
+    acquired_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class AIUsageEvent(db.Model):
+    """Append-only provider usage ledger for LifeOS AI economics and quotas.
+
+    This table stores counts/metadata only; prompts and model outputs are never
+    stored here. Events may have no user when they originate from internal/CLI
+    workflows outside an authenticated HTTP request.
+    """
+
+    __tablename__ = "ai_usage_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=True,
+        index=True,
+    )
+    request_id = db.Column(db.Unicode(64), nullable=False, index=True)
+    endpoint = db.Column(db.Unicode(160), nullable=True, index=True)
+    feature = db.Column(db.Unicode(80), nullable=False, default="unknown", index=True)
+    operation = db.Column(db.Unicode(32), nullable=False, default="generation", index=True)
+    provider = db.Column(db.Unicode(40), nullable=False, index=True)
+    model = db.Column(db.Unicode(120), nullable=False, index=True)
+    provider_call_index = db.Column(db.Integer, nullable=False, default=1)
+    prompt_characters = db.Column(db.Integer, nullable=False, default=0)
+    input_tokens = db.Column(db.Integer, nullable=True)
+    output_tokens = db.Column(db.Integer, nullable=True)
+    thinking_tokens = db.Column(db.Integer, nullable=True)
+    cached_input_tokens = db.Column(db.Integer, nullable=True)
+    total_tokens = db.Column(db.Integer, nullable=True)
+    input_cost_usd = db.Column(db.Numeric(18, 10), nullable=True)
+    output_cost_usd = db.Column(db.Numeric(18, 10), nullable=True)
+    total_cost_usd = db.Column(db.Numeric(18, 10), nullable=True, index=True)
+    pricing_source = db.Column(db.Unicode(120), nullable=True)
+    latency_ms = db.Column(db.Integer, nullable=False, default=0)
+    success = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    error_category = db.Column(db.Unicode(80), nullable=True)
+    langsmith_run_id = db.Column(db.Unicode(80), nullable=True, index=True)
+    usage_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)

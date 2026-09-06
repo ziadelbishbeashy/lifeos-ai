@@ -19,6 +19,10 @@ from services.ai_service import (
     analyze_document,
     get_ai_configuration,
 )
+from services.ai_operation_lock_service import (
+    AIOperationAlreadyRunningError,
+    ai_operation_lock,
+)
 
 from services.lifeos_activity_service import add_activity_event
 
@@ -48,6 +52,13 @@ class DocumentNotFoundError(DocumentAnalysisWorkflowError):
 
 class DocumentNotReadyError(DocumentAnalysisWorkflowError):
     """Raised when a document has no readable extracted text."""
+
+
+class DocumentAnalysisInProgressError(DocumentAnalysisWorkflowError):
+    """Raised when the same owned document is already being analysed."""
+
+
+DOCUMENT_ANALYSIS_OPERATION = "document_analysis"
 
 
 @dataclass(frozen=True)
@@ -159,136 +170,165 @@ def analyse_owned_document(
             )
 
     try:
-        result = analyze_document(
-            filename=document.filename,
-            extracted_text=extracted_text,
-            confirmed_document_type=confirmed_type_key,
-        )
-
-    except AIServiceError as error:
-        _save_failed_analysis(
-            document=document,
+        with ai_operation_lock(
             user_id=user_id,
+            operation=DOCUMENT_ANALYSIS_OPERATION,
+            resource_type="document",
+            resource_id=document.id,
             fingerprint=fingerprint,
-            error=error,
-            confirmed_document_type=confirmed_type_key,
-        )
-
-        raise DocumentAnalysisWorkflowError(
-            str(error)
-        ) from error
-
-    analysis_data = dict(
-        result["analysis"]
-    )
-
-    if confirmed_type_key is not None:
-        if detected_type_key is None:
-            type_source = "user_confirmed"
-        elif detected_type_key == confirmed_type_key:
-            type_source = "detected_confirmed"
-        else:
-            type_source = "user_override"
-
-        analysis_data[
-            "type_metadata"
-        ] = {
-            "detected_type_key": detected_type_key,
-            "detected_type": (
-                get_document_type_label(
-                    detected_type_key
+            ttl_seconds=15 * 60,
+        ):
+            # A previous request may have finished between the first reuse check
+            # and our lock acquisition. Re-check after acquiring the lock so an
+            # unchanged analysis is reused rather than paid for twice.
+            if not force:
+                existing_analysis = _find_reusable_analysis(
+                    document_id=document.id,
+                    user_id=user_id,
+                    fingerprint=fingerprint,
                 )
-                if detected_type_key
-                else None
-            ),
-            "confirmed_type_key": confirmed_type_key,
-            "confirmed_type": get_document_type_label(
-                confirmed_type_key
-            ),
-            "source": type_source,
-            "confidence": (
-                cleaned_confidence
-                or None
-            ),
-        }
+                if existing_analysis is not None:
+                    return SavedDocumentAnalysis(
+                        document=document,
+                        analysis=existing_analysis,
+                        reused_existing=True,
+                    )
 
-    analysis = DocumentAIAnalysis(
-        document_id=document.id,
-        user_id=user_id,
-        provider=str(
-            result.get("provider") or "unknown"
-        )[:30],
-        model=str(
-            result.get("model") or "unknown"
-        )[:100],
-        status="Completed",
-        document_type=analysis_data.get(
-            "document_type"
-        ),
-        summary=analysis_data.get("summary"),
-        insights_json=json.dumps(
-            analysis_data,
-            ensure_ascii=False,
-        ),
-        source_fingerprint=fingerprint,
-        error_message=None,
-    )
+            try:
+                result = analyze_document(
+                    filename=document.filename,
+                    extracted_text=extracted_text,
+                    confirmed_document_type=confirmed_type_key,
+                )
 
-    # Keep the latest executive summary available directly
-    # on the Document record for document cards and previews.
-    document.summary = analysis_data.get(
-        "summary"
-    )
+            except AIServiceError as error:
+                _save_failed_analysis(
+                    document=document,
+                    user_id=user_id,
+                    fingerprint=fingerprint,
+                    error=error,
+                    confirmed_document_type=confirmed_type_key,
+                )
 
-    try:
-        db.session.add(analysis)
-        db.session.flush()
+                raise DocumentAnalysisWorkflowError(
+                    str(error)
+                ) from error
 
-        suggestions = build_document_task_suggestions(
-            analysis=analysis,
-            document=document,
-            user_id=user_id,
-        )
+            analysis_data = dict(
+                result["analysis"]
+            )
 
-        db.session.add_all(suggestions)
-        add_activity_event(
-            user_id=user_id,
-            event_type="document.analysis_completed",
-            object_type="document_analysis",
-            object_id=analysis.id,
-            project_id=document.project_id,
-            title=f"Document analysis completed: {document.filename}",
-            summary="LifeOS refreshed the document's structured intelligence.",
-            changes={"document_id": document.id, "document_type": analysis.document_type},
-            source_type="document_brain",
-            source_id=document.id,
-        )
-        db.session.commit()
+            if confirmed_type_key is not None:
+                if detected_type_key is None:
+                    type_source = "user_confirmed"
+                elif detected_type_key == confirmed_type_key:
+                    type_source = "detected_confirmed"
+                else:
+                    type_source = "user_override"
 
-    except (
-        SQLAlchemyError,
-        DocumentSuggestionBuildError,
-    ) as error:
-        db.session.rollback()
+                analysis_data[
+                    "type_metadata"
+                ] = {
+                    "detected_type_key": detected_type_key,
+                    "detected_type": (
+                        get_document_type_label(
+                            detected_type_key
+                        )
+                        if detected_type_key
+                        else None
+                    ),
+                    "confirmed_type_key": confirmed_type_key,
+                    "confirmed_type": get_document_type_label(
+                        confirmed_type_key
+                    ),
+                    "source": type_source,
+                    "confidence": (
+                        cleaned_confidence
+                        or None
+                    ),
+                }
 
-        _save_failed_analysis(
-            document=document,
-            user_id=user_id,
-            fingerprint=fingerprint,
-            error=error,
-            confirmed_document_type=confirmed_type_key,
-        )
+            analysis = DocumentAIAnalysis(
+                document_id=document.id,
+                user_id=user_id,
+                provider=str(
+                    result.get("provider") or "unknown"
+                )[:30],
+                model=str(
+                    result.get("model") or "unknown"
+                )[:100],
+                status="Completed",
+                document_type=analysis_data.get(
+                    "document_type"
+                ),
+                summary=analysis_data.get("summary"),
+                insights_json=json.dumps(
+                    analysis_data,
+                    ensure_ascii=False,
+                ),
+                source_fingerprint=fingerprint,
+                error_message=None,
+            )
 
-        raise DocumentAnalysisWorkflowError(
-            "LifeOS generated the document analysis, "
-            "but could not save it."
+            # Keep the latest executive summary available directly
+            # on the Document record for document cards and previews.
+            document.summary = analysis_data.get(
+                "summary"
+            )
+
+            try:
+                db.session.add(analysis)
+                db.session.flush()
+
+                suggestions = build_document_task_suggestions(
+                    analysis=analysis,
+                    document=document,
+                    user_id=user_id,
+                )
+
+                db.session.add_all(suggestions)
+                add_activity_event(
+                    user_id=user_id,
+                    event_type="document.analysis_completed",
+                    object_type="document_analysis",
+                    object_id=analysis.id,
+                    project_id=document.project_id,
+                    title=f"Document analysis completed: {document.filename}",
+                    summary="LifeOS refreshed the document's structured intelligence.",
+                    changes={"document_id": document.id, "document_type": analysis.document_type},
+                    source_type="document_brain",
+                    source_id=document.id,
+                )
+                db.session.commit()
+
+            except (
+                SQLAlchemyError,
+                DocumentSuggestionBuildError,
+            ) as error:
+                db.session.rollback()
+
+                _save_failed_analysis(
+                    document=document,
+                    user_id=user_id,
+                    fingerprint=fingerprint,
+                    error=error,
+                    confirmed_document_type=confirmed_type_key,
+                )
+
+                raise DocumentAnalysisWorkflowError(
+                    "LifeOS generated the document analysis, "
+                    "but could not save it."
+                ) from error
+
+            return SavedDocumentAnalysis(
+                document=document,
+                analysis=analysis,
+                reused_existing=False,
+            )
+    except AIOperationAlreadyRunningError as error:
+        raise DocumentAnalysisInProgressError(
+            "This document is already being analysed. Please wait for the current analysis to finish."
         ) from error
-
-    return SavedDocumentAnalysis(
-        document=document,
-        analysis=analysis,
-        reused_existing=False,
-    )
 
 
 def _find_owned_document(

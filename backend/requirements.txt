@@ -17,3 +17,6 @@ opencv-python-headless>=4.10,<5
 
 # I17 schedule timezone database (required on Windows for IANA zones)
 tzdata>=2025.2,<2027
+
+# Optional tracing/observability (disabled unless LANGSMITH_TRACING=true)
+langsmith>=0.4.43,<1

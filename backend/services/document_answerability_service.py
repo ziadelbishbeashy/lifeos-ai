@@ -225,6 +225,7 @@ def _request_verifier_response(
             provider=config["provider"],
             api_key=config["api_key"],
             model=config["model"],
+            feature="document_answerability",
             prompt=prompt,
             empty_message=(
                 "The AI provider returned an empty "

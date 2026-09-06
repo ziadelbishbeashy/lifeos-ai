@@ -132,3 +132,91 @@ def test_document_without_text_is_not_ready(
                 document_id=document.id,
                 user_id=user,
             )
+
+
+def test_unchanged_document_type_detection_is_cached(
+    app,
+    user,
+    monkeypatch,
+):
+    with app.app_context():
+        document = create_document(
+            user_id=user,
+            extracted_text="Abstract. Methods. Results. Stable content.",
+        )
+        calls = {"value": 0}
+
+        def detected(**kwargs):
+            calls["value"] += 1
+            return fake_detection()
+
+        monkeypatch.setattr(workflow, "detect_document_type", detected)
+
+        first = detect_owned_document_type(document_id=document.id, user_id=user)
+        second = detect_owned_document_type(document_id=document.id, user_id=user)
+
+        assert first.reused_existing is False
+        assert second.reused_existing is True
+        assert second.detection.document_type_key == "research_paper"
+        assert calls["value"] == 1
+
+
+def test_changed_document_text_invalidates_type_detection_cache(
+    app,
+    user,
+    monkeypatch,
+):
+    with app.app_context():
+        document = create_document(
+            user_id=user,
+            extracted_text="Abstract. First version.",
+        )
+        calls = {"value": 0}
+
+        def detected(**kwargs):
+            calls["value"] += 1
+            return fake_detection()
+
+        monkeypatch.setattr(workflow, "detect_document_type", detected)
+        detect_owned_document_type(document_id=document.id, user_id=user)
+
+        document.extracted_text = "Abstract. Second materially changed version."
+        db.session.commit()
+
+        result = detect_owned_document_type(document_id=document.id, user_id=user)
+        assert result.reused_existing is False
+        assert calls["value"] == 2
+
+
+def test_duplicate_running_type_detection_is_rejected_before_provider_call(
+    app,
+    user,
+    monkeypatch,
+):
+    from services.ai_operation_lock_service import AIOperationAlreadyRunningError
+    from services.document_type_detection_workflow_service import DocumentTypeDetectionInProgressError
+
+    with app.app_context():
+        document = create_document(
+            user_id=user,
+            extracted_text="Readable content for concurrent classification.",
+        )
+        provider_calls = {"value": 0}
+
+        def provider(**kwargs):
+            provider_calls["value"] += 1
+            return fake_detection()
+
+        class BusyLock:
+            def __enter__(self):
+                raise AIOperationAlreadyRunningError("busy")
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        monkeypatch.setattr(workflow, "detect_document_type", provider)
+        monkeypatch.setattr(workflow, "ai_operation_lock", lambda **kwargs: BusyLock())
+
+        with pytest.raises(DocumentTypeDetectionInProgressError, match="already being checked"):
+            detect_owned_document_type(document_id=document.id, user_id=user)
+
+        assert provider_calls["value"] == 0

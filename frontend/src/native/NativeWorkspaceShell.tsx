@@ -8,7 +8,7 @@ import { navigate } from "../core/navigation";
 
 export type NativeSection =
   | "dashboard" | "projects" | "modules" | "tasks" | "notes" | "focus"
-  | "analytics" | "notifications" | "documents" | "intelligence" | "memory" | "automations";
+  | "analytics" | "notifications" | "documents" | "intelligence" | "memory" | "automations" | "settings";
 
 type NavItem = { key: NativeSection; href: string; label: string; small?: string; path: string };
 const workspaceItems: NavItem[] = [
@@ -41,6 +41,7 @@ const context: Record<NativeSection, { kicker: string; title: string }> = {
   intelligence: { kicker: "Verified workspace intelligence", title: "Ask LifeOS" },
   memory: { kicker: "Controlled intelligence context", title: "Memory" },
   automations: { kicker: "Constrained workflow preparation", title: "Automations" },
+  settings: { kicker: "My LifeOS", title: "Experience settings" },
 };
 
 function NavLink({ item, active }: { item: NavItem; active: NativeSection }) {
@@ -57,7 +58,14 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
   const [loggingOut, setLoggingOut] = useState(false);
   const initial = (user.name || user.email || "L").trim().slice(0, 1).toUpperCase();
   const firstName = useMemo(() => (user.name || "Workspace").trim().split(/\s+/)[0], [user.name]);
-  const pageContext = context[active];
+  const experience = user.experience;
+  const visibleWorkspaceItems = useMemo(() => workspaceItems
+    .filter((item) => item.key !== "modules" || experience.ui.modules_visible)
+    .map((item) => item.key === "modules" ? { ...item, label: experience.ui.module_label, small: experience.primary_experience === "self_learning" ? "Your learning" : "Learning" } : item),
+    [experience.ui.modules_visible, experience.ui.module_label, experience.primary_experience]);
+  const pageContext = active === "modules"
+    ? { kicker: "Learning workspace", title: experience.ui.module_label }
+    : context[active];
   const proactiveQuery = useQuery({
     queryKey: ["lifeos-proactive-notifications"],
     queryFn: () => apiPost<{ proactive: ProactiveNotificationData }>("/api/v1/intelligence/proactive/refresh"),
@@ -93,13 +101,13 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
       <div className="sidebar-header">
         <a href="/dashboard" className="app-brand">
           <span className="app-brand-mark">L</span>
-          <span className="app-brand-copy"><strong>LifeOS AI</strong><small>Personal workspace</small></span>
+          <span className="app-brand-copy"><strong>LifeOS AI</strong><small>{experience.ui.workspace_label}</small></span>
         </a>
         <button type="button" className="sidebar-close-button" onClick={() => setMobileOpen(false)} aria-label="Close navigation">×</button>
       </div>
       <nav className="app-navigation" aria-label="Main navigation">
         <span className="navigation-label">Workspace</span>
-        {workspaceItems.map((item) => <NavLink item={item} active={active} key={item.key}/>) }
+        {visibleWorkspaceItems.map((item) => <NavLink item={item} active={active} key={item.key}/>) }
         <span className="navigation-label navigation-label-spaced">Intelligence</span>
         {intelligenceItems.map((item) => <NavLink item={item} active={active} key={item.key}/>) }
         <span className="navigation-label navigation-label-spaced">Planning</span>
@@ -124,8 +132,8 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
           </button>
           <a className="icon-action-button notification-button lifeos-proactive-bell" href="/notifications/history" title={proactiveUnread ? `${proactiveUnread} unread LifeOS notification${proactiveUnread === 1 ? "" : "s"}` : "Notifications"} aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.4 2.4 0 0 0 2.3-2h-4.6A2.4 2.4 0 0 0 12 22Zm7-5-2-2v-4.5a5 5 0 0 0-4-4.9V4a1 1 0 0 0-2 0v1.6a5 5 0 0 0-4 4.9V15l-2 2v1h14v-1Z"/></svg>{proactiveUnread > 0 ? <span className="lifeos-proactive-badge">{proactiveUnread > 99 ? "99+" : proactiveUnread}</span> : null}</a>
           <div className="profile-menu-wrapper">
-            <button type="button" className="profile-menu-button" onClick={() => setProfileOpen(v => !v)} aria-expanded={profileOpen}><span className="topbar-avatar">{initial}</span><span className="topbar-user-copy"><strong>{firstName}</strong><small>Workspace owner</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5H7Z"/></svg></button>
-            <div className={`profile-dropdown ${profileOpen ? "open" : ""}`}><div className="profile-dropdown-header"><strong>{user.name}</strong><span>{user.email}</span></div><span className="profile-dropdown-item profile-dropdown-disabled">Profile settings<small>Phase 4</small></span><button type="button" className="profile-logout-button" onClick={handleLogout} disabled={loggingOut}>{loggingOut ? "Logging out…" : "Log out"}</button></div>
+            <button type="button" className="profile-menu-button" onClick={() => setProfileOpen(v => !v)} aria-expanded={profileOpen}><span className="topbar-avatar">{initial}</span><span className="topbar-user-copy"><strong>{firstName}</strong><small>{experience.primary?.label || "LifeOS"}</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5H7Z"/></svg></button>
+            <div className={`profile-dropdown ${profileOpen ? "open" : ""}`}><div className="profile-dropdown-header"><strong>{user.name}</strong><span>{user.email}</span></div><a className="profile-dropdown-item" href="/settings">Experience settings<small>{experience.primary?.label || "Set up"}</small></a><button type="button" className="profile-logout-button" onClick={handleLogout} disabled={loggingOut}>{loggingOut ? "Logging out…" : "Log out"}</button></div>
           </div>
         </div>
       </header>

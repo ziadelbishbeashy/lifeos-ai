@@ -1,3 +1,4 @@
+import inspect
 import json
 import os
 import re
@@ -1707,12 +1708,18 @@ def _generate_text(
     """Generate text through the provider-independent LifeOS router."""
 
     try:
+        frame = inspect.currentframe()
+        try:
+            caller = frame.f_back.f_code.co_name if frame is not None and frame.f_back is not None else "unknown"
+        finally:
+            del frame
         return route_ai_text(
             provider=provider,
             api_key=api_key,
             model=model,
             prompt=prompt,
             empty_message=empty_message,
+            feature=f"ai_service.{caller}",
         )
     except AIProviderRouterError as error:
         raise AIServiceError(str(error)) from error

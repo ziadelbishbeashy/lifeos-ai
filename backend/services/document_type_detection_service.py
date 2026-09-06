@@ -126,6 +126,7 @@ def detect_document_type(
             provider=config["provider"],
             api_key=config["api_key"],
             model=config["model"],
+            feature="document_type_detection",
             prompt=prompt,
             empty_message=(
                 "The AI provider returned an empty "

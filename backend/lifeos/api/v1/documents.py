@@ -23,7 +23,14 @@ from lifeos.api.v1.serializers import (
 )
 from models import DocumentAIAnalysis
 from services.document_access_service import DocumentNotFoundError as AccessDocumentNotFoundError, DocumentPersistenceError, DocumentValidationError, list_owned_documents, require_owned_document
-from services.document_ai_workflow_service import DocumentAnalysisWorkflowError, DocumentNotFoundError, DocumentNotReadyError, analyse_owned_document
+from services.document_ai_workflow_service import (
+    DOCUMENT_ANALYSIS_OPERATION,
+    DocumentAnalysisInProgressError,
+    DocumentAnalysisWorkflowError,
+    DocumentNotFoundError,
+    DocumentNotReadyError,
+    analyse_owned_document,
+)
 from services.document_analysis_experience_service import build_document_analysis_experience
 from services.document_comparison_service import DocumentComparisonNotFoundError, DocumentComparisonValidationError, list_owned_comparisons, require_owned_comparison
 from services.document_comparison_workflow_service import DocumentComparisonPersistenceError, DocumentComparisonWorkflowError, compare_owned_documents
@@ -78,7 +85,15 @@ from services.document_task_action_service import (
     reject_document_suggestion,
     require_owned_document_suggestion,
 )
-from services.document_type_detection_workflow_service import DocumentTypeDetectionNotFoundError, DocumentTypeDetectionNotReadyError, DocumentTypeDetectionWorkflowError, detect_owned_document_type
+from services.document_type_detection_workflow_service import (
+    DOCUMENT_TYPE_DETECTION_OPERATION,
+    DocumentTypeDetectionInProgressError,
+    DocumentTypeDetectionNotFoundError,
+    DocumentTypeDetectionNotReadyError,
+    DocumentTypeDetectionWorkflowError,
+    detect_owned_document_type,
+)
+from services.ai_operation_lock_service import is_ai_operation_running
 from services.document_type_profile_service import document_type_choices
 from services.document_type_workspace_service import build_document_type_workspace
 from services.document_version_service import DocumentVersionNotFoundError, DocumentVersionPersistenceError, DocumentVersionValidationError, create_new_document_version, get_owned_document_version_history
@@ -127,6 +142,20 @@ def _details(document):
         "document_type_choices": [{"key": key, "label": label} for key, label in document_type_choices()],
         "version_history": serialize_version_history(version_history),
         "pdf_url": f"/api/v1/documents/{document.id}/file",
+        "ai_operations": {
+            "analysis_running": is_ai_operation_running(
+                user_id=current_user.id,
+                operation=DOCUMENT_ANALYSIS_OPERATION,
+                resource_type="document",
+                resource_id=document.id,
+            ),
+            "type_detection_running": is_ai_operation_running(
+                user_id=current_user.id,
+                operation=DOCUMENT_TYPE_DETECTION_OPERATION,
+                resource_type="document",
+                resource_id=document.id,
+            ),
+        },
     }
 
 
@@ -488,16 +517,35 @@ def document_file_route(document_id: int):
 @documents_api_bp.post("/<int:document_id>/detect-type")
 @api_auth_required
 def detect_type_route(document_id: int):
+    payload = json_body()
     try:
-        result = detect_owned_document_type(document_id=document_id, user_id=current_user.id)
+        result = detect_owned_document_type(
+            document_id=document_id,
+            user_id=current_user.id,
+            force=bool(payload.get("force")),
+        )
     except DocumentTypeDetectionNotFoundError:
         return not_found("Document not found.")
     except DocumentTypeDetectionNotReadyError as error:
         return validation_error(str(error))
+    except DocumentTypeDetectionInProgressError as error:
+        return jsonify({
+            "error": "operation_in_progress",
+            "status": "already_running",
+            "message": str(error),
+        }), 409
     except DocumentTypeDetectionWorkflowError as error:
         return jsonify({"error": "ai_unavailable", "message": str(error)}), 503
     d = result.detection
-    return jsonify({"detection": {"document_type_key": d.document_type_key, "document_type_label": d.document_type_label, "confidence": d.confidence, "reason": d.reason}})
+    return jsonify({
+        "detection": {
+            "document_type_key": d.document_type_key,
+            "document_type_label": d.document_type_label,
+            "confidence": d.confidence,
+            "reason": d.reason,
+        },
+        "reused_existing": result.reused_existing,
+    })
 
 
 @documents_api_bp.post("/<int:document_id>/analyze")
@@ -517,6 +565,12 @@ def analyze_route(document_id: int):
         return not_found("Document not found.")
     except DocumentNotReadyError as error:
         return validation_error(str(error))
+    except DocumentAnalysisInProgressError as error:
+        return jsonify({
+            "error": "operation_in_progress",
+            "status": "already_running",
+            "message": str(error),
+        }), 409
     except DocumentAnalysisWorkflowError as error:
         return jsonify({"error": "analysis_failed", "message": str(error)}), 503
     return jsonify({"analysis": serialize_document_analysis(result.analysis), "reused_existing": result.reused_existing, **_details(result.document)})

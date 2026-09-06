@@ -4,6 +4,7 @@ import { PageState } from "./components/NativeUi";
 import { navigate } from "./core/navigation";
 import { NativeWorkspaceShell, type NativeSection } from "./native/NativeWorkspaceShell";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { AnalyticsAiUsagePage } from "./pages/AnalyticsAiUsagePage";
 import { AutomationsPage } from "./pages/AutomationsPage";
 import { AskLifeOSPage } from "./pages/AskLifeOSPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -90,6 +91,7 @@ export function App() {
   if (path === "/focus") return <PrivateArea active="focus"><FocusPage /></PrivateArea>;
   if (path === "/focus/insights") return <PrivateArea active="focus"><FocusInsightsPage /></PrivateArea>;
   if (path === "/analytics") return <PrivateArea active="analytics"><AnalyticsPage /></PrivateArea>;
+  if (path === "/analytics/ai-usage") return <PrivateArea active="analytics"><AnalyticsAiUsagePage /></PrivateArea>;
 
   if (path === "/notifications" || path === "/notifications/settings") {
     return <PrivateArea active="notifications"><NotificationSettingsPage /></PrivateArea>;

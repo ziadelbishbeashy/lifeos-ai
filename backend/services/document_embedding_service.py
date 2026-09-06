@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -13,8 +14,11 @@ from google import genai
 from google.genai import types
 from sqlalchemy.exc import SQLAlchemyError
 
+from ai.providers.base import ProviderUsage
 from database import db
 from models import Document, DocumentChunk
+from services.ai_pricing_service import calculate_usage_cost
+from services.ai_usage_service import record_embedding_usage
 from services.resource_limit_service import (
     ResourceLimitError,
     get_resource_limits,
@@ -243,6 +247,8 @@ def ensure_owned_document_embeddings(
                 model=configuration.model,
                 dimensions=configuration.dimensions,
                 texts=prepared_texts,
+                usage_user_id=user_id,
+                usage_feature="document_chunk_embedding",
             )
 
             if len(vectors) != len(batch):
@@ -479,12 +485,69 @@ def cosine_similarity(
     )
 
 
+def _usage_value(value, *names: str) -> int | None:
+    for name in names:
+        raw = getattr(value, name, None)
+        if raw is None and isinstance(value, dict):
+            raw = value.get(name)
+        if raw is None:
+            continue
+        try:
+            return max(0, int(raw))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _embedding_input_tokens(
+    *,
+    client: genai.Client,
+    model: str,
+    contents,
+    response,
+) -> tuple[int | None, str]:
+    """Return exact embedding input tokens when the SDK exposes them.
+
+    Current embed responses do not consistently include generation-style
+    ``usage_metadata``. When absent, Gemini's count_tokens endpoint is used on
+    the exact request contents. A counting failure never breaks retrieval; the
+    ledger simply leaves cost unknown instead of inventing a token estimate.
+    """
+
+    usage_metadata = getattr(response, "usage_metadata", None)
+    if usage_metadata is not None:
+        tokens = _usage_value(
+            usage_metadata,
+            "prompt_token_count",
+            "promptTokenCount",
+            "total_token_count",
+            "totalTokenCount",
+        )
+        if tokens is not None:
+            return tokens, "embed_response_usage"
+
+    try:
+        counted = client.models.count_tokens(
+            model=model,
+            contents=contents,
+        )
+        tokens = _usage_value(counted, "total_tokens", "totalTokens")
+        if tokens is not None:
+            return tokens, "count_tokens"
+    except Exception:
+        pass
+
+    return None, "unavailable"
+
+
 def _generate_embeddings(
     *,
     client: genai.Client,
     model: str,
     dimensions: int,
     texts: list[str],
+    usage_user_id: int | None = None,
+    usage_feature: str = "document_embedding",
 ) -> list[list[float]]:
     """
     Generate one separate vector for every supplied text.
@@ -498,7 +561,7 @@ def _generate_embeddings(
         return []
 
     try:
-        guard_embedding_request(
+        provider_call_index = guard_embedding_request(
             provider=EMBEDDING_PROVIDER,
             model=model,
             texts=texts,
@@ -517,12 +580,60 @@ def _generate_embeddings(
         for text in texts
     ]
 
-    response = client.models.embed_content(
+    started = time.perf_counter()
+    prompt_characters = sum(len(str(text or "")) for text in texts)
+    try:
+        response = client.models.embed_content(
+            model=model,
+            contents=separate_contents,
+            config=types.EmbedContentConfig(
+                output_dimensionality=dimensions,
+            ),
+        )
+    except Exception as error:
+        latency_ms = round((time.perf_counter() - started) * 1000)
+        usage = ProviderUsage()
+        record_embedding_usage(
+            provider=EMBEDDING_PROVIDER,
+            model=model,
+            feature=usage_feature,
+            prompt_characters=prompt_characters,
+            provider_call_index=provider_call_index,
+            usage=usage,
+            cost=calculate_usage_cost(provider=EMBEDDING_PROVIDER, model=model, usage=usage),
+            latency_ms=latency_ms,
+            success=False,
+            error_category=type(error).__name__,
+            user_id=usage_user_id,
+        )
+        raise
+
+    prompt_tokens, token_count_source = _embedding_input_tokens(
+        client=client,
         model=model,
         contents=separate_contents,
-        config=types.EmbedContentConfig(
-            output_dimensionality=dimensions,
-        ),
+        response=response,
+    )
+    usage = ProviderUsage(
+        input_tokens=prompt_tokens,
+        total_tokens=prompt_tokens,
+        raw={
+            "prompt_token_count": prompt_tokens,
+            "token_count_source": token_count_source,
+        },
+    )
+    latency_ms = round((time.perf_counter() - started) * 1000)
+    record_embedding_usage(
+        provider=EMBEDDING_PROVIDER,
+        model=model,
+        feature=usage_feature,
+        prompt_characters=prompt_characters,
+        provider_call_index=provider_call_index,
+        usage=usage,
+        cost=calculate_usage_cost(provider=EMBEDDING_PROVIDER, model=model, usage=usage),
+        latency_ms=latency_ms,
+        success=True,
+        user_id=usage_user_id,
     )
 
     embeddings = response.embeddings or []
@@ -653,6 +764,7 @@ def generate_question_embedding(
             texts=[
                 prepared_question,
             ],
+            usage_feature="document_query_embedding",
         )
 
     except DocumentEmbeddingError:

@@ -3,11 +3,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import { ApiError } from "../api/client";
 import { PageState } from "../components/NativeUi";
 import { createModule, fetchModules, moduleKeys } from "../features/modules/api";
+import { AcademicScheduleImportPanel } from "../features/modules/AcademicScheduleImportPanel";
 
 export function ModulesPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const query = useQuery({ queryKey: moduleKeys.all, queryFn: fetchModules, retry: false });
 
@@ -50,12 +52,16 @@ export function ModulesPage() {
         <h1>Modules</h1>
         <p>Organize lectures, study material, notes, tasks, collections, and grounded AI without turning a course into a project.</p>
       </div>
-      <button className="workspace-primary-button" type="button" onClick={() => setShowCreate((value) => !value)}>
+      <div className="module-header-actions"><button className="workspace-secondary-button" type="button" onClick={() => { setShowImport((value) => !value); setShowCreate(false); }}>
+        {showImport ? "Close Import" : "Import Schedule"}
+      </button><button className="workspace-primary-button" type="button" onClick={() => { setShowCreate((value) => !value); setShowImport(false); }}>
         {showCreate ? "Close" : "+ New Module"}
-      </button>
+      </button></div>
     </header>
 
     {error ? <div className="brain-alert is-error">{error}</div> : null}
+
+    {showImport ? <AcademicScheduleImportPanel modules={query.data?.items || []} onClose={() => setShowImport(false)} /> : null}
 
     {showCreate ? <form className="module-create-card" onSubmit={submit}>
       <div className="module-form-grid">
@@ -81,6 +87,7 @@ export function ModulesPage() {
         <p>{item.description || "A dedicated learning workspace for lectures, knowledge, and revision."}</p>
         <div className="module-metrics">
           <span><strong>{item.counts.lectures}</strong> Lectures</span>
+          <span><strong>{item.counts.assessments || 0}</strong> Assessments</span>
           <span><strong>{item.counts.documents}</strong> Documents</span>
           <span><strong>{item.counts.tasks}</strong> Tasks</span>
         </div>

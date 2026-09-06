@@ -348,6 +348,7 @@ def reason_about_project_review(
             provider=config["provider"],
             api_key=config["api_key"],
             model=config["model"],
+            feature="ask_lifeos_reasoner",
             prompt=prompt,
             empty_message="The AI provider returned an empty LifeOS reasoning result.",
         )
