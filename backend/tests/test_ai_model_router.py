@@ -15,6 +15,7 @@ def test_feature_tiers_are_deterministic():
     assert tier_for_feature("document_answerability") == TIER_CHEAP
     assert tier_for_feature("agent_reasoning") == TIER_DEEP
     assert tier_for_feature("ask_lifeos_reasoner") == TIER_NORMAL
+    assert tier_for_feature("ask_lifeos_advisor") == TIER_NORMAL
     assert tier_for_feature("ai_service.analyze_document") == TIER_NORMAL
     assert tier_for_feature("brand_new_feature") == TIER_NORMAL
 

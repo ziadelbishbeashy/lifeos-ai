@@ -19,6 +19,7 @@ from services.intelligence_intent_router_service import (
 )
 from services.intelligence_reasoning_service import (
     IntelligenceReasoningError,
+    reason_about_project_advice,
     reason_about_project_review,
 )
 from services.project_review_intelligence_service import ProjectReviewResult, review_project_context
@@ -32,7 +33,10 @@ from services.project_review_agent_service import (
     review_project_with_agent,
     run_owned_portfolio_review_agent,
 )
-from services.intelligence_action_service import priority_action_options
+from services.intelligence_action_service import (
+    issue_priority_action_authorization,
+    priority_action_options,
+)
 from services.lifeos_activity_service import build_owned_recent_activity
 from services.context_connection_service import ContextConnectionsResult, query_owned_context_connections
 from services.structured_memory_service import build_owned_memory_summary
@@ -191,14 +195,19 @@ def _fallback_verification(reason: str) -> dict[str, Any]:
     }
 
 
-def _agent_payload_with_actions(payload: dict[str, Any]) -> dict[str, Any]:
-    """Expose only reviewed I9 action choices for each deterministic priority."""
+def _agent_payload_with_actions(payload: dict[str, Any], *, owner_id: int) -> dict[str, Any]:
+    """Expose reviewed actions plus an owner-bound I9 authorization envelope."""
 
     result = dict(payload)
     priorities = []
     for raw in list(payload.get("priorities") or []):
         item = dict(raw)
         item["actions"] = priority_action_options(item)
+        # The browser may display/re-submit the recommendation, but it cannot
+        # edit its actionable fields and still pass I9 proposal preparation.
+        item["i9_authorization"] = issue_priority_action_authorization(
+            priority=item, owner_id=int(owner_id)
+        )
         priorities.append(item)
     result["priorities"] = priorities
     return result
@@ -361,8 +370,9 @@ def _looks_like_goal_request(query: str) -> bool:
     if len(text) < 12:
         return False
     strong_starts = (
-        "help me ",
-        "help us ",
+        # Generic "help me ..." is advisory, not automatically agentic.
+        # Goal-shaped help requests are still caught by the concrete phrases
+        # below (deployment, launch, finish, blockers, etc.).
         "prepare me ",
         "prepare this ",
         "prepare my ",
@@ -470,7 +480,7 @@ def ask_lifeos(
         candidate = str(clarification_context.get("intent") or "").strip()
         if candidate in {
             "project_review", "project_focus", "recent_activity", "task_status",
-            "deadline_review", "document_review", "workspace_gaps", "project_question", "today_focus",
+            "deadline_review", "document_review", "workspace_gaps", "project_question", "project_advice", "today_focus",
         }:
             continuation_intent = candidate
 
@@ -763,7 +773,7 @@ def ask_lifeos(
             },
             attention_level=agent.attention_level,
             clarification=None,
-            agent=_agent_payload_with_actions(agent.to_dict()),
+            agent=_agent_payload_with_actions(agent.to_dict(), owner_id=owner_id),
         )
 
     if route.intent == "portfolio_review":
@@ -808,10 +818,10 @@ def ask_lifeos(
             },
             attention_level=agent.attention_level,
             clarification=None,
-            agent=_agent_payload_with_actions(agent.to_dict()),
+            agent=_agent_payload_with_actions(agent.to_dict(), owner_id=owner_id),
         )
 
-    if not (route.intent == "project_review" and route.scope_type == "project" and route.scope_id):
+    if not (route.intent in {"project_review", "project_advice"} and route.scope_type == "project" and route.scope_id):
         return AskLifeOSResult(
             route=route,
             status="unsupported_intent",
@@ -830,7 +840,8 @@ def ask_lifeos(
     fallback = build_deterministic_project_answer(review)
 
     try:
-        reasoning = reason_about_project_review(query=query, context=context, review=review)
+        reasoner = reason_about_project_advice if route.intent == "project_advice" else reason_about_project_review
+        reasoning = reasoner(query=query, context=context, review=review)
     except IntelligenceReasoningError as error:
         return AskLifeOSResult(
             route=route,

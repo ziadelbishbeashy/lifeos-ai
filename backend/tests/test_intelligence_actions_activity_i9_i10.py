@@ -11,6 +11,7 @@ from services.intelligence_action_service import (
     IntelligenceActionValidationError,
     confirm_owned_action_proposal,
     create_priority_action_proposal,
+    issue_priority_action_authorization,
     require_owned_proposal,
 )
 from services.intelligence_ask_service import ask_lifeos
@@ -242,6 +243,9 @@ def test_i9_api_requires_explicit_second_confirm(client, app, user):
     with app.app_context():
         project = _project(user, "LifeOS")
         priority = _priority(project)
+        priority["i9_authorization"] = issue_priority_action_authorization(
+            priority=priority, owner_id=user
+        )
 
     _login(client)
     proposed = client.post(

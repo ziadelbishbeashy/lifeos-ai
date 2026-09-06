@@ -9,9 +9,16 @@ actual write is executed by existing deterministic LifeOS services.
 from __future__ import annotations
 
 from datetime import datetime
+import base64
+import hashlib
+import hmac
 import json
+import time
 from typing import Any
 
+from flask import current_app
+
+from sqlalchemy import true
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
@@ -48,6 +55,9 @@ ALLOWED_ACTION_TYPES = frozenset({
     ACTION_CREATE_MODULE_ASSESSMENT,
 })
 ALLOWED_PROPOSAL_STATUSES = frozenset({"pending", "executing", "confirmed", "dismissed", "failed"})
+I9_PRIORITY_AUTH_VERSION = "v1"
+I9_PRIORITY_AUTH_TTL_SECONDS = 60 * 60
+I9_PRIORITY_AUTH_MAX_TOKEN_CHARACTERS = 4_096
 
 
 class IntelligenceActionError(RuntimeError):
@@ -118,6 +128,125 @@ def _sanitize_evidence(value: Any, *, owner_id: int, project_id: int) -> list[di
             "freshness": _clean(raw.get("freshness"), 40) or "current",
         })
     return result
+
+
+def _priority_authorization_projection(priority: dict[str, Any]) -> dict[str, Any]:
+    """Canonical client-visible priority fields covered by the I9 signature.
+
+    UI-only fields such as ``actions`` and the authorization token itself are
+    deliberately excluded. Any field that can influence a persisted task/note
+    proposal is included, so editing a recommendation in DevTools invalidates
+    the envelope instead of silently changing what I9 will prepare.
+    """
+
+    evidence = priority.get("evidence") if isinstance(priority, dict) else None
+    return {
+        "project_id": priority.get("project_id"),
+        "project_title": priority.get("project_title"),
+        "category": priority.get("category"),
+        "severity": priority.get("severity"),
+        "title": priority.get("title"),
+        "reason": priority.get("reason"),
+        "recommended_action": priority.get("recommended_action"),
+        "evidence": evidence if isinstance(evidence, list) else [],
+    }
+
+
+def _priority_digest(priority: dict[str, Any]) -> str:
+    payload = json.dumps(
+        _priority_authorization_projection(priority),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _i9_signing_secret() -> bytes:
+    secret = current_app.config.get("SECRET_KEY")
+    if not secret:
+        raise IntelligenceActionValidationError("LifeOS action confirmation is not configured safely.")
+
+    # Key separation: I9 does not use the raw Flask session-signing key directly.
+    # Rotating SECRET_KEY still invalidates outstanding I9 authorizations, while
+    # this derivation keeps the two signing purposes cryptographically distinct.
+    return hmac.new(
+        str(secret).encode("utf-8"),
+        b"lifeos:i9:priority-authorization:v1",
+        hashlib.sha256,
+    ).digest()
+
+
+def issue_priority_action_authorization(*, priority: dict[str, Any], owner_id: int) -> str:
+    """Issue a short-lived, owner-bound authorization for one reviewed priority."""
+
+    try:
+        project_id = int(priority.get("project_id"))
+    except (TypeError, ValueError) as error:
+        raise IntelligenceActionValidationError("A valid project is required for this action.") from error
+    issued_at = int(time.time())
+    body = {
+        "v": I9_PRIORITY_AUTH_VERSION,
+        "uid": int(owner_id),
+        "pid": project_id,
+        "iat": issued_at,
+        "digest": _priority_digest(priority),
+    }
+    raw = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    signature = hmac.new(_i9_signing_secret(), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{encoded}.{signature}"
+
+
+def _decode_priority_authorization(token: str) -> dict[str, Any]:
+    raw_token = str(token or "")
+    if not raw_token or len(raw_token) > I9_PRIORITY_AUTH_MAX_TOKEN_CHARACTERS:
+        raise IntelligenceActionValidationError(
+            "This LifeOS suggestion is no longer trusted. Ask LifeOS to review the project again."
+        )
+    try:
+        encoded, signature = raw_token.split(".", 1)
+        expected = hmac.new(_i9_signing_secret(), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError("signature")
+        padded = encoded + "=" * (-len(encoded) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+    except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise IntelligenceActionValidationError(
+            "This LifeOS suggestion is no longer trusted. Ask LifeOS to review the project again."
+        ) from error
+    if not isinstance(payload, dict):
+        raise IntelligenceActionValidationError(
+            "This LifeOS suggestion is no longer trusted. Ask LifeOS to review the project again."
+        )
+    return payload
+
+
+def verify_priority_action_authorization(
+    *, priority: dict[str, Any], owner_id: int, token: str
+) -> None:
+    payload = _decode_priority_authorization(token)
+    try:
+        token_owner = int(payload.get("uid"))
+        token_project = int(payload.get("pid"))
+        priority_project = int(priority.get("project_id"))
+        issued_at = int(payload.get("iat"))
+    except (TypeError, ValueError) as error:
+        raise IntelligenceActionValidationError(
+            "This LifeOS suggestion is no longer trusted. Ask LifeOS to review the project again."
+        ) from error
+    age = int(time.time()) - issued_at
+    valid = (
+        payload.get("v") == I9_PRIORITY_AUTH_VERSION
+        and token_owner == int(owner_id)
+        and token_project == priority_project
+        and -30 <= age <= I9_PRIORITY_AUTH_TTL_SECONDS
+        and hmac.compare_digest(str(payload.get("digest") or ""), _priority_digest(priority))
+    )
+    if not valid:
+        raise IntelligenceActionValidationError(
+            "This LifeOS suggestion is no longer trusted. Ask LifeOS to review the project again."
+        )
 
 
 def priority_action_options(priority: dict[str, Any]) -> list[dict[str, str]]:
@@ -233,10 +362,17 @@ def create_priority_action_proposal(
     owner_id: int,
     action_type: str,
     priority: dict[str, Any],
+    require_signed_priority: bool = False,
 ) -> LifeOSActionProposal:
     action_type = str(action_type or "").strip()
     if action_type not in ALLOWED_ACTION_TYPES:
         raise IntelligenceActionValidationError("This LifeOS action is not supported.")
+    if require_signed_priority:
+        verify_priority_action_authorization(
+            priority=priority,
+            owner_id=owner_id,
+            token=str(priority.get("i9_authorization") or ""),
+        )
 
     try:
         project_id = int(priority.get("project_id"))
@@ -254,6 +390,32 @@ def create_priority_action_proposal(
         priority=priority,
         owner_id=owner_id,
     )
+    payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    evidence_json = json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    # A still-pending identical proposal is the same user decision, not a new
+    # write opportunity. Reuse it so replaying a valid short-lived authorization
+    # or double-clicking "prepare" cannot flood the DB with duplicate proposals.
+    pending_candidates = (
+        LifeOSActionProposal.query
+        .filter_by(
+            user_id=owner_id,
+            action_type=action_type,
+            status="pending",
+            project_id=project.id,
+            target_type=target_type,
+            target_id=target_id,
+            title=proposal_title,
+            requires_confirmation=True,
+        )
+        .order_by(LifeOSActionProposal.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    for existing in pending_candidates:
+        if existing.payload_json == payload_json and existing.evidence_json == evidence_json:
+            return existing
+
     proposal = LifeOSActionProposal(
         user_id=owner_id,
         action_type=action_type,
@@ -263,8 +425,8 @@ def create_priority_action_proposal(
         target_type=target_type,
         target_id=target_id,
         project_id=project.id,
-        payload_json=json.dumps(payload, ensure_ascii=False),
-        evidence_json=json.dumps(evidence, ensure_ascii=False),
+        payload_json=payload_json,
+        evidence_json=evidence_json,
         risk_level=risk,
         requires_confirmation=True,
     )
@@ -445,17 +607,49 @@ def confirm_owned_action_proposal(*, proposal_id: int, owner_id: int) -> LifeOSA
     proposal = require_owned_proposal(proposal_id=proposal_id, owner_id=owner_id)
     if proposal.status != "pending":
         raise IntelligenceActionValidationError("This action proposal is no longer waiting for confirmation.")
+    if proposal.action_type not in ALLOWED_ACTION_TYPES:
+        raise IntelligenceActionValidationError("This action proposal is not an approved LifeOS capability.")
+    if not bool(proposal.requires_confirmation):
+        raise IntelligenceActionValidationError("This action proposal does not satisfy the I9 confirmation contract.")
     _prevalidate_confirmable_action(proposal, owner_id)
 
-    # Persist the transition before executing.  Repeated/double-clicked confirm
-    # requests cannot execute the same proposal twice.
-    proposal.status = "executing"
-    proposal.failure_message = None
+    # Atomically claim the pending proposal. A read-then-write status transition
+    # is not enough under concurrent requests: two workers can both observe
+    # "pending" before either commits. This conditional UPDATE gives exactly one
+    # confirmer the right to execute, across workers and supported SQL databases.
     try:
+        claimed = (
+            LifeOSActionProposal.query
+            .filter(
+                LifeOSActionProposal.id == int(proposal_id),
+                LifeOSActionProposal.user_id == int(owner_id),
+                LifeOSActionProposal.status == "pending",
+                LifeOSActionProposal.requires_confirmation == true(),
+                LifeOSActionProposal.action_type == proposal.action_type,
+            )
+            .update(
+                {
+                    LifeOSActionProposal.status: "executing",
+                    LifeOSActionProposal.failure_message: None,
+                },
+                synchronize_session=False,
+            )
+        )
+        if claimed != 1:
+            db.session.rollback()
+            raise IntelligenceActionValidationError(
+                "This action proposal is no longer waiting for confirmation."
+            )
         db.session.commit()
+    except IntelligenceActionValidationError:
+        raise
     except SQLAlchemyError as error:
         db.session.rollback()
         raise IntelligenceActionExecutionError("LifeOS could not lock the action for execution.") from error
+
+    proposal = require_owned_proposal(proposal_id=proposal_id, owner_id=owner_id)
+    if proposal.status != "executing":
+        raise IntelligenceActionExecutionError("LifeOS could not establish the I9 execution lock.")
 
     try:
         resource_type, resource_id = _execute_confirmed_action(proposal, owner_id)

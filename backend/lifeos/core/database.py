@@ -20,6 +20,18 @@ load_dotenv()
 db = SQLAlchemy()
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_production() -> bool:
+    environment = os.getenv("LIFEOS_ENV") or os.getenv("APP_ENV") or "development"
+    return environment.strip().lower() == "production"
+
+
 def normalize_database_uri(value: str) -> str:
     """Normalize provider URLs to the psycopg 3 SQLAlchemy dialect."""
 
@@ -48,12 +60,24 @@ def _legacy_sql_server_uri() -> str:
     else:
         authentication = "Trusted_Connection=yes;"
 
+    # Encrypt SQL Server traffic in every environment. Local development keeps
+    # the legacy self-signed-certificate compatibility by default, while a
+    # production override verifies the server certificate unless explicitly
+    # configured otherwise. Production normally uses PostgreSQL and validates
+    # TLS separately in ``validate_config``.
+    encrypt = _env_bool("DB_ENCRYPT", True)
+    trust_server_certificate = _env_bool(
+        "DB_TRUST_SERVER_CERTIFICATE",
+        not _is_production(),
+    )
+
     connection_string = (
         f"DRIVER={{{driver}}};"
         f"SERVER={server};"
         f"DATABASE={database};"
         f"{authentication}"
-        "TrustServerCertificate=yes;"
+        f"Encrypt={'yes' if encrypt else 'no'};"
+        f"TrustServerCertificate={'yes' if trust_server_certificate else 'no'};"
     )
 
     return "mssql+pyodbc:///?odbc_connect=" + quote_plus(connection_string)

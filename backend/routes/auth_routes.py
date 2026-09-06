@@ -11,6 +11,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
@@ -68,6 +69,7 @@ def register():
         else:
             try:
                 user = create_user(registration)
+                session.clear()
                 login_user(user)
                 flash(
                     "Your LifeOS account was created successfully.",
@@ -116,6 +118,7 @@ def login():
                 "LifeOS could not claim legacy projects during login."
             )
 
+        session.clear()
         login_user(user, remember=remember)
         flash(f"Welcome back, {user.name}.", "success")
 
@@ -131,5 +134,6 @@ def login():
 @login_required
 def logout():
     logout_user()
+    session.clear()
     flash("You have been logged out.", "success")
     return redirect(url_for("landing"))

@@ -323,6 +323,7 @@ def create_action_proposal_route():
             owner_id=current_user.id,
             action_type=payload.get("action_type") or "",
             priority=priority,
+            require_signed_priority=True,
         )
     except IntelligenceActionValidationError as error:
         return validation_error(str(error))

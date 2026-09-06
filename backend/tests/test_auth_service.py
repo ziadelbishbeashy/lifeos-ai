@@ -77,3 +77,44 @@ def test_authenticate_user_checks_password(app):
         assert authenticated.id == account.id
         assert rejected is None
         assert User.query.count() == 1
+
+
+def test_ownerless_legacy_project_is_not_auto_claimed_when_security_flag_is_disabled(app):
+    with app.app_context():
+        app.config["ALLOW_LEGACY_PROJECT_AUTO_CLAIM"] = False
+        project = Project(title="Ownerless production-style project")
+        db.session.add(project)
+        db.session.commit()
+        project_id = project.id
+
+        account = create_user(_valid_registration("secure-owner@example.com"))
+
+        ownerless = db.session.get(Project, project_id)
+        assert account.id is not None
+        assert ownerless.user_id is None
+
+
+def test_authentication_rejects_unbounded_credentials(app):
+    with app.app_context():
+        create_user(_valid_registration())
+
+        assert authenticate_user("x" * 321, "StrongPass123!") is None
+        assert authenticate_user("student@example.com", "x" * 257) is None
+
+
+def test_registration_rejects_unbounded_identity_fields():
+    long_name = build_registration_input(
+        name="x" * 121,
+        email="student@example.com",
+        password="StrongPass123!",
+        confirm_password="StrongPass123!",
+    )
+    long_password = build_registration_input(
+        name="Test Student",
+        email="student@example.com",
+        password="x" * 257,
+        confirm_password="x" * 257,
+    )
+
+    assert "at most 120" in (validate_registration(long_name) or "")
+    assert "at most 256" in (validate_registration(long_password) or "")

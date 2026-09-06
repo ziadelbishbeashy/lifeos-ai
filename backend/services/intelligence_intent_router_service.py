@@ -291,6 +291,26 @@ def _classify_intent(text: str, *, project_resolved: bool) -> tuple[str, float]:
     ):
         return "project_review", 0.96 if project_resolved else 0.86
 
+    # Advice/problem-solving is intentionally distinct from factual project
+    # lookup.  The selected project supplies trusted workspace facts, but it
+    # must not turn Ask LifeOS into a context paraphraser.
+    project_advice_phrases = (
+        "how can i improve", "how should i improve", "how can we improve",
+        "what would you recommend", "what do you recommend", "recommend a",
+        "how can i fix", "how should i fix", "how do i fix",
+        "how can i solve", "how should i solve", "how do i solve",
+        "give me a solution", "give me solutions", "what is the best approach",
+        "what's the best approach", "better approach", "best way to",
+        "how can i simplify", "how should i simplify", "simplify this",
+        "what should i change", "what would you change", "what would you do",
+        "why am i falling behind", "why are we falling behind",
+        "why is this taking", "why is the project taking",
+        "help me decide", "tradeoff", "trade-off", "architecture advice",
+        "strategy", "how should i structure", "how can i structure",
+    )
+    if project_resolved and _has_any(text, project_advice_phrases):
+        return "project_advice", 0.97
+
     if _has_any(text, (
         "project deadline", "project priority", "project goal", "project phase",
         "project progress", "project status", "project start date",
@@ -322,7 +342,10 @@ def _classify_intent(text: str, *, project_resolved: bool) -> tuple[str, float]:
         return "knowledge_search", 0.75
 
     if project_resolved:
-        return "project_question", 0.72
+        # A selected/resolved project is a factual scope, not an instruction to
+        # merely restate project fields. Unknown project-scoped questions get
+        # the advisory reasoner; explicit fact questions above stay deterministic.
+        return "project_advice", 0.72
 
     return "general_conversation", 0.55
 
@@ -358,11 +381,11 @@ def route_intelligence_request(*, query: str, owner_id: int, continuation_intent
     }
     if continuation in {
         "project_review", "project_focus", "recent_activity", "task_status", "deadline_review",
-        "document_review", "workspace_gaps", "project_question", "today_focus",
+        "document_review", "workspace_gaps", "project_question", "project_advice", "today_focus",
     } and all_project_reply:
         portfolio_intent = (
             "portfolio_focus" if continuation == "project_focus"
-            else "portfolio_review" if continuation in {"project_review", "project_question"}
+            else "portfolio_review" if continuation in {"project_review", "project_question", "project_advice"}
             else continuation
         )
         return IntelligenceRouteDecision(
@@ -398,11 +421,11 @@ def route_intelligence_request(*, query: str, owner_id: int, continuation_intent
     )
     if continuation in {
         "project_review", "project_focus", "recent_activity", "task_status", "deadline_review",
-        "document_review", "workspace_gaps", "project_question", "today_focus",
+        "document_review", "workspace_gaps", "project_question", "project_advice", "today_focus",
     } and resolved is not None:
         intent, confidence = continuation, 0.98
 
-    project_required = intent in {"project_review", "project_focus", "project_question"}
+    project_required = intent in {"project_review", "project_focus", "project_question", "project_advice"}
     project_word_present = "project" in normalized_query
     explicit_all_projects = _has_any(
         normalized_query,
@@ -436,7 +459,7 @@ def route_intelligence_request(*, query: str, owner_id: int, continuation_intent
     elif intent in {
         "portfolio_review", "portfolio_focus", "recent_activity", "task_status",
         "deadline_review", "document_review", "workspace_gaps", "study_next",
-        "today_focus", "project_question", "memory_query", "memory_candidate",
+        "today_focus", "project_question", "project_advice", "memory_query", "memory_candidate",
     }:
         status = "ready"
     else:
@@ -446,7 +469,7 @@ def route_intelligence_request(*, query: str, owner_id: int, continuation_intent
         intent in {"portfolio_review", "portfolio_focus"}
         or (intent == "recent_activity" and (activity_all_projects or (continuation == "recent_activity" and all_project_reply)))
         or (
-            intent in {"task_status", "deadline_review", "document_review", "workspace_gaps", "project_question"}
+            intent in {"task_status", "deadline_review", "document_review", "workspace_gaps", "project_question", "project_advice"}
             and continuation == intent
             and all_project_reply
         )

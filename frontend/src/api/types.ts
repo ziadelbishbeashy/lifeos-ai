@@ -281,6 +281,7 @@ export type TodayPriority = {
   reason: string;
   recommended_action: string;
   actions: IntelligenceActionOption[];
+  i9_authorization?: string;
   evidence: Array<{
     source_type: string;
     source_id: number | null;

@@ -13,7 +13,10 @@ from datetime import date
 from typing import Any
 
 from services.intelligence_context_service import ContextEvidence
-from services.intelligence_action_service import priority_action_options
+from services.intelligence_action_service import (
+    issue_priority_action_authorization,
+    priority_action_options,
+)
 from services.project_review_agent_service import AgentPriority, run_owned_portfolio_review_agent
 
 
@@ -44,8 +47,8 @@ class TodayPriority:
             evidence=item.evidence,
         )
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
+    def to_dict(self, *, owner_id: int) -> dict[str, Any]:
+        payload = {
             "project_id": self.project_id,
             "project_title": self.project_title,
             "category": self.category,
@@ -68,10 +71,15 @@ class TodayPriority:
                 for item in self.evidence
             ],
         }
+        payload["i9_authorization"] = issue_priority_action_authorization(
+            priority=payload, owner_id=int(owner_id)
+        )
+        return payload
 
 
 @dataclass(frozen=True)
 class TodayIntelligenceResult:
+    owner_id: int
     today: date
     attention_level: str
     summary: str
@@ -85,7 +93,7 @@ class TodayIntelligenceResult:
             "today": self.today.isoformat(),
             "attention_level": self.attention_level,
             "summary": self.summary,
-            "priorities": [item.to_dict() for item in self.priorities],
+            "priorities": [item.to_dict(owner_id=self.owner_id) for item in self.priorities],
             "counts": {
                 "total_owned_projects": self.total_owned_projects,
                 "reviewed_projects": self.reviewed_projects,
@@ -131,6 +139,7 @@ def build_owned_today_intelligence(*, owner_id: int, today: date | None = None) 
     )
 
     return TodayIntelligenceResult(
+        owner_id=int(owner_id),
         today=effective_today,
         attention_level=portfolio.attention_level,
         summary=_summary(

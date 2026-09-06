@@ -5,6 +5,9 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from sqlalchemy.engine import make_url
 
 from dotenv import load_dotenv
 
@@ -30,6 +33,11 @@ def env_int(name: str, default: int, minimum: int | None = None) -> int:
     if minimum is not None:
         value = max(minimum, value)
     return value
+
+
+def env_csv(name: str) -> tuple[str, ...]:
+    value = os.getenv(name, "")
+    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 def env_float(
@@ -63,6 +71,7 @@ class BaseConfig:
     REMEMBER_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_NAME = "lifeos_session"
     PERMANENT_SESSION_LIFETIME = timedelta(days=14)
+    REMEMBER_COOKIE_DURATION = timedelta(days=env_int("REMEMBER_COOKIE_DAYS", 14, minimum=1))
 
     WTF_CSRF_ENABLED = True
     WTF_CSRF_CHECK_DEFAULT = True
@@ -70,6 +79,7 @@ class BaseConfig:
     WTF_CSRF_SSL_STRICT = True
 
     MAX_CONTENT_LENGTH = env_int("MAX_UPLOAD_SIZE_MB", 25, minimum=1) * 1024 * 1024
+    MAX_API_JSON_BYTES = env_int("MAX_API_JSON_KB", 256, minimum=16) * 1024
 
     # Step 20 — predictable resource and provider-cost boundaries.
     MAX_PDF_PAGES = env_int("MAX_PDF_PAGES", 300, minimum=1)
@@ -143,15 +153,33 @@ class BaseConfig:
         "EMAIL_SCHEDULER_INTERVAL_MINUTES", 60, minimum=1
     )
     PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:5000")
+    ALLOWED_HOSTS = env_csv("ALLOWED_HOSTS")
+    # Exact browser origins that a trusted local/reverse proxy may preserve while
+    # forwarding requests to Flask. This does not enable CORS and does not bypass
+    # Fetch Metadata or CSRF checks.
+    TRUSTED_API_ORIGINS = env_csv("TRUSTED_API_ORIGINS")
     TRUST_PROXY_HEADERS = env_bool("TRUST_PROXY_HEADERS", False)
     MAIL_TIMEOUT_SECONDS = env_int("MAIL_TIMEOUT_SECONDS", 20, minimum=1)
     REQUIRE_POSTGRES_IN_PRODUCTION = env_bool(
         "REQUIRE_POSTGRES_IN_PRODUCTION", True
     )
+    REQUIRE_DATABASE_TLS_IN_PRODUCTION = env_bool(
+        "REQUIRE_DATABASE_TLS_IN_PRODUCTION", True
+    )
+    ALLOW_LEGACY_PROJECT_AUTO_CLAIM = env_bool(
+        "ALLOW_LEGACY_PROJECT_AUTO_CLAIM", True
+    )
 
 
 class DevelopmentConfig(BaseConfig):
     ENV_NAME = "development"
+    # Vite serves React on :5173 and proxies /api to Flask on :5000. The browser
+    # Origin is preserved by the proxy, so explicitly trust only the two standard
+    # local development origins unless the developer overrides the env setting.
+    TRUSTED_API_ORIGINS = env_csv("TRUSTED_API_ORIGINS") or (
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    )
     DEBUG = env_bool("FLASK_DEBUG", False)
     TEMPLATES_AUTO_RELOAD = True
     AUTO_CREATE_DB = env_bool("AUTO_CREATE_DB", True)
@@ -184,7 +212,8 @@ class ProductionConfig(BaseConfig):
     TEMPLATES_AUTO_RELOAD = False
     ENABLE_EMAIL_SCHEDULER = False
     AUTO_CREATE_DB = False
-    TRUST_PROXY_HEADERS = True
+    TRUST_PROXY_HEADERS = env_bool("TRUST_PROXY_HEADERS", False)
+    ALLOW_LEGACY_PROJECT_AUTO_CLAIM = False
     PREFERRED_URL_SCHEME = "https"
 
 
@@ -204,6 +233,29 @@ def get_config_name() -> str:
     return requested if requested in CONFIG_BY_NAME else "development"
 
 
+def _database_transport_is_secure(database_uri: str) -> bool:
+    """Conservatively verify encrypted DB transport without exposing credentials."""
+
+    try:
+        url = make_url(database_uri)
+    except Exception:
+        return False
+
+    driver = str(url.drivername or "").casefold()
+    if driver.startswith("postgresql"):
+        sslmode = str(url.query.get("sslmode") or "").casefold()
+        return sslmode in {"require", "verify-ca", "verify-full"}
+
+    if driver.startswith("mssql"):
+        odbc_connect = str(url.query.get("odbc_connect") or "").casefold().replace(" ", "")
+        encrypted = "encrypt=yes" in odbc_connect or "encrypt=mandatory" in odbc_connect or "encrypt=strict" in odbc_connect
+        verifies_certificate = "trustservercertificate=no" in odbc_connect
+        return encrypted and verifies_certificate
+
+    # SQLite/other local-only transports are not accepted as production DBs.
+    return False
+
+
 def validate_config(app) -> None:
     if app.config.get("TESTING"):
         return
@@ -220,6 +272,36 @@ def validate_config(app) -> None:
             "Production requires a strong SECRET_KEY of at least 32 characters."
         )
 
+    if app.config.get("DEBUG"):
+        raise RuntimeError("Production must run with DEBUG disabled.")
+    if app.config.get("AUTO_CREATE_DB"):
+        raise RuntimeError("Production must use reviewed migrations; AUTO_CREATE_DB must be false.")
+    if not app.config.get("WTF_CSRF_ENABLED"):
+        raise RuntimeError("Production requires CSRF protection.")
+    if not app.config.get("SESSION_COOKIE_SECURE") or not app.config.get("REMEMBER_COOKIE_SECURE"):
+        raise RuntimeError("Production authentication cookies must be HTTPS-only.")
+
+    public_base_url = str(app.config.get("PUBLIC_BASE_URL") or "").strip()
+    parsed_public_url = urlsplit(public_base_url)
+    if parsed_public_url.scheme != "https" or not parsed_public_url.hostname:
+        raise RuntimeError("Production PUBLIC_BASE_URL must be a valid HTTPS URL.")
+
+    for trusted_origin in app.config.get("TRUSTED_API_ORIGINS") or ():
+        parsed_origin = urlsplit(str(trusted_origin or "").strip())
+        if (
+            parsed_origin.scheme != "https"
+            or not parsed_origin.hostname
+            or parsed_origin.username is not None
+            or parsed_origin.password is not None
+            or parsed_origin.path not in {"", "/"}
+            or parsed_origin.query
+            or parsed_origin.fragment
+        ):
+            raise RuntimeError(
+                "Production TRUSTED_API_ORIGINS entries must be exact HTTPS origins "
+                "without credentials, paths, queries, or fragments."
+            )
+
     database_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
     if not database_uri:
         raise RuntimeError("Production requires a database connection string.")
@@ -232,3 +314,14 @@ def validate_config(app) -> None:
             "a PostgreSQL/Neon connection string, or explicitly disable "
             "REQUIRE_POSTGRES_IN_PRODUCTION during the temporary migration window."
         )
+
+    if (
+        app.config.get("REQUIRE_DATABASE_TLS_IN_PRODUCTION")
+        and not _database_transport_is_secure(database_uri)
+    ):
+        raise RuntimeError(
+            "Production database transport must use encrypted TLS. For PostgreSQL use "
+            "sslmode=require/verify-ca/verify-full. For temporary SQL Server use Encrypt=yes "
+            "with TrustServerCertificate=no."
+        )
+

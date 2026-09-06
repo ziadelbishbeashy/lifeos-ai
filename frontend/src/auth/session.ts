@@ -19,7 +19,9 @@ export async function login(input: {
   remember: boolean;
 }) {
   resetCsrfToken();
-  return apiPost<SessionState>("/api/v1/auth/login", input);
+  const result = await apiPost<SessionState>("/api/v1/auth/login", input);
+  resetCsrfToken();
+  return result;
 }
 
 export async function register(input: {
@@ -30,7 +32,9 @@ export async function register(input: {
   primary_experience: string;
 }) {
   resetCsrfToken();
-  return apiPost<SessionState>("/api/v1/auth/register", input);
+  const result = await apiPost<SessionState>("/api/v1/auth/register", input);
+  resetCsrfToken();
+  return result;
 }
 
 export async function logout() {

@@ -102,6 +102,7 @@ type AgentPriority = {
   recommended_action: string;
   evidence?: AgentEvidence[];
   actions?: ActionOption[];
+  i9_authorization?: string;
 };
 
 type AskAgent = {

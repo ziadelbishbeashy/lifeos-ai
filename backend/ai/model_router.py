@@ -36,6 +36,7 @@ _MODEL_TIER_ALIASES: Final[dict[str, str]] = {
 # weakens the verification boundary.
 _USER_SELECTABLE_EXACT: Final[frozenset[str]] = frozenset({
     "ask_lifeos_reasoner",
+    "ask_lifeos_advisor",
     "agent_reasoning",
 })
 _USER_SELECTABLE_PREFIXES: Final[tuple[str, ...]] = (
@@ -58,6 +59,7 @@ _FEATURE_TIER_EXACT: Final[dict[str, str]] = {
     "document_comparison_verifier": TIER_NORMAL,
     "ask_lifeos_claim_verifier": TIER_NORMAL,
     "ask_lifeos_reasoner": TIER_NORMAL,
+    "ask_lifeos_advisor": TIER_NORMAL,
     "academic_schedule_extraction": TIER_NORMAL,
     # Complex I19 goal reasoning gets the DEEP tier. Today DEEP can still map to
     # the same Gemini model; later deployment can point it at GPT-5 or equivalent.

@@ -7,7 +7,7 @@ small so feature routes do not become another monolith.
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, current_app, jsonify, session
 from flask_login import current_user, login_user, logout_user
 from flask_wtf.csrf import generate_csrf
 from sqlalchemy.exc import SQLAlchemyError
@@ -127,6 +127,7 @@ def login():
             "LifeOS could not claim legacy projects during API login."
         )
 
+    session.clear()
     login_user(user, remember=remember)
 
     return jsonify(
@@ -198,6 +199,7 @@ def register():
             # The account remains usable; onboarding will retry this preference.
             current_app.logger.exception("LifeOS could not save the registration experience profile.")
 
+    session.clear()
     login_user(user)
 
     return jsonify(
@@ -212,6 +214,7 @@ def register():
 @api_auth_required
 def logout():
     logout_user()
+    session.clear()
     return jsonify({"authenticated": False, "user": None})
 
 
