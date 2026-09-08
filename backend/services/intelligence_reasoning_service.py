@@ -292,6 +292,13 @@ def _review_for_prompt(review: ProjectReviewResult) -> dict[str, Any]:
 
 _ADVISORY_FOCUS_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
+        "deployment",
+        (
+            "deploy", "deployment", "production", "production ready", "release",
+            "launch", "go live", "ship", "hosting", "rollback", "staging",
+        ),
+    ),
+    (
         "technical",
         (
             "architecture", "backend", "frontend", "database", "api", "code", "implementation",
@@ -330,6 +337,13 @@ _ADVISORY_FOCUS_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 _ADVISORY_FOCUS_BLOCKS: dict[str, str] = {
+    "deployment": """DEPLOYMENT / RELEASE FOCUS:
+- Answer the release question directly. Do not turn deployment planning into a project-status recap.
+- Build an ordered release path: minimum release scope -> prerequisites/blockers -> production configuration -> staging validation -> launch -> rollback/monitoring.
+- Consider database migrations/backups, secrets and authentication, HTTPS/origin controls, persistent storage, background jobs, rate limits/cost controls, observability, smoke tests, and rollback only when relevant to the user's actual project.
+- Never assume a hosting provider, database, deployment platform, or completed readiness step unless trusted LifeOS context explicitly supports it.
+- Separate confirmed workspace blockers from general release best practices. General best practices are recommendations, not stored LifeOS facts.
+- End with the smallest practical next action that moves the project toward a safe deployment.""",
     "technical": """TECHNICAL / ARCHITECTURE FOCUS:
 - Act like an experienced engineer or architect, not a project-status reporter.
 - Evaluate the current approach instead of assuming it is correct.

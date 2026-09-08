@@ -199,3 +199,35 @@ def test_unlisted_proxy_origin_is_still_rejected():
     )
 
     assert response.status_code == 403
+
+
+def test_allowed_hosts_accepts_host_with_port_without_request_hostname_attribute():
+    app = create_app(
+        "testing",
+        {
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "WTF_CSRF_ENABLED": False,
+            "ALLOWED_HOSTS": ("127.0.0.1", "localhost"),
+        },
+    )
+    client = app.test_client()
+
+    response = client.get("/health", headers={"Host": "127.0.0.1:5000"})
+
+    assert response.status_code == 200
+
+
+def test_allowed_hosts_still_rejects_unlisted_host():
+    app = create_app(
+        "testing",
+        {
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "WTF_CSRF_ENABLED": False,
+            "ALLOWED_HOSTS": ("127.0.0.1", "localhost"),
+        },
+    )
+    client = app.test_client()
+
+    response = client.get("/health", headers={"Host": "evil.example:5000"})
+
+    assert response.status_code == 403

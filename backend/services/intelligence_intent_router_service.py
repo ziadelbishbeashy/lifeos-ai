@@ -307,6 +307,10 @@ def _classify_intent(text: str, *, project_resolved: bool) -> tuple[str, float]:
         "why is this taking", "why is the project taking",
         "help me decide", "tradeoff", "trade-off", "architecture advice",
         "strategy", "how should i structure", "how can i structure",
+        "what should i do to deploy", "how should i deploy", "how do i deploy",
+        "how can i deploy", "deploy this project", "deploy the project",
+        "prepare for production", "production ready", "release this project",
+        "launch this project", "go live", "release plan", "deployment plan",
     )
     if project_resolved and _has_any(text, project_advice_phrases):
         return "project_advice", 0.97

@@ -185,6 +185,59 @@ def build_deterministic_project_answer(review: ProjectReviewResult) -> str:
     return "".join((opening, task_text, document_text, attention, recommendation)).strip()
 
 
+_DEPLOYMENT_ADVICE_MARKERS = (
+    "deploy",
+    "deployment",
+    "production",
+    "release",
+    "launch",
+    "go live",
+    "ship",
+    "hosting",
+)
+
+
+def _looks_like_deployment_advice(query: str) -> bool:
+    text = " ".join(str(query or "").casefold().split())
+    return any(marker in text for marker in _DEPLOYMENT_ADVICE_MARKERS)
+
+
+def build_query_aware_project_fallback(
+    *,
+    query: str,
+    review: ProjectReviewResult,
+    advisory: bool,
+) -> str:
+    """Keep fail-closed answers relevant to the user's request.
+
+    The verifier boundary remains unchanged: unverified model prose is never shown.
+    For deployment/release advice, however, falling back to a generic project recap
+    is misleading.  Use a deterministic, code-authored release playbook plus only
+    verified attention signals from the current project state.
+    """
+
+    if not advisory or not _looks_like_deployment_advice(query):
+        return build_deterministic_project_answer(review)
+
+    facts = _fact_lookup(review)
+    title = str(facts.get("project.title") or review.project.get("title") or "this project")
+    attention = [item.title for item in review.signals[:3] if str(item.title or "").strip()]
+
+    answer = (
+        f"To move {title} toward deployment, use a release path rather than working through every saved task equally. "
+        "First freeze the minimum release scope. Then verify the production-critical path: database schema/migrations and backup/restore, "
+        "production secrets/authentication and HTTPS/origin controls, persistent storage and background jobs, rate limits/cost controls and observability, "
+        "then a staging smoke test before the production rollout. Finish with a rollback plan and post-deploy monitoring."
+    )
+    if attention:
+        answer += " Trusted LifeOS state currently flags these items for review before release: " + "; ".join(attention) + "."
+    answer += (
+        " This is a deterministic safety fallback because the AI reasoning response could not be fully verified; "
+        "the release sequence is general guidance, while the named project items above come only from trusted LifeOS state."
+    )
+    return answer
+
+
 def _fallback_verification(reason: str) -> dict[str, Any]:
     return {
         "status": "trusted_fallback",
@@ -837,7 +890,11 @@ def ask_lifeos(
     # request and guarantees the reasoner/reviewer see the same snapshot.
     context = collect_owned_project_context(project_id=route.scope_id, owner_id=owner_id)
     review = review_project_context(context=context)
-    fallback = build_deterministic_project_answer(review)
+    fallback = build_query_aware_project_fallback(
+        query=query,
+        review=review,
+        advisory=(route.intent == "project_advice"),
+    )
 
     try:
         reasoner = reason_about_project_advice if route.intent == "project_advice" else reason_about_project_review

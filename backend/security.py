@@ -39,13 +39,41 @@ def _configured_allowed_hosts() -> set[str]:
     return hosts
 
 
+def _request_hostname() -> str | None:
+    """Return a normalized hostname from Flask's supported ``request.host`` API.
+
+    Flask exposes ``request.host`` (optionally including a port), not a
+    ``request.hostname`` attribute.  Parsing through ``urlsplit`` also gives us
+    correct IPv6 handling and lets malformed/userinfo-style Host values fail
+    closed instead of being compared as trusted hosts.
+    """
+
+    raw_host = str(request.host or "").strip()
+    if not raw_host:
+        return None
+
+    try:
+        parsed = urlsplit(f"//{raw_host}")
+    except ValueError:
+        return None
+
+    if parsed.username is not None or parsed.password is not None:
+        return None
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        return None
+    if not parsed.hostname:
+        return None
+
+    return parsed.hostname.casefold().rstrip(".")
+
+
 def _host_is_allowed() -> bool:
     allowed = _configured_allowed_hosts()
     if not allowed:
         # Development/test environments may intentionally have no fixed host.
         return current_app.config.get("ENV_NAME") != "production"
 
-    hostname = str(request.hostname or "").casefold().rstrip(".")
+    hostname = _request_hostname()
     return bool(hostname and hostname in allowed)
 
 

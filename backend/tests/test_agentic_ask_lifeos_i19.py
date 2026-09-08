@@ -224,3 +224,8 @@ def test_i19_explicit_project_does_not_turn_simple_project_question_into_goal(ap
         )
         assert result.response_mode != "goal_plan"
         assert result.status != "goal_plan_ready"
+
+
+def test_i19_keeps_short_deployment_advice_direct_but_goal_shaped_release_request_agentic():
+    assert _looks_like_goal_request("What should I do to deploy this project?") is False
+    assert _looks_like_goal_request("Help me get this project ready for deployment.") is True

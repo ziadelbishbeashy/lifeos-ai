@@ -339,3 +339,84 @@ def test_i9_reuses_identical_pending_proposal_instead_of_accepting_replay(app, u
             project_id=project.id,
             status="pending",
         ).count() == 1
+
+
+def test_deployment_question_routes_as_project_advice_and_gets_deployment_focus(app, user):
+    from services.intelligence_intent_router_service import route_intelligence_request
+    from services.intelligence_reasoning_service import _build_reasoning_prompt
+    from services.intelligence_context_service import collect_owned_project_context
+    from services.project_review_intelligence_service import review_project_context
+
+    with app.app_context():
+        project = _project(user)
+        route = route_intelligence_request(
+            query="What should I do to deploy this project?",
+            owner_id=user,
+            forced_project_id=project.id,
+        )
+        assert route.intent == "project_advice"
+
+        context = collect_owned_project_context(project_id=project.id, owner_id=user)
+        review = review_project_context(context=context)
+        prompt = _build_reasoning_prompt(
+            query="What should I do to deploy this project?",
+            context=context,
+            review=review,
+            mode="advisory",
+        ).lower()
+        assert "deployment / release focus" in prompt
+        assert "do not turn deployment planning into a project-status recap" in prompt
+        assert "smallest practical next action" in prompt
+
+
+def test_deployment_verifier_failure_returns_relevant_trusted_fallback(app, user, monkeypatch):
+    from services.intelligence_ask_service import ask_lifeos
+
+    with app.app_context():
+        project = _project(user)
+        db.session.add(Task(user_id=user, project_id=project.id, title="Production smoke test", status="Pending"))
+        db.session.commit()
+
+        advisory_json = json.dumps(
+            {
+                "answer": "Use a staged release path.",
+                "factual_claims": [],
+                "inferences": [],
+                "recommendations": [
+                    {
+                        "text": "Use a staged release path.",
+                        "supporting_fact_keys": [],
+                        "supporting_signal_titles": [],
+                    }
+                ],
+            }
+        )
+        monkeypatch.setattr("services.intelligence_reasoning_service.get_ai_configuration", _provider_config)
+        monkeypatch.setattr("services.intelligence_claim_verifier_service.get_ai_configuration", _provider_config)
+        monkeypatch.setattr(
+            "services.intelligence_reasoning_service.route_ai_text",
+            lambda **_kwargs: advisory_json,
+        )
+        monkeypatch.setattr(
+            "services.intelligence_claim_verifier_service.route_ai_text",
+            lambda **_kwargs: json.dumps({"verified": False, "issues": ["unsupported workspace claim"]}),
+        )
+
+        result = ask_lifeos(
+            query="What should I do to deploy this project?",
+            owner_id=user,
+            selected_context={"type": "project", "id": project.id},
+        )
+        assert result.response_mode == "deterministic_fallback"
+        answer = (result.answer or "").lower()
+        assert "minimum release scope" in answer
+        assert "staging smoke test" in answer
+        assert "rollback plan" in answer
+        assert "saved project progress" not in answer
+
+
+def test_short_deployment_advice_does_not_force_i19_goal_plan():
+    from services.intelligence_ask_service import _looks_like_goal_request
+
+    assert _looks_like_goal_request("What should I do to deploy this project?") is False
+    assert _looks_like_goal_request("Help me get this project ready for deployment") is True
