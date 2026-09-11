@@ -150,6 +150,16 @@ def run_migrations_online() -> None:
     try:
         with connectable.connect() as connection:
             _guard_fresh_postgres(connection)
+
+            # SQLAlchemy 2.x autobegins a transaction for the metadata query
+            # performed by _guard_fresh_postgres(). If we leave that implicit
+            # read transaction open, Alembic can run its upgrade inside it and
+            # the connection close will roll the whole migration back. End the
+            # guard transaction explicitly so context.begin_transaction() below
+            # owns the real migration transaction and commits it normally.
+            if connection.in_transaction():
+                connection.rollback()
+
             context.configure(
                 connection=connection,
                 target_metadata=target_metadata,

@@ -43,6 +43,7 @@ from services.agent_runtime_service import (
     _goal_summary,
     _json_safe,
     _knowledge_result_is_direct,
+    _provider_call_cost_for_tool,
     _save_run,
     _trusted_fallback_answer,
 )
@@ -196,6 +197,10 @@ def _execute_tool_node(context: _RuntimeContext, state: _SafeGraphState) -> _Saf
 
     step = plan.steps[index]
     step_started = time.monotonic()
+    tool_provider_cost = _provider_call_cost_for_tool(step.tool_name)
+    if provider_calls + tool_provider_cost > AGENT_LIMITS["max_provider_calls"]:
+        context.failure_message = "The agent reached its AI-call limit before executing the next tool."
+        return {"phase": "failed", "failed": True, "failure_code": "provider_limit"}
     try:
         # The existing registry performs contract/ownership checks. The graph
         # hard-codes allow_mutation=False and never accepts model-selected tools.
@@ -207,10 +212,8 @@ def _execute_tool_node(context: _RuntimeContext, state: _SafeGraphState) -> _Saf
         )
         tool_calls += 1
         context.tool_calls = tool_calls
-        if step.tool_name == "knowledge.ask_context":
-            # Preserve the conservative budget accounting of the legacy runtime.
-            provider_calls += 2
-            context.provider_calls = provider_calls
+        provider_calls += tool_provider_cost
+        context.provider_calls = provider_calls
         context.observations[step.step_id] = result.data
         context.trace.append({
             "index": index + 1,

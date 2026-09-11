@@ -28,6 +28,7 @@ const expected = [
   "./ux-refresh.css",
   "./document-brain.css",
   "./modules-v1.css",
+  "./smart-planner.css",
 ];
 
 const source = fs.readFileSync(entry, "utf8");

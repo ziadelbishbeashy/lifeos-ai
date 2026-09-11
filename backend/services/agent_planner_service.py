@@ -100,6 +100,16 @@ def _scope_from_context(option: AskContextOption | None) -> AgentScope:
     )
 
 
+def _needs_public_web(goal: str) -> bool:
+    text = " ".join(str(goal or "").casefold().split())
+    markers = (
+        "search the web", "search online", "browse", "look up", "latest", "current price",
+        "current pricing", "today", "recent", "official docs", "official documentation",
+        "release notes", "current version", "up to date", "up-to-date",
+    )
+    return any(marker in text for marker in markers)
+
+
 def _append_step(
     steps: list[AgentPlanStep],
     *,
@@ -229,6 +239,16 @@ def plan_owned_agent_goal(
         )
     else:
         raise AgentPlannerError("This LifeOS context is not supported by the Agent yet.")
+
+    if _needs_public_web(cleaned_goal):
+        _append_step(
+            steps,
+            registry=active_registry,
+            step_id="public_web_research",
+            tool_name="public.web_search",
+            arguments={"query": cleaned_goal},
+            purpose="Research current public information relevant to the user-authored goal without exposing private LifeOS context.",
+        )
 
     if not steps:
         raise AgentPlannerError("LifeOS could not build a safe read-only plan for this goal.")

@@ -23,6 +23,7 @@ import { NotesPage } from "./pages/NotesPage";
 import { NotificationHistoryPage, NotificationSettingsPage } from "./pages/NotificationsPage";
 import { ProjectDetailsPage } from "./pages/ProjectDetailsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { SmartPlannerPage } from "./pages/SmartPlannerPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { TasksPage } from "./pages/TasksPage";
 
@@ -80,6 +81,7 @@ export function App() {
   }
 
   if (path === "/tasks") return <PrivateArea active="tasks"><TasksPage /></PrivateArea>;
+  if (path === "/planner") return <PrivateArea active="planner"><SmartPlannerPage /></PrivateArea>;
   if (/^\/tasks\/\d+\/edit$/.test(path)) {
     navigate("/tasks", true);
     return null;

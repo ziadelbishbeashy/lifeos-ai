@@ -14,7 +14,7 @@ from typing import Callable
 
 from ai.model_router import ModelRoute, resolve_model_route
 from ai.providers import GeminiProvider, OpenAIProvider, ProviderRequestError
-from ai.providers.base import ProviderGeneration, ProviderUsage
+from ai.providers.base import ProviderGeneration, ProviderUsage, ProviderWebGeneration
 from services.ai_pricing_service import UsageCost, calculate_usage_cost
 from services.ai_usage_service import record_generation_usage
 from services.langsmith_observability_service import trace_generation_call
@@ -127,6 +127,15 @@ def _normalize_generation(value) -> ProviderGeneration:
     return ProviderGeneration(text=str(value or "").strip(), usage=ProviderUsage())
 
 
+
+def _normalize_web_generation(value) -> ProviderWebGeneration:
+    if isinstance(value, ProviderWebGeneration):
+        return value
+    if isinstance(value, ProviderGeneration):
+        return ProviderWebGeneration(text=value.text, usage=value.usage)
+    return ProviderWebGeneration(text=str(value or "").strip(), usage=ProviderUsage())
+
+
 def _record_attempt(
     *,
     config: ProviderConfig,
@@ -161,6 +170,7 @@ def _execute(
     *,
     feature: str,
     model_route: ModelRoute | None = None,
+    json_mode: bool = False,
 ) -> str:
     try:
         call_index = guard_generation_request(
@@ -184,7 +194,11 @@ def _execute(
             requested_model=model_route.requested_model if model_route else None,
             model_tier_source=model_route.tier_source if model_route else None,
             provider_call=lambda: _normalize_generation(
-                provider.generate_text(model=config.model, prompt=prompt)
+                (
+                    getattr(provider, "generate_json_text")(model=config.model, prompt=prompt)
+                    if json_mode and callable(getattr(provider, "generate_json_text", None))
+                    else provider.generate_text(model=config.model, prompt=prompt)
+                )
             ),
         )
         generation = traced.generation
@@ -243,12 +257,15 @@ def generate_text(
     prompt: str,
     empty_message: str,
     feature: str = "unknown",
+    json_mode: bool = False,
 ) -> str:
     """Generate through the requested provider and optional configured fallback.
 
     ``feature`` is used by the deterministic model router to select a configured
     CHEAP/NORMAL/DEEP model tier and is also recorded as observability metadata.
-    The API key is never logged or included in errors.
+    ``json_mode`` asks official adapters for provider-native JSON output while
+    preserving the same usage/cost/fallback accounting path. The API key is never
+    logged or included in errors.
     """
 
     primary = ProviderConfig(
@@ -278,6 +295,7 @@ def generate_text(
             prompt,
             feature=safe_feature,
             model_route=primary_route,
+            json_mode=json_mode,
         )
         if not result:
             raise AIProviderRouterError(empty_message)
@@ -306,6 +324,7 @@ def generate_text(
                 prompt,
                 feature=safe_feature,
                 model_route=fallback_route,
+                json_mode=json_mode,
             )
             if not result:
                 raise AIProviderRouterError(empty_message)
@@ -315,3 +334,157 @@ def generate_text(
                 f"Primary provider failed: {primary_error} "
                 f"Fallback provider failed: {fallback_error}"
             ) from fallback_error
+
+def _execute_web(
+    config: ProviderConfig,
+    prompt: str,
+    *,
+    feature: str,
+    model_route: ModelRoute | None = None,
+) -> ProviderWebGeneration:
+    """Run one provider-hosted, read-only web-research generation."""
+
+    try:
+        call_index = guard_generation_request(
+            provider=config.name,
+            model=config.model,
+            prompt=prompt,
+        )
+    except ResourceLimitError as error:
+        raise AIProviderBudgetError(str(error)) from error
+
+    factory = _PROVIDER_FACTORIES[config.name]
+    provider = factory(config.api_key)
+    started = time.perf_counter()
+    try:
+        traced = trace_generation_call(
+            provider=config.name,
+            model=config.model,
+            feature=feature,
+            prompt_characters=len(str(prompt or "")),
+            model_tier=model_route.tier if model_route else None,
+            requested_model=model_route.requested_model if model_route else None,
+            model_tier_source=model_route.tier_source if model_route else None,
+            provider_call=lambda: _normalize_web_generation(
+                provider.generate_web_research(model=config.model, prompt=prompt)
+            ),
+        )
+        generation = traced.generation
+    except ProviderRequestError as error:
+        latency_ms = round((time.perf_counter() - started) * 1000)
+        _record_attempt(
+            config=config,
+            feature=feature,
+            prompt=prompt,
+            call_index=call_index,
+            usage=ProviderUsage(),
+            latency_ms=latency_ms,
+            success=False,
+            error_category=type(error).__name__,
+        )
+        raise AIProviderRouterError(friendly_provider_error(config.name, error)) from error
+    except Exception as error:
+        latency_ms = round((time.perf_counter() - started) * 1000)
+        _record_attempt(
+            config=config,
+            feature=feature,
+            prompt=prompt,
+            call_index=call_index,
+            usage=ProviderUsage(),
+            latency_ms=latency_ms,
+            success=False,
+            error_category=type(error).__name__,
+        )
+        raise AIProviderRouterError(friendly_provider_error(config.name, error)) from error
+
+    latency_ms = round((time.perf_counter() - started) * 1000)
+    _record_attempt(
+        config=config,
+        feature=feature,
+        prompt=prompt,
+        call_index=call_index,
+        usage=generation.usage,
+        latency_ms=latency_ms,
+        success=True,
+        langsmith_run_id=traced.run_id,
+    )
+    return generation
+
+
+def generate_web_research(
+    *,
+    provider: str,
+    api_key: str,
+    model: str,
+    prompt: str,
+    empty_message: str,
+    feature: str = "ask_lifeos_web_research",
+) -> ProviderWebGeneration:
+    """Run provider-hosted public web research with normal routing/metering.
+
+    The provider tools used by this function are read-only search tools. LifeOS
+    does not expose arbitrary URLs, browser sessions, credentials, or website
+    actions through this boundary.
+    """
+
+    primary = ProviderConfig(
+        name=(provider or "").strip().lower(),
+        api_key=api_key,
+        model=model,
+    )
+    if primary.name not in _PROVIDER_FACTORIES:
+        raise AIProviderRouterError(f'Unsupported AI provider: "{primary.name}".')
+
+    safe_feature = str(feature or "ask_lifeos_web_research").strip().lower().replace(" ", "_")[:80] or "ask_lifeos_web_research"
+    primary_route = resolve_model_route(
+        feature=safe_feature,
+        provider=primary.name,
+        requested_model=primary.model,
+    )
+    routed_primary = ProviderConfig(
+        name=primary.name,
+        api_key=primary.api_key,
+        model=primary_route.selected_model,
+    )
+    try:
+        result = _execute_web(
+            routed_primary,
+            prompt,
+            feature=safe_feature,
+            model_route=primary_route,
+        )
+        if not result.text:
+            raise AIProviderRouterError(empty_message)
+        return result
+    except AIProviderBudgetError:
+        raise
+    except AIProviderRouterError as primary_error:
+        fallback = fallback_provider_config(primary.name)
+        if fallback is None:
+            raise
+        fallback_route = resolve_model_route(
+            feature=safe_feature,
+            provider=fallback.name,
+            requested_model=fallback.model,
+        )
+        routed_fallback = ProviderConfig(
+            name=fallback.name,
+            api_key=fallback.api_key,
+            model=fallback_route.selected_model,
+        )
+        try:
+            result = _execute_web(
+                routed_fallback,
+                prompt,
+                feature=safe_feature,
+                model_route=fallback_route,
+            )
+            if not result.text:
+                raise AIProviderRouterError(empty_message)
+            return result
+        except AIProviderRouterError as fallback_error:
+            raise AIProviderRouterError(
+                f"Primary provider failed: {primary_error} "
+                f"Fallback provider failed: {fallback_error}"
+            ) from fallback_error
+

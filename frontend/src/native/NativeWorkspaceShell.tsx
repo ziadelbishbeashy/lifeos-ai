@@ -7,7 +7,7 @@ import { logout } from "../auth/session";
 import { navigate } from "../core/navigation";
 
 export type NativeSection =
-  | "dashboard" | "projects" | "modules" | "tasks" | "notes" | "focus"
+  | "dashboard" | "projects" | "modules" | "tasks" | "notes" | "focus" | "planner"
   | "analytics" | "notifications" | "documents" | "intelligence" | "memory" | "automations" | "settings";
 
 type NavItem = { key: NativeSection; href: string; label: string; small?: string; path: string };
@@ -35,6 +35,7 @@ const context: Record<NativeSection, { kicker: string; title: string }> = {
   tasks: { kicker: "Execution center", title: "Tasks" },
   notes: { kicker: "Knowledge workspace", title: "AI Notes" },
   focus: { kicker: "Deep work", title: "Focus Mode" },
+  planner: { kicker: "Adaptive planning", title: "Smart Planner" },
   analytics: { kicker: "Performance intelligence", title: "Analytics" },
   notifications: { kicker: "Smart notifications", title: "Notifications" },
   documents: { kicker: "Grounded intelligence", title: "Document Brain" },
@@ -111,6 +112,7 @@ export function NativeWorkspaceShell({ user, active, children }: { user: User; a
         <span className="navigation-label navigation-label-spaced">Intelligence</span>
         {intelligenceItems.map((item) => <NavLink item={item} active={active} key={item.key}/>) }
         <span className="navigation-label navigation-label-spaced">Planning</span>
+        <NavLink item={{ key: "planner", href: "/planner", label: "Smart Planner", small: "Day & week", path: "M4 5h16v16H4V5Zm3-3v6m10-6v6M4 9h16M8 13h3v3H8v-3Zm5 0h3v3h-3v-3Z" }} active={active} />
         <span className="navigation-link navigation-link-disabled"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.4 5.1L20 8l-4 4 .9 5.7L12 15l-4.9 2.7L8 12 4 8l5.6-.9L12 2Z"/></svg><span>Visual Flows</span><em>Later</em></span>
       </nav>
       <div className="sidebar-system-card"><div className="system-card-heading"><span className="system-status-dot"/><strong>All systems ready</strong></div><p>Your workspace is connected and ready.</p></div>

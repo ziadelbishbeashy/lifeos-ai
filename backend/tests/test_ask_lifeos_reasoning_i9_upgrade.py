@@ -341,10 +341,11 @@ def test_i9_reuses_identical_pending_proposal_instead_of_accepting_replay(app, u
         ).count() == 1
 
 
-def test_deployment_question_routes_as_project_advice_and_gets_deployment_focus(app, user):
+def test_deployment_question_uses_general_request_profile_not_a_domain_specific_executor(app, user):
+    from services.intelligence_capability_router_service import deterministic_request_profile
+    from services.intelligence_context_service import collect_owned_project_context
     from services.intelligence_intent_router_service import route_intelligence_request
     from services.intelligence_reasoning_service import _build_reasoning_prompt
-    from services.intelligence_context_service import collect_owned_project_context
     from services.project_review_intelligence_service import review_project_context
 
     with app.app_context():
@@ -355,6 +356,14 @@ def test_deployment_question_routes_as_project_advice_and_gets_deployment_focus(
             forced_project_id=project.id,
         )
         assert route.intent == "project_advice"
+        profile = deterministic_request_profile(
+            query="What should I do to deploy this project?",
+            route_intent=route.intent,
+            selected_context_type="project",
+        )
+        assert profile.task_type == "advise"
+        assert profile.needs_workspace is True
+        assert profile.action_mode == "recommendation"
 
         context = collect_owned_project_context(project_id=project.id, owner_id=user)
         review = review_project_context(context=context)
@@ -363,10 +372,12 @@ def test_deployment_question_routes_as_project_advice_and_gets_deployment_focus(
             context=context,
             review=review,
             mode="advisory",
+            request_profile=profile,
         ).lower()
-        assert "deployment / release focus" in prompt
-        assert "do not turn deployment planning into a project-status recap" in prompt
-        assert "smallest practical next action" in prompt
+        assert "request profile" in prompt
+        assert "task_type: advise" in prompt
+        assert "recommend a concrete approach" in prompt
+        assert "context is evidence, not the answer" in prompt
 
 
 def test_deployment_verifier_failure_returns_relevant_trusted_fallback(app, user, monkeypatch):
@@ -409,9 +420,9 @@ def test_deployment_verifier_failure_returns_relevant_trusted_fallback(app, user
         )
         assert result.response_mode == "deterministic_fallback"
         answer = (result.answer or "").lower()
-        assert "minimum release scope" in answer
-        assert "staging smoke test" in answer
-        assert "rollback plan" in answer
+        assert "could not complete the reasoning step" in answer
+        assert "generic project summary" in answer
+        assert "no workspace changes were made" in answer
         assert "saved project progress" not in answer
 
 
@@ -420,3 +431,26 @@ def test_short_deployment_advice_does_not_force_i19_goal_plan():
 
     assert _looks_like_goal_request("What should I do to deploy this project?") is False
     assert _looks_like_goal_request("Help me get this project ready for deployment") is True
+
+
+def test_create_tasks_for_fixes_is_read_only_until_i9_confirmation(app, user):
+    with app.app_context():
+        project = _project(user, "Mutation boundary project")
+        tasks_before = Task.query.filter_by(user_id=user, project_id=project.id).count()
+        proposals_before = LifeOSActionProposal.query.filter_by(user_id=user, project_id=project.id).count()
+
+        result = ask_lifeos(
+            query="Create tasks for the fixes",
+            owner_id=user,
+            selected_context={"type": "project", "id": project.id},
+        )
+
+        assert result.status == "goal_plan_ready"
+        assert result.response_mode == "goal_plan"
+        assert result.goal_plan is not None
+        assert result.goal_plan["safety"]["workspace_mutation"] is False
+        assert result.goal_plan["safety"]["important_actions_require"] == "I9_confirmation"
+        assert "I9 proposal" in (result.answer or "")
+        assert "explicit confirmation" in (result.answer or "")
+        assert Task.query.filter_by(user_id=user, project_id=project.id).count() == tasks_before
+        assert LifeOSActionProposal.query.filter_by(user_id=user, project_id=project.id).count() == proposals_before

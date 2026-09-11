@@ -23,6 +23,7 @@ def test_default_intelligence_registry_is_read_only_and_explicit():
         "project.get_summary",
         "project.get_tasks",
         "project.review",
+        "public.web_search",
         "workspace.get_home",
         "workspace.get_portfolio_review",
         "workspace.get_recent_activity",

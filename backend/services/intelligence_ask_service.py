@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import re
 from typing import Any
 
 from services.langsmith_observability_service import trace_lifeos_span
 from services.intelligence_claim_verifier_service import (
     IntelligenceVerificationProviderError,
     IntelligenceVerificationResult,
+    deterministic_verify_general_reasoning,
     deterministic_verify_reasoning,
+    verify_general_reasoning,
     verify_project_reasoning,
 )
 from services.intelligence_context_service import collect_owned_project_context
@@ -19,10 +22,16 @@ from services.intelligence_intent_router_service import (
 )
 from services.intelligence_reasoning_service import (
     IntelligenceReasoningError,
+    reason_about_general_request,
     reason_about_project_advice,
     reason_about_project_review,
 )
 from services.project_review_intelligence_service import ProjectReviewResult, review_project_context
+
+from services.intelligence_capability_router_service import RequestProfile, understand_request
+from services.intelligence_rag_tool_service import retrieve_context_reasoning_evidence
+from services.safe_calculator_service import CalculationResult, SafeCalculatorError, calculate_expression
+from services.web_research_service import WebResearchError, WebResearchResult, research_public_web
 from services.portfolio_review_intelligence_service import (
     build_deterministic_portfolio_answer,
     review_owned_portfolio,
@@ -86,6 +95,7 @@ class AskLifeOSResult:
     grounded: dict[str, Any] | None = None
     memory_suggestion: dict[str, Any] | None = None
     goal_plan: dict[str, Any] | None = None
+    capabilities: dict[str, Any] | None = None
 
     def to_dict(self, *, include_diagnostics: bool = False) -> dict[str, Any]:
         route_payload = self.route.to_dict() if include_diagnostics else {
@@ -129,6 +139,7 @@ class AskLifeOSResult:
             "grounded": self.grounded,
             "memory_suggestion": self.memory_suggestion,
             "goal_plan": self.goal_plan,
+            "capabilities": self.capabilities,
             "read_only": True,
         }
 
@@ -185,21 +196,38 @@ def build_deterministic_project_answer(review: ProjectReviewResult) -> str:
     return "".join((opening, task_text, document_text, attention, recommendation)).strip()
 
 
-_DEPLOYMENT_ADVICE_MARKERS = (
-    "deploy",
-    "deployment",
-    "production",
-    "release",
-    "launch",
-    "go live",
-    "ship",
-    "hosting",
-)
+def _query_relevant_review_titles(
+    *, query: str, review: ProjectReviewResult, limit: int = 2
+) -> list[str]:
+    """Return only review signals with a lexical tie to the user's actual question.
 
+    This keeps an advisory failure from turning into an unrelated project-status
+    dump. Prefix matching is deliberately generic (not deployment/domain specific)
+    so the fallback works the same way for debugging, planning, prioritization, etc.
+    """
 
-def _looks_like_deployment_advice(query: str) -> bool:
-    text = " ".join(str(query or "").casefold().split())
-    return any(marker in text for marker in _DEPLOYMENT_ADVICE_MARKERS)
+    query_tokens = {
+        token[:5]
+        for token in re.findall(r"[a-z0-9]+", str(query or "").casefold())
+        if len(token) >= 5
+    }
+    if not query_tokens:
+        return []
+
+    matches: list[str] = []
+    for item in review.signals:
+        title = " ".join(str(item.title or "").split()).strip()
+        detail = " ".join(str(item.detail or "").split()).strip()
+        haystack_tokens = {
+            token[:5]
+            for token in re.findall(r"[a-z0-9]+", f"{title} {detail}".casefold())
+            if len(token) >= 5
+        }
+        if title and query_tokens.intersection(haystack_tokens):
+            matches.append(title)
+            if len(matches) >= max(1, int(limit)):
+                break
+    return matches
 
 
 def build_query_aware_project_fallback(
@@ -208,34 +236,123 @@ def build_query_aware_project_fallback(
     review: ProjectReviewResult,
     advisory: bool,
 ) -> str:
-    """Keep fail-closed answers relevant to the user's request.
+    """Fail closed without pretending a project recap answers an advice request.
 
-    The verifier boundary remains unchanged: unverified model prose is never shown.
-    For deployment/release advice, however, falling back to a generic project recap
-    is misleading.  Use a deterministic, code-authored release playbook plus only
-    verified attention signals from the current project state.
+    Factual/review routes may still use the deterministic state summary. Advisory
+    questions require reasoning; when that reasoning cannot be verified, LifeOS
+    says so explicitly and surfaces only query-relevant verified context.
     """
 
-    if not advisory or not _looks_like_deployment_advice(query):
+    if not advisory:
         return build_deterministic_project_answer(review)
 
     facts = _fact_lookup(review)
     title = str(facts.get("project.title") or review.project.get("title") or "this project")
-    attention = [item.title for item in review.signals[:3] if str(item.title or "").strip()]
-
+    attention = _query_relevant_review_titles(query=query, review=review)
     answer = (
-        f"To move {title} toward deployment, use a release path rather than working through every saved task equally. "
-        "First freeze the minimum release scope. Then verify the production-critical path: database schema/migrations and backup/restore, "
-        "production secrets/authentication and HTTPS/origin controls, persistent storage and background jobs, rate limits/cost controls and observability, "
-        "then a staging smoke test before the production rollout. Finish with a rollback plan and post-deploy monitoring."
+        f"I can read the trusted LifeOS state for {title}, but I could not complete "
+        "the reasoning step needed to answer this request reliably. I will not replace "
+        "your question with a generic project summary or expose unverified AI prose."
     )
     if attention:
-        answer += " Trusted LifeOS state currently flags these items for review before release: " + "; ".join(attention) + "."
-    answer += (
-        " This is a deterministic safety fallback because the AI reasoning response could not be fully verified; "
-        "the release sequence is general guidance, while the named project items above come only from trusted LifeOS state."
-    )
+        answer += (
+            " Verified project context directly related to your question: "
+            + "; ".join(attention)
+            + "."
+        )
+    answer += " No workspace changes were made."
     return answer
+
+
+def _capability_payload(
+    *,
+    profile: RequestProfile | None,
+    web_research: WebResearchResult | None = None,
+    calculation: CalculationResult | None = None,
+    rag_evidence: Any = None,
+    warnings: list[str] | None = None,
+) -> dict[str, Any] | None:
+    if profile is None and web_research is None and calculation is None and rag_evidence is None and not warnings:
+        return None
+    payload: dict[str, Any] = {
+        "request": profile.to_dict(public=True) if profile is not None else None,
+        "web": web_research.to_dict() if web_research is not None else None,
+        "calculation": calculation.to_dict() if calculation is not None else None,
+        "documents": rag_evidence.to_dict() if rag_evidence is not None and hasattr(rag_evidence, "to_dict") else None,
+        "warnings": list(warnings or []),
+        "read_only": True,
+    }
+    return payload
+
+
+def _run_read_only_capabilities(
+    *,
+    profile: RequestProfile,
+    query: str,
+    owner_id: int,
+    project_id: int | None,
+    selected_context: AskContextOption | None = None,
+    selected_context_label: str | None = None,
+) -> tuple[WebResearchResult | None, CalculationResult | None, Any, list[str]]:
+    """Execute only the bounded read-only capabilities selected for this request."""
+
+    warnings: list[str] = []
+    calculation: CalculationResult | None = None
+    web_research: WebResearchResult | None = None
+    rag_evidence = None
+
+    if profile.needs_calculator:
+        if not profile.calculator_expression:
+            warnings.append("Calculator: the request could not be translated into a safe deterministic expression.")
+        else:
+            try:
+                calculation = calculate_expression(profile.calculator_expression)
+            except SafeCalculatorError as error:
+                warnings.append(f"Calculator: {error}")
+
+    if profile.needs_web:
+        try:
+            web_research = research_public_web(
+                query=profile.web_query or query,
+                original_query=query,
+                selected_context_label=selected_context_label,
+            )
+        except WebResearchError as error:
+            warnings.append(f"Web research: {error}")
+
+    if profile.needs_rag:
+        context_type = selected_context.type if selected_context is not None else ("project" if project_id is not None else None)
+        context_id = selected_context.id if selected_context is not None else project_id
+        parent_id = selected_context.parent_id if selected_context is not None else None
+        if context_type is not None and context_id is not None:
+            rag_evidence = retrieve_context_reasoning_evidence(
+                owner_id=int(owner_id),
+                context_type=context_type,
+                context_id=int(context_id),
+                parent_id=parent_id,
+                query=query,
+            )
+        if rag_evidence is None:
+            warnings.append("Document evidence: no searchable evidence was available in the selected LifeOS scope for this request.")
+
+    return web_research, calculation, rag_evidence, warnings
+
+
+def _capability_failure_answer(*, profile: RequestProfile, warnings: list[str]) -> str:
+    if profile.needs_web and any(item.startswith("Web research:") for item in warnings):
+        warning = next(item for item in warnings if item.startswith("Web research:"))
+        return (
+            "I understood that this request needs current public information, but the read-only web research step could not complete. "
+            "I will not present model memory as if it were fresh web research. " + warning
+        )
+    if profile.needs_calculator and any(item.startswith("Calculator:") for item in warnings):
+        return "I could not evaluate the requested calculation safely. " + next(item for item in warnings if item.startswith("Calculator:"))
+    if profile.needs_rag and any(item.startswith("Document evidence:") for item in warnings):
+        return (
+            "I understood that this request depends on LifeOS document evidence, but no searchable evidence was available in the selected scope. "
+            "I will not substitute general model knowledge for missing document grounding."
+        )
+    return "LifeOS could not complete the capability needed for this request safely."
 
 
 def _fallback_verification(reason: str) -> dict[str, Any]:
@@ -597,10 +714,30 @@ def ask_lifeos(
                 memory_suggestion=suggestion.to_dict(),
             )
 
+    # Explicit knowledge scopes keep the existing authoritative direct RAG path
+    # for simple read-only questions, but richer requests (web research, math,
+    # code, advice/planning/comparison) continue through the general capability
+    # stack so selected context is evidence rather than an intelligence limit.
+    preliminary_profile: RequestProfile | None = None
     if explicit_context is not None and explicit_context.type in {"document", "collection", "module", "lecture"}:
-        scoped = _answer_selected_knowledge_context(query=query, owner_id=owner_id, context=explicit_context)
-        if scoped is not None:
-            return scoped
+        preliminary_profile = understand_request(
+            query=query,
+            route_intent=route.intent,
+            selected_context_type=explicit_context.type,
+            selected_context_label=explicit_context.label,
+        )
+        direct_knowledge_request = bool(
+            preliminary_profile.action_mode == "read_only"
+            and preliminary_profile.complexity != "multi_step"
+            and preliminary_profile.task_type in {"factual", "explain", "summarize"}
+            and not preliminary_profile.needs_web
+            and not preliminary_profile.needs_calculator
+            and not preliminary_profile.needs_code
+        )
+        if direct_knowledge_request:
+            scoped = _answer_selected_knowledge_context(query=query, owner_id=owner_id, context=explicit_context)
+            if scoped is not None:
+                return scoped
     if route.requires_clarification:
         return AskLifeOSResult(
             route=route,
@@ -640,6 +777,13 @@ def ask_lifeos(
             connections=connections.to_dict(),
         )
 
+    request_profile = preliminary_profile or understand_request(
+        query=query,
+        route_intent=route.intent,
+        selected_context_type=(explicit_context.type if explicit_context is not None else route.scope_type),
+        selected_context_label=(explicit_context.label if explicit_context is not None else route.scope_label),
+    )
+
     # I19 is a hidden capability of Ask LifeOS, not a separate user-facing
     # module.  Clear goal-shaped requests get a bounded read-only plan first;
     # nothing executes until the user explicitly starts the review in chat.
@@ -652,7 +796,14 @@ def ask_lifeos(
         "memory_query",
         "context_connections",
     }
-    goal_shaped = _looks_like_goal_request(query)
+    goal_shaped = bool(
+        _looks_like_goal_request(query)
+        or (
+            request_profile.complexity == "multi_step"
+            and request_profile.needs_workspace
+            and request_profile.task_type in {"plan", "execute", "advise", "prioritize", "research"}
+        )
+    )
     explicit_project_goal = bool(
         goal_shaped
         and explicit_context is not None
@@ -695,10 +846,16 @@ def ask_lifeos(
                 candidates=(),
                 status="ready",
             )
+            plan_answer = (
+                "This request would change your LifeOS workspace, so I prepared a read-only review plan first. "
+                "Nothing has changed yet. Any resulting workspace change must become an I9 proposal and still requires your explicit confirmation."
+                if request_profile.action_mode == "mutation_requested"
+                else "This needs a few trusted LifeOS checks. I prepared a read-only review plan below; nothing has run yet."
+            )
             return AskLifeOSResult(
                 route=route,
                 status="goal_plan_ready",
-                answer="This needs a few trusted LifeOS checks. I prepared a read-only review plan below; nothing has run yet.",
+                answer=plan_answer,
                 response_mode="goal_plan",
                 verification={
                     "status": "verified",
@@ -875,14 +1032,144 @@ def ask_lifeos(
         )
 
     if not (route.intent in {"project_review", "project_advice"} and route.scope_type == "project" and route.scope_id):
+        web_research, calculation, rag_evidence, capability_warnings = _run_read_only_capabilities(
+            profile=request_profile,
+            query=query,
+            owner_id=owner_id,
+            project_id=None,
+            selected_context=explicit_context,
+            selected_context_label=(explicit_context.label if explicit_context is not None else route.scope_label),
+        )
+        capabilities = _capability_payload(
+            profile=request_profile,
+            web_research=web_research,
+            calculation=calculation,
+            rag_evidence=rag_evidence,
+            warnings=capability_warnings,
+        )
+
+        # Pure arithmetic should not spend a second model call when code can answer exactly.
+        if (
+            request_profile.task_type == "calculate"
+            and calculation is not None
+            and not request_profile.needs_web
+            and not request_profile.needs_code
+        ):
+            answer = f"{calculation.expression} = {calculation.formatted_result}"
+            return AskLifeOSResult(
+                route=route,
+                status="completed",
+                answer=answer,
+                response_mode="deterministic_calculation",
+                verification={
+                    "status": "verified",
+                    "deterministic_checks_passed": True,
+                    "prose_check_performed": False,
+                    "checked_claims": {"factual": 0, "inference": 0, "recommendation": 0},
+                },
+                attention_level=None,
+                clarification=None,
+                capabilities=capabilities,
+            )
+
+        # If the request explicitly depends on a capability that failed, do not
+        # silently answer from stale model memory as though the tool succeeded.
+        if capability_warnings and (
+            (request_profile.needs_web and web_research is None)
+            or (request_profile.needs_calculator and calculation is None)
+            or (request_profile.needs_rag and rag_evidence is None)
+        ):
+            return AskLifeOSResult(
+                route=route,
+                status="completed",
+                answer=_capability_failure_answer(profile=request_profile, warnings=capability_warnings),
+                response_mode="capability_fallback",
+                verification=_fallback_verification("A requested read-only capability could not complete."),
+                attention_level=None,
+                clarification=None,
+                capabilities=capabilities,
+            )
+
+        try:
+            reasoning = reason_about_general_request(
+                query=query,
+                request_profile=request_profile,
+                web_research=web_research,
+                calculation=calculation,
+                rag_evidence=rag_evidence,
+            )
+        except IntelligenceReasoningError:
+            return AskLifeOSResult(
+                route=route,
+                status="completed",
+                answer="I understood the request, but the reasoning step could not complete reliably. No workspace changes were made.",
+                response_mode="reasoning_unavailable",
+                verification=_fallback_verification("General AI reasoning was unavailable."),
+                attention_level=None,
+                clarification=None,
+                capabilities=capabilities,
+            )
+
+        if verification_policy == "automation_fast":
+            deterministic_ok, deterministic_issues = deterministic_verify_general_reasoning(
+                reasoning=reasoning,
+                web_research=web_research,
+                rag_evidence=rag_evidence,
+                calculation=calculation,
+            )
+            verification = IntelligenceVerificationResult(
+                verified=deterministic_ok,
+                deterministic_checks_passed=deterministic_ok,
+                prose_check_performed=False,
+                issues=deterministic_issues,
+                checked_factual_claims=len(reasoning.factual_claims),
+                checked_inferences=len(reasoning.inferences),
+                checked_recommendations=len(reasoning.recommendations),
+            )
+        elif verification_policy == "full":
+            try:
+                verification = verify_general_reasoning(
+                    query=query,
+                    reasoning=reasoning,
+                    web_research=web_research,
+                    rag_evidence=rag_evidence,
+                    calculation=calculation,
+                )
+            except IntelligenceVerificationProviderError:
+                return AskLifeOSResult(
+                    route=route,
+                    status="completed",
+                    answer="I generated an answer, but the independent verification step was unavailable, so I am not showing unverified reasoning.",
+                    response_mode="reasoning_unavailable",
+                    verification=_fallback_verification("General AI verification was unavailable."),
+                    attention_level=None,
+                    clarification=None,
+                    capabilities=capabilities,
+                )
+        else:
+            raise ValueError("Unsupported Ask LifeOS verification policy.")
+
+        if not verification.verified:
+            return AskLifeOSResult(
+                route=route,
+                status="completed",
+                answer="I could not verify the generated answer against the available evidence/capability boundary, so I am not showing it.",
+                response_mode="reasoning_rejected",
+                verification=verification.to_dict(),
+                attention_level=None,
+                clarification=None,
+                capabilities=capabilities,
+            )
+
         return AskLifeOSResult(
             route=route,
-            status="unsupported_intent",
-            answer=None,
-            response_mode="route_only",
-            verification=None,
+            status="completed",
+            answer=reasoning.answer,
+            response_mode=("general_ai_verified_fast" if verification_policy == "automation_fast" else "general_ai_verified"),
+            verification=verification.to_dict(),
             attention_level=None,
-            clarification="This Ask LifeOS intent is recognized but does not have a verified executor yet.",
+            clarification=None,
+            capabilities=capabilities,
         )
 
     # Gather the reviewed tool/context state once, then derive the deterministic
@@ -896,9 +1183,56 @@ def ask_lifeos(
         advisory=(route.intent == "project_advice"),
     )
 
+    web_research = None
+    calculation = None
+    rag_evidence = None
+    capability_warnings: list[str] = []
+    if route.intent == "project_advice":
+        web_research, calculation, rag_evidence, capability_warnings = _run_read_only_capabilities(
+            profile=request_profile,
+            query=query,
+            owner_id=owner_id,
+            project_id=int(route.scope_id),
+            selected_context=(explicit_context if explicit_context is not None and explicit_context.type == "project" else None),
+            selected_context_label=route.scope_label,
+        )
+    capabilities = _capability_payload(
+        profile=request_profile if route.intent == "project_advice" else None,
+        web_research=web_research,
+        calculation=calculation,
+        rag_evidence=rag_evidence,
+        warnings=capability_warnings,
+    )
+
+    if route.intent == "project_advice" and capability_warnings and (
+        (request_profile.needs_web and web_research is None)
+        or (request_profile.needs_calculator and calculation is None)
+        or (request_profile.needs_rag and rag_evidence is None)
+    ):
+        return AskLifeOSResult(
+            route=route,
+            status="completed",
+            answer=_capability_failure_answer(profile=request_profile, warnings=capability_warnings),
+            response_mode="capability_fallback",
+            verification=_fallback_verification("A requested read-only capability could not complete."),
+            attention_level=review.attention_level,
+            clarification=None,
+            capabilities=capabilities,
+        )
+
     try:
-        reasoner = reason_about_project_advice if route.intent == "project_advice" else reason_about_project_review
-        reasoning = reasoner(query=query, context=context, review=review)
+        if route.intent == "project_advice":
+            reasoning = reason_about_project_advice(
+                query=query,
+                context=context,
+                review=review,
+                request_profile=request_profile,
+                web_research=web_research,
+                calculation=calculation,
+                rag_evidence=rag_evidence,
+            )
+        else:
+            reasoning = reason_about_project_review(query=query, context=context, review=review)
     except IntelligenceReasoningError as error:
         return AskLifeOSResult(
             route=route,
@@ -908,6 +1242,7 @@ def ask_lifeos(
             verification=_fallback_verification("AI reasoning was unavailable; LifeOS used verified project state instead."),
             attention_level=review.attention_level,
             clarification=None,
+            capabilities=capabilities,
         )
 
     if verification_policy == "automation_fast":
@@ -919,6 +1254,9 @@ def ask_lifeos(
             reasoning=reasoning,
             context=context,
             review=review,
+            web_research=web_research,
+            rag_evidence=rag_evidence,
+            calculation=calculation,
         )
         verification = IntelligenceVerificationResult(
             verified=deterministic_ok,
@@ -936,6 +1274,9 @@ def ask_lifeos(
                 reasoning=reasoning,
                 context=context,
                 review=review,
+                web_research=web_research,
+                rag_evidence=rag_evidence,
+                calculation=calculation,
             )
         except IntelligenceVerificationProviderError as error:
             return AskLifeOSResult(
@@ -946,6 +1287,7 @@ def ask_lifeos(
                 verification=_fallback_verification("AI verification was unavailable; LifeOS used verified project state instead."),
                 attention_level=review.attention_level,
                 clarification=None,
+                capabilities=capabilities,
             )
     else:
         raise ValueError("Unsupported Ask LifeOS verification policy.")
@@ -959,6 +1301,7 @@ def ask_lifeos(
             verification=verification.to_dict(),
             attention_level=review.attention_level,
             clarification=None,
+            capabilities=capabilities,
         )
 
     verification_payload = verification.to_dict()
@@ -973,4 +1316,5 @@ def ask_lifeos(
         verification=verification_payload,
         attention_level=review.attention_level,
         clarification=None,
+        capabilities=capabilities,
     )

@@ -9,6 +9,7 @@ from lifeos.api.v1.experience import experience_api_bp
 from lifeos.api.v1.document_collections import document_collections_api_bp
 from lifeos.api.v1.notes import notes_api_bp
 from lifeos.api.v1.focus import focus_api_bp
+from lifeos.api.v1.planner import planner_api_bp
 from lifeos.api.v1.analytics import analytics_api_bp
 from lifeos.api.v1.ai_usage import ai_usage_api_bp
 from lifeos.api.v1.agent import agent_api_bp
@@ -33,6 +34,7 @@ def register_api_v1(app) -> None:
     app.register_blueprint(automations_api_bp)
     app.register_blueprint(notes_api_bp)
     app.register_blueprint(focus_api_bp)
+    app.register_blueprint(planner_api_bp)
     app.register_blueprint(analytics_api_bp)
     app.register_blueprint(ai_usage_api_bp)
     app.register_blueprint(agent_api_bp)
@@ -51,6 +53,7 @@ __all__ = [
     "automations_api_bp",
     "notes_api_bp",
     "focus_api_bp",
+    "planner_api_bp",
     "analytics_api_bp",
     "ai_usage_api_bp",
     "agent_api_bp",

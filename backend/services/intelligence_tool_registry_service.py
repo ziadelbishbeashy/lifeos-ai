@@ -234,6 +234,23 @@ def _project_review_tool(*, owner_id: int, project_id: int) -> dict[str, Any]:
     ).to_dict(include_diagnostics=True)
 
 
+def _public_web_search_tool(*, owner_id: int, query: str) -> dict[str, Any]:
+    """Run bounded read-only public research without private workspace context."""
+
+    del owner_id  # Public search intentionally receives no workspace identifier/data.
+    from services.web_research_service import WebResearchError, research_public_web
+
+    try:
+        result = research_public_web(
+            query=str(query or "").strip(),
+            original_query=str(query or "").strip(),
+            selected_context_label=None,
+        )
+    except WebResearchError as error:
+        raise IntelligenceToolError(str(error)) from error
+    return result.to_dict()
+
+
 def _knowledge_context_tool(
     *, owner_id: int, context_type: str, context_id: int, query: str
 ) -> dict[str, Any]:
@@ -349,6 +366,16 @@ def build_default_intelligence_tool_registry() -> IntelligenceToolRegistry:
             scope="workspace",
             input_fields=(),
             handler=_workspace_portfolio_review_tool,
+        )
+    )
+    registry.register(
+        IntelligenceToolSpec(
+            name="public.web_search",
+            description="Research current public information through a provider-hosted read-only web search. No LifeOS workspace context is sent to the search tool.",
+            risk="read_only",
+            scope="public_web",
+            input_fields=("query",),
+            handler=_public_web_search_tool,
         )
     )
     registry.register(

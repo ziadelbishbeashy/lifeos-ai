@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ApiError, apiGet, apiPost } from "../api/client";
 import { useSession } from "../auth/session";
 import type { AgentActionSuggestion, AgentPlan, AgentRun } from "../api/types";
@@ -243,6 +243,20 @@ type MemoryResult = {
   user_controlled: boolean;
 };
 
+type AskWebSource = { id: string; title: string; url: string };
+type AskDocumentSource = { id: string; document_id: number; filename: string; page?: number | null; section?: string | null };
+type AskCapabilities = {
+  request?: {
+    task_type: string; complexity: string; knowledge_scope: string; needs_workspace: boolean;
+    needs_rag: boolean; needs_web: boolean; needs_calculator: boolean; needs_code: boolean; action_mode: string;
+  } | null;
+  web?: { query: string; summary: string; sources: AskWebSource[]; source_count: number; read_only: boolean; provider_hosted_search: boolean } | null;
+  calculation?: { expression: string; result: number; formatted_result: string; deterministic: boolean; code_execution: boolean } | null;
+  documents?: { sources: AskDocumentSource[]; source_count: number; retrieval_mode: string; verified_grounding: boolean } | null;
+  warnings?: string[];
+  read_only: boolean;
+};
+
 type AskLifeOSResponse = {
   route: AskRoute;
   status: string;
@@ -259,6 +273,7 @@ type AskLifeOSResponse = {
   grounded?: GroundedAskResult | null;
   memory_suggestion?: ConversationMemorySuggestion | null;
   goal_plan?: AgentPlan | null;
+  capabilities?: AskCapabilities | null;
   reasoning_tier?: AskModelTier | null;
   read_only: boolean;
 };
@@ -324,6 +339,171 @@ function goalEvidenceGroups(evidence: AgentRun["output"]["evidence"] = []) {
   return Array.from(groups.values());
 }
 
+function answerSourceMaps(capabilities?: AskCapabilities | null) {
+  const web = new Map((capabilities?.web?.sources || []).map((source) => [source.id, source]));
+  const documents = new Map((capabilities?.documents?.sources || []).map((source) => [source.id, source]));
+  return { web, documents };
+}
+
+function renderAnswerInline(text: string, capabilities?: AskCapabilities | null): ReactNode[] {
+  const { web, documents } = answerSourceMaps(capabilities);
+  const parts = text.split(/(\[(?:W|D)\d+\]|`[^`\n]+`|\*\*[^*\n]+\*\*|\\\([^\n]+?\\\))/g).filter(Boolean);
+  return parts.map((part, index) => {
+    const citation = /^\[((?:W|D)\d+)\]$/.exec(part);
+    if (citation) {
+      const id = citation[1];
+      const webSource = web.get(id);
+      if (webSource) return <a className="ask-lifeos-citation web" href={webSource.url} target="_blank" rel="noreferrer" key={`${id}-${index}`} title={webSource.title}>{id}</a>;
+      const documentSource = documents.get(id);
+      if (documentSource) return <a className="ask-lifeos-citation document" href={`/documents/${documentSource.document_id}`} key={`${id}-${index}`} title={documentSource.filename}>{id}</a>;
+      return <span className="ask-lifeos-citation unresolved" key={`${id}-${index}`}>{id}</span>;
+    }
+    if (part.startsWith("`") && part.endsWith("`")) return <code className="ask-lifeos-inline-code" key={index}>{part.slice(1, -1)}</code>;
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("\\(") && part.endsWith("\\)")) return <span className="ask-lifeos-inline-equation" key={index}>{part.slice(2, -2)}</span>;
+    return <span key={index}>{part}</span>;
+  });
+}
+
+function AskCodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return <div className="ask-lifeos-code-block">
+    <div className="ask-lifeos-code-head">
+      <div className="ask-lifeos-code-meta"><span>{language || "code"}</span><em>generated · not executed</em></div>
+      <button type="button" className="ask-lifeos-code-copy" onClick={copyCode} aria-label="Copy generated code">{copied ? "Copied" : "Copy"}</button>
+    </div>
+    <pre><code>{code}</code></pre>
+  </div>;
+}
+
+function isTableDivider(line: string) {
+  const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function tableCells(line: string) {
+  return line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+}
+
+function RichAskAnswer({ text, capabilities }: { text: string; capabilities?: AskCapabilities | null }) {
+  const lines = String(text || "").replace(/\r\n?/g, "\n").split("\n");
+  const blocks: ReactNode[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (!trimmed) { index += 1; continue; }
+
+    if (trimmed.startsWith("```")) {
+      const language = trimmed.slice(3).trim();
+      const code: string[] = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith("```")) { code.push(lines[index]); index += 1; }
+      if (index < lines.length) index += 1;
+      blocks.push(<AskCodeBlock language={language} code={code.join("\n")} key={`code-${blocks.length}`} />);
+      continue;
+    }
+
+    if (trimmed.startsWith("$$") && trimmed.endsWith("$$") && trimmed.length > 4) {
+      blocks.push(<div className="ask-lifeos-equation" key={`eq-${blocks.length}`}><span>{trimmed.slice(2, -2).trim()}</span></div>);
+      index += 1;
+      continue;
+    }
+
+    if (trimmed === "$$") {
+      const equation: string[] = [];
+      index += 1;
+      while (index < lines.length && lines[index].trim() !== "$$") { equation.push(lines[index]); index += 1; }
+      if (index < lines.length) index += 1;
+      blocks.push(<div className="ask-lifeos-equation" key={`eq-${blocks.length}`}><span>{equation.join(" ").trim()}</span></div>);
+      continue;
+    }
+
+    if (/^#{1,4}\s+/.test(trimmed)) {
+      const level = (trimmed.match(/^#+/)?.[0].length || 2);
+      const content = trimmed.replace(/^#{1,4}\s+/, "");
+      const rendered = renderAnswerInline(content, capabilities);
+      blocks.push(level <= 2 ? <h3 key={`h-${blocks.length}`}>{rendered}</h3> : <h4 key={`h-${blocks.length}`}>{rendered}</h4>);
+      index += 1;
+      continue;
+    }
+
+    if (index + 1 < lines.length && line.includes("|") && isTableDivider(lines[index + 1])) {
+      const headers = tableCells(line);
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && lines[index].includes("|") && lines[index].trim()) { rows.push(tableCells(lines[index])); index += 1; }
+      blocks.push(<div className="ask-lifeos-table-wrap" key={`table-${blocks.length}`}><table><thead><tr>{headers.map((cell, cellIndex) => <th key={cellIndex}>{renderAnswerInline(cell, capabilities)}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{headers.map((_, cellIndex) => <td key={cellIndex}>{renderAnswerInline(row[cellIndex] || "", capabilities)}</td>)}</tr>)}</tbody></table></div>);
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (index < lines.length && /^[-*]\s+/.test(lines[index].trim())) { items.push(lines[index].trim().replace(/^[-*]\s+/, "")); index += 1; }
+      blocks.push(<ul className="ask-lifeos-rich-list unordered" key={`ul-${blocks.length}`}>{items.map((item, itemIndex) => <li key={itemIndex}>{renderAnswerInline(item, capabilities)}</li>)}</ul>);
+      continue;
+    }
+
+    if (/^\d+[.)]\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (index < lines.length && /^\d+[.)]\s+/.test(lines[index].trim())) { items.push(lines[index].trim().replace(/^\d+[.)]\s+/, "")); index += 1; }
+      blocks.push(<ol className="ask-lifeos-rich-list ordered" key={`ol-${blocks.length}`}>{items.map((item, itemIndex) => <li key={itemIndex}>{renderAnswerInline(item, capabilities)}</li>)}</ol>);
+      continue;
+    }
+
+    const paragraph: string[] = [trimmed];
+    index += 1;
+    while (index < lines.length) {
+      const next = lines[index].trim();
+      if (!next || next.startsWith("```") || next === "$$" || /^#{1,4}\s+/.test(next) || /^[-*]\s+/.test(next) || /^\d+[.)]\s+/.test(next)) break;
+      if (index + 1 < lines.length && lines[index].includes("|") && isTableDivider(lines[index + 1])) break;
+      paragraph.push(next); index += 1;
+    }
+    blocks.push(<p key={`p-${blocks.length}`}>{renderAnswerInline(paragraph.join(" "), capabilities)}</p>);
+  }
+
+  return <div className="ask-lifeos-rich-answer">{blocks}</div>;
+}
+
+function CapabilityEvidence({ capabilities }: { capabilities?: AskCapabilities | null }) {
+  const webSources = capabilities?.web?.sources || [];
+  const documentSources = capabilities?.documents?.sources || [];
+  const calculation = capabilities?.calculation;
+  const warnings = capabilities?.warnings || [];
+  const sourceCount = webSources.length + documentSources.length;
+  const [sourcesOpen, setSourcesOpen] = useState(sourceCount <= 3);
+  if (!capabilities || (!sourceCount && !calculation && !warnings.length)) return null;
+  return <section className="ask-lifeos-capability-evidence">
+    {calculation ? <div className="ask-lifeos-calculation-card"><div><span>Deterministic calculation</span><small>Computed by LifeOS code, not estimated by the model</small></div><strong>{calculation.formatted_result}</strong><code>{calculation.expression}</code></div> : null}
+    {sourceCount ? <details className="ask-lifeos-evidence-panel" open={sourcesOpen} onToggle={(event) => setSourcesOpen(event.currentTarget.open)}>
+      <summary>
+        <div className="ask-lifeos-evidence-summary-copy">
+          <span className="ask-lifeos-evidence-icon" aria-hidden="true">↗</span>
+          <div><strong>Sources & evidence</strong><small>{sourceCount} {sourceCount === 1 ? "reference" : "references"} used in this answer</small></div>
+        </div>
+        <span className="ask-lifeos-evidence-toggle">{sourcesOpen ? "Hide" : "View"}</span>
+      </summary>
+      <div className="ask-lifeos-evidence-body">
+        {webSources.length ? <div className="ask-lifeos-source-group"><div className="ask-lifeos-source-heading"><strong>Web sources</strong><span>Read-only research</span></div><div className="ask-lifeos-source-cards">{webSources.slice(0, 8).map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.id}><span>{source.id}</span><strong>{source.title}</strong><small>{(() => { try { return new URL(source.url).hostname; } catch { return "Public web"; } })()}</small><em aria-hidden="true">↗</em></a>)}</div></div> : null}
+        {documentSources.length ? <div className="ask-lifeos-source-group"><div className="ask-lifeos-source-heading"><strong>Document evidence</strong><span>Owned LifeOS knowledge</span></div><div className="ask-lifeos-source-cards documents">{documentSources.slice(0, 8).map((source) => <a href={`/documents/${source.document_id}`} key={source.id}><span>{source.id}</span><strong>{source.filename}</strong><small>{[source.page ? `page ${source.page}` : null, source.section].filter(Boolean).join(" · ") || "Document Brain"}</small><em aria-hidden="true">→</em></a>)}</div></div> : null}
+      </div>
+    </details> : null}
+    {warnings.length ? <details className="ask-lifeos-capability-warnings"><summary>Capability notes</summary>{warnings.map((warning, warningIndex) => <p key={warningIndex}>{warning}</p>)}</details> : null}
+  </section>;
+}
+
 function TrustBadge({ result }: { result: AskLifeOSResponse }) {
   if (result.response_mode === "goal_plan") {
     return <span className="ask-lifeos-trust verified"><i />Safe plan · nothing run yet</span>;
@@ -337,8 +517,14 @@ function TrustBadge({ result }: { result: AskLifeOSResponse }) {
   if (result.response_mode === "agent_verified" && result.verification?.status === "verified") {
     return <span className="ask-lifeos-trust verified"><i />Verified priority review</span>;
   }
-  if ((result.response_mode === "ai_verified" || result.response_mode === "deterministic_verified") && result.verification?.status === "verified") {
-    return <span className="ask-lifeos-trust verified"><i />Verified against LifeOS state</span>;
+  if (["ai_verified", "ai_verified_fast", "general_ai_verified", "general_ai_verified_fast", "deterministic_verified"].includes(result.response_mode) && result.verification?.status === "verified") {
+    return <span className="ask-lifeos-trust verified"><i />Verified intelligence</span>;
+  }
+  if (result.response_mode === "deterministic_calculation" && result.verification?.status === "verified") {
+    return <span className="ask-lifeos-trust verified"><i />Deterministic calculation</span>;
+  }
+  if (["capability_fallback", "reasoning_unavailable", "reasoning_rejected"].includes(result.response_mode)) {
+    return <span className="ask-lifeos-trust fallback"><i />Safe capability boundary</span>;
   }
   if (result.response_mode === "deterministic_fallback") {
     return <span className="ask-lifeos-trust fallback"><i />Trusted state fallback</span>;
@@ -347,6 +533,33 @@ function TrustBadge({ result }: { result: AskLifeOSResponse }) {
     return <span className="ask-lifeos-trust neutral"><i />Needs clarification</span>;
   }
   return <span className="ask-lifeos-trust neutral"><i />Verified intelligence boundary</span>;
+}
+
+function responseSurfaceTone(result?: AskLifeOSResponse | null) {
+  if (!result) return "tone-neutral";
+  if (result.status === "clarification_required") return "tone-neutral";
+  if (result.verification?.status === "verified") return "tone-verified";
+  if (result.verification?.status === "trusted_fallback" || ["capability_fallback", "reasoning_unavailable", "reasoning_rejected", "deterministic_fallback"].includes(result.response_mode)) return "tone-fallback";
+  return "tone-neutral";
+}
+
+function AskResponseCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyAnswer() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return <button type="button" className={`ask-lifeos-response-copy ${copied ? "copied" : ""}`} onClick={copyAnswer} aria-label="Copy LifeOS answer" title="Copy answer">
+    <span className="ask-lifeos-response-copy-icon" aria-hidden="true">{copied ? "✓" : "⧉"}</span>
+    <span>{copied ? "Copied" : "Copy"}</span>
+  </button>;
 }
 
 function AssistantMessage({ item, onReply, onRemember }: { item: ConversationItem; onReply: (text: string) => void; onRemember: (suggestion: ConversationMemorySuggestion) => void }) {
@@ -467,7 +680,17 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
     <div className="ask-lifeos-avatar lifeos-avatar" aria-hidden="true">L</div>
     <div className="ask-lifeos-message-body">
       <div className="ask-lifeos-message-label">LifeOS</div>
-      <div className="ask-lifeos-answer">{item.text}</div>
+      <article className={`ask-lifeos-response-card ${responseSurfaceTone(result)}`}>
+        <header className="ask-lifeos-response-head">
+          <div className="ask-lifeos-response-status">
+            <span className="ask-lifeos-response-spark" aria-hidden="true">✦</span>
+            {result ? <TrustBadge result={result} /> : <span className="ask-lifeos-trust neutral"><i />LifeOS response</span>}
+          </div>
+          <AskResponseCopyButton text={item.text} />
+        </header>
+        <div className="ask-lifeos-answer"><RichAskAnswer text={item.text} capabilities={result?.capabilities} /></div>
+        <CapabilityEvidence capabilities={result?.capabilities} />
+      </article>
       {result?.status === "clarification_required" ? <div className="ask-lifeos-clarification-actions">
         {candidates.map((candidate) => <button type="button" key={candidate.id} onClick={() => onReply(candidate.label)}>{candidate.label}</button>)}
         <button type="button" className="all-projects" onClick={() => onReply("all")}>All projects</button>
@@ -679,7 +902,6 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
         </div>
       </section> : proposalError ? <div className="ask-lifeos-action-error standalone">{proposalError}</div> : null}
       {result ? <div className="ask-lifeos-answer-meta">
-        <TrustBadge result={result} />
         {result.reasoning_tier ? <span className="ask-lifeos-model-chip">{askModelTierOptions.find((option) => option.value === result.reasoning_tier)?.label || result.reasoning_tier}</span> : null}
         {result.route.scope?.label ? <span className="ask-lifeos-scope-chip">{result.route.scope.label}</span> : null}
         {result.attention_level ? <span className={`ask-lifeos-attention attention-${result.attention_level}`}>{result.attention_level} attention</span> : null}

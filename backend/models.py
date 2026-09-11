@@ -2802,6 +2802,114 @@ class LifeOSActionProposal(db.Model):
         return parsed if isinstance(parsed, list) else []
 
 
+class SmartPlannerPlan(db.Model):
+    """Accepted, user-owned Smart Planner schedule.
+
+    Plans are created only after the user confirms an I9 proposal. Generated
+    previews remain transient and never mutate workspace state.
+    """
+
+    __tablename__ = "smart_planner_plans"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title = db.Column(db.Unicode(255), nullable=False)
+    mode = db.Column(db.Unicode(24), nullable=False, default="day", index=True)
+    start_date = db.Column(db.Date, nullable=False, index=True)
+    end_date = db.Column(db.Date, nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    supersedes_plan_id = db.Column(db.Integer, nullable=True, index=True)
+    status = db.Column(db.Unicode(24), nullable=False, default="accepted", index=True)
+    request_text = db.Column(db.UnicodeText, nullable=True)
+    summary = db.Column(db.UnicodeText, nullable=True)
+    working_start = db.Column(db.Time, nullable=False)
+    working_end = db.Column(db.Time, nullable=False)
+    break_minutes = db.Column(db.Integer, nullable=False, default=15)
+    available_minutes = db.Column(db.Integer, nullable=False, default=0)
+    scheduled_minutes = db.Column(db.Integer, nullable=False, default=0)
+    overload_minutes = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    accepted_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    blocks = db.relationship(
+        "SmartPlannerBlock",
+        back_populates="plan",
+        lazy=True,
+        cascade="all, delete-orphan",
+        order_by="SmartPlannerBlock.sort_order",
+    )
+
+
+class SmartPlannerBlock(db.Model):
+    """One deterministic scheduled block inside an accepted Smart Planner plan."""
+
+    __tablename__ = "smart_planner_blocks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(
+        db.Integer,
+        db.ForeignKey("smart_planner_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tasks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    block_date = db.Column(db.Date, nullable=False, index=True)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    minutes = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.Unicode(255), nullable=False)
+    block_type = db.Column(db.Unicode(24), nullable=False, default="task")
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    project_title = db.Column(db.Unicode(255), nullable=True)
+    importance = db.Column(db.Unicode(24), nullable=True)
+    deadline = db.Column(db.Date, nullable=True)
+    rationale = db.Column(db.UnicodeText, nullable=True)
+    locked = db.Column(db.Boolean, nullable=False, default=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    plan = db.relationship("SmartPlannerPlan", back_populates="blocks")
+    task = db.relationship("Task", foreign_keys=[task_id])
+
+
+class SmartPlannerCommitment(db.Model):
+    """User-owned fixed time that Smart Planner must schedule around.
+
+    Manual commitments are explicit user input. Academic assessments are read
+    directly from ModuleAssessment and are never copied into this table.
+    """
+
+    __tablename__ = "smart_planner_commitments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title = db.Column(db.Unicode(255), nullable=False)
+    commitment_date = db.Column(db.Date, nullable=False, index=True)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    commitment_type = db.Column(db.Unicode(32), nullable=False, default="other", index=True)
+    notes = db.Column(db.UnicodeText, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class LifeOSActivityEvent(db.Model):
     """Auditable, user-owned record of meaningful workspace changes."""
 

@@ -48,11 +48,13 @@ ACTION_CREATE_TASK = "create_task"
 ACTION_CREATE_NOTE = "create_note"
 ACTION_REFRESH_DOCUMENT_ANALYSIS = "refresh_document_analysis"
 ACTION_CREATE_MODULE_ASSESSMENT = "create_module_assessment"
+ACTION_APPLY_SMART_PLAN = "apply_smart_plan"
 ALLOWED_ACTION_TYPES = frozenset({
     ACTION_CREATE_TASK,
     ACTION_CREATE_NOTE,
     ACTION_REFRESH_DOCUMENT_ANALYSIS,
     ACTION_CREATE_MODULE_ASSESSMENT,
+    ACTION_APPLY_SMART_PLAN,
 })
 ALLOWED_PROPOSAL_STATUSES = frozenset({"pending", "executing", "confirmed", "dismissed", "failed"})
 I9_PRIORITY_AUTH_VERSION = "v1"
@@ -523,6 +525,12 @@ def _execute_confirmed_action(proposal: LifeOSActionProposal, owner_id: int) -> 
         result = analyse_owned_document(document_id=document.id, user_id=owner_id, force=True)
         return "document_analysis", int(result.analysis.id)
 
+    if proposal.action_type == ACTION_APPLY_SMART_PLAN:
+        from services.smart_planner_service import apply_confirmed_smart_plan
+
+        plan = apply_confirmed_smart_plan(owner_id=owner_id, proposal=proposal)
+        return "smart_plan", int(plan.id)
+
     if proposal.action_type == ACTION_CREATE_MODULE_ASSESSMENT:
         try:
             module_id = int(payload.get("module_id"))
@@ -653,7 +661,7 @@ def confirm_owned_action_proposal(*, proposal_id: int, owner_id: int) -> LifeOSA
 
     try:
         resource_type, resource_id = _execute_confirmed_action(proposal, owner_id)
-    except (IntelligenceActionError, TaskPersistenceError, NotePersistenceError, DocumentAnalysisWorkflowError, ModuleAssessmentPersistenceError, ModuleAssessmentValidationError, ModuleNotFoundError, ValueError) as error:
+    except (IntelligenceActionError, TaskPersistenceError, NotePersistenceError, DocumentAnalysisWorkflowError, ModuleAssessmentPersistenceError, ModuleAssessmentValidationError, ModuleNotFoundError, ValueError, RuntimeError) as error:
         _mark_failed(proposal, str(error))
         raise IntelligenceActionExecutionError(str(error)) from error
 
@@ -675,7 +683,7 @@ def confirm_owned_action_proposal(*, proposal_id: int, owner_id: int) -> LifeOSA
         object_type=resource_type,
         object_id=resource_id,
         project_id=proposal.project_id,
-        title=proposal.title.replace("Create task: ", "Created task: ").replace("Save note: ", "Saved note: ").replace("Refresh analysis: ", "Refreshed analysis: ").replace("Import assessment: ", "Imported assessment: "),
+        title=proposal.title.replace("Create task: ", "Created task: ").replace("Save note: ", "Saved note: ").replace("Refresh analysis: ", "Refreshed analysis: ").replace("Import assessment: ", "Imported assessment: ").replace("Accept Smart Planner: ", "Accepted Smart Planner: "),
         summary="The user confirmed a LifeOS intelligence action after reviewing its proposal.",
         changes={"action_type": proposal.action_type, "proposal_id": proposal.id},
         source_type="ask_lifeos",

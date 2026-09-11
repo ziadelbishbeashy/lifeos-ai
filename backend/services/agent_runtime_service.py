@@ -39,7 +39,7 @@ from services.intelligence_tool_registry_service import (
 AGENT_LIMITS = {
     "max_steps": 6,
     "max_tool_calls": 6,
-    "max_provider_calls": 2,
+    "max_provider_calls": 4,
     "max_runtime_seconds": 45,
     "max_evidence_items": 24,
     "max_action_suggestions": 3,
@@ -61,6 +61,18 @@ class AgentLimitError(AgentRuntimeError):
 
 class AgentProposalError(AgentRuntimeError, ValueError):
     pass
+
+
+def _provider_call_cost_for_tool(tool_name: str) -> int:
+    """Conservative provider-call budget reserved by reviewed read-only tools."""
+
+    if tool_name == "knowledge.ask_context":
+        # The grounded Ask LifeOS path can consume one reasoner + one verifier.
+        return 2
+    if tool_name == "public.web_search":
+        # Provider-hosted search is one metered provider call.
+        return 1
+    return 0
 
 
 def _json_safe(value: Any, *, depth: int = 0) -> Any:
@@ -111,6 +123,15 @@ def _compact_tool_result(tool_name: str, data: dict[str, Any]) -> dict[str, Any]
             "total_items": data.get("total_items"),
             "context_limited": bool(data.get("context_limited")),
             "read_only": True,
+        }
+    if tool_name == "public.web_search":
+        return {
+            "query": _clean(data.get("query"), 500),
+            "summary": _clean(data.get("summary"), 4000),
+            "sources": _json_safe(list(data.get("sources") or [])[:8]),
+            "source_count": int(data.get("source_count") or 0),
+            "read_only": True,
+            "provider_hosted_search": True,
         }
     if tool_name == "knowledge.ask_context":
         grounded = data.get("grounded") if isinstance(data.get("grounded"), dict) else {}
@@ -221,6 +242,36 @@ def _build_evidence_catalog(
                         "field": item.get("event_type") or "activity",
                         "freshness": "current",
                     }],
+                })
+            continue
+
+        if step.tool_name == "public.web_search":
+            sources = list(data.get("sources") or [])
+            summary = _clean(data.get("summary"), 1800)
+            if sources:
+                for index, source in enumerate(sources[:8], start=1):
+                    if not isinstance(source, dict):
+                        continue
+                    add({
+                        "id": f"{step.step_id}.source.{index}",
+                        "kind": "public_web",
+                        "label": _clean(source.get("title") or source.get("url"), 300),
+                        "detail": summary,
+                        "source_refs": [{
+                            "source_type": "public_web",
+                            "source_id": source.get("id"),
+                            "label": source.get("title") or source.get("url"),
+                            "url": source.get("url"),
+                            "freshness": "current_research",
+                        }],
+                    })
+            else:
+                add({
+                    "id": f"{step.step_id}.summary",
+                    "kind": "public_web",
+                    "label": "Current public web research",
+                    "detail": summary,
+                    "source_refs": [],
                 })
             continue
 
@@ -529,6 +580,9 @@ def run_owned_agent_goal(
                 raise AgentLimitError("The agent reached its runtime limit.")
 
             step_started = time.monotonic()
+            tool_provider_cost = _provider_call_cost_for_tool(step.tool_name)
+            if provider_calls + tool_provider_cost > AGENT_LIMITS["max_provider_calls"]:
+                raise AgentLimitError("The agent reached its AI-call limit before executing the next tool.")
             try:
                 result = active_registry.execute(
                     step.tool_name,
@@ -537,10 +591,7 @@ def run_owned_agent_goal(
                     allow_mutation=False,
                 )
                 tool_calls += 1
-                if step.tool_name == "knowledge.ask_context":
-                    # Conservatively reserve the full I4/I5 grounded Ask LifeOS
-                    # budget. The direct knowledge path never adds another reasoner.
-                    provider_calls += 2
+                provider_calls += tool_provider_cost
                 observations[step.step_id] = result.data
                 trace.append({
                     "index": index,

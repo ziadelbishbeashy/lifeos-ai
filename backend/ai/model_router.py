@@ -37,6 +37,7 @@ _MODEL_TIER_ALIASES: Final[dict[str, str]] = {
 _USER_SELECTABLE_EXACT: Final[frozenset[str]] = frozenset({
     "ask_lifeos_reasoner",
     "ask_lifeos_advisor",
+    "ask_lifeos_general_reasoner",
     "agent_reasoning",
 })
 _USER_SELECTABLE_PREFIXES: Final[tuple[str, ...]] = (
@@ -60,6 +61,10 @@ _FEATURE_TIER_EXACT: Final[dict[str, str]] = {
     "ask_lifeos_claim_verifier": TIER_NORMAL,
     "ask_lifeos_reasoner": TIER_NORMAL,
     "ask_lifeos_advisor": TIER_NORMAL,
+    "ask_lifeos_general_reasoner": TIER_NORMAL,
+    "ask_lifeos_general_verifier": TIER_NORMAL,
+    "ask_lifeos_request_understanding": TIER_CHEAP,
+    "ask_lifeos_web_research": TIER_CHEAP,
     "academic_schedule_extraction": TIER_NORMAL,
     # Complex I19 goal reasoning gets the DEEP tier. Today DEEP can still map to
     # the same Gemini model; later deployment can point it at GPT-5 or equivalent.

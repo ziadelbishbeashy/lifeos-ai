@@ -61,6 +61,25 @@ class ProviderUsage:
         return result
 
 
+
+
+@dataclass(frozen=True)
+class ProviderWebSource:
+    """One public source returned by a hosted provider web-search tool."""
+
+    title: str
+    url: str
+
+
+@dataclass(frozen=True)
+class ProviderWebGeneration:
+    """Grounded web synthesis plus public source metadata."""
+
+    text: str
+    sources: tuple[ProviderWebSource, ...] = ()
+    search_queries: tuple[str, ...] = ()
+    usage: ProviderUsage = field(default_factory=ProviderUsage)
+
 @dataclass(frozen=True)
 class ProviderGeneration:
     """One provider generation result without exposing provider SDK objects."""
@@ -80,3 +99,19 @@ class AIProvider(ABC):
     @abstractmethod
     def generate_text(self, *, model: str, prompt: str) -> str | ProviderGeneration:
         """Return generated text/usage or raise ProviderRequestError."""
+
+    def generate_json_text(self, *, model: str, prompt: str) -> str | ProviderGeneration:
+        """Return a JSON-only generation when the provider supports that mode.
+
+        The default keeps third-party/test providers backwards compatible. Official
+        adapters override this to request provider-native JSON output, which makes
+        Ask LifeOS structured reasoning/verifier calls much less brittle without
+        changing the ordinary free-form generation path.
+        """
+
+        return self.generate_text(model=model, prompt=prompt)
+
+    def generate_web_research(self, *, model: str, prompt: str) -> ProviderWebGeneration:
+        """Run one read-only hosted web search when the provider supports it."""
+
+        raise ProviderRequestError(f"{self.provider_name} web research is not available.")
