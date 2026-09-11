@@ -26,6 +26,7 @@ import { NotificationHistoryPage, NotificationSettingsPage } from "./pages/Notif
 import { ProjectDetailsPage } from "./pages/ProjectDetailsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SmartPlannerPage } from "./pages/SmartPlannerPage";
+import { PrivateTutorPage } from "./pages/PrivateTutorPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { TasksPage } from "./pages/TasksPage";
 
@@ -70,7 +71,7 @@ export function App() {
   if (path === "/register") return <RegisterPage />;
   if (path === "/onboarding") return <ExperienceOnboardingPage />;
   if (path === "/settings") return <PrivateArea active="settings"><ExperienceSettingsPage /></PrivateArea>;
-  if (path === "/tutor") return <PrivateArea active="tutor"><AskLifeOSPage tutor /></PrivateArea>;
+  if (path === "/tutor") return <PrivateArea active="tutor"><PrivateTutorPage /></PrivateArea>;
 
   if (path === "/dashboard") return <PrivateArea active="dashboard"><DashboardPage /></PrivateArea>;
   if (path === "/ask" || path === "/intelligence") return <PrivateArea active="intelligence"><AskLifeOSPage /></PrivateArea>;

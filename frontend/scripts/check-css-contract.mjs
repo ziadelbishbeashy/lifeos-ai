@@ -30,6 +30,7 @@ const expected = [
   "./document-brain.css",
   "./modules-v1.css",
   "./smart-planner.css",
+  "./private-tutor.css",
   "./vspace.css",
 ];
 

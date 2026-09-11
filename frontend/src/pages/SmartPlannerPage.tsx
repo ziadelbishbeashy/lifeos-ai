@@ -229,6 +229,10 @@ function PlanTimeline({ plan, editable, onEdit }: { plan: SmartPlan; editable: b
 
 export function SmartPlannerPage() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const initialPrompt = useMemo(() => {
+    const value = new URLSearchParams(window.location.search).get("prompt") || "";
+    return value.slice(0, 600);
+  }, []);
   const [mode, setMode] = useState<"day" | "week" | "goal">("day");
   const [horizonDays, setHorizonDays] = useState(7);
   const [startDate, setStartDate] = useState(today);
@@ -236,7 +240,7 @@ export function SmartPlannerPage() {
   const [workingEnd, setWorkingEnd] = useState("17:00");
   const [breakMinutes, setBreakMinutes] = useState(15);
   const [projectId, setProjectId] = useState("");
-  const [requestText, setRequestText] = useState("");
+  const [requestText, setRequestText] = useState(initialPrompt);
   const [preview, setPreview] = useState<SmartPlan | null>(null);
   const [proposal, setProposal] = useState<PlannerProposal | null>(null);
   const [message, setMessage] = useState<string | null>(null);

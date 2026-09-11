@@ -151,6 +151,13 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
     )
 
+    private_tutor_sessions = db.relationship(
+        "PrivateTutorSession",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -2751,6 +2758,80 @@ class ModuleQuestion(db.Model):
             parsed = json.loads(self.sources_json or "[]")
         except (json.JSONDecodeError, TypeError):
             return []
+        return parsed if isinstance(parsed, list) else []
+
+
+class PrivateTutorSession(db.Model):
+    """One user-owned Private Tutor generation or quiz attempt.
+
+    Private Tutor reuses the authoritative Module/Document Brain retrieval stack.
+    Stored payloads make study history and quiz review reproducible without
+    creating a second knowledge pipeline.
+    """
+
+    __tablename__ = "private_tutor_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    module_id = db.Column(
+        db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    lecture_id = db.Column(
+        db.Integer, db.ForeignKey("lectures.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    mode = db.Column(db.Unicode(32), nullable=False, index=True)
+    difficulty = db.Column(db.Unicode(24), nullable=False, default="intermediate")
+    topic = db.Column(db.Unicode(500), nullable=True)
+    request_text = db.Column(db.UnicodeText, nullable=True)
+    content_json = db.Column(db.UnicodeText, nullable=False, default="{}")
+    sources_json = db.Column(db.UnicodeText, nullable=False, default="[]")
+    answers_json = db.Column(db.UnicodeText, nullable=True)
+    weak_areas_json = db.Column(db.UnicodeText, nullable=True)
+    score_correct = db.Column(db.Integer, nullable=True)
+    score_total = db.Column(db.Integer, nullable=True)
+    status = db.Column(db.Unicode(24), nullable=False, default="ready", index=True)
+    provider = db.Column(db.Unicode(30), nullable=False)
+    model = db.Column(db.Unicode(100), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    user = db.relationship("User", back_populates="private_tutor_sessions")
+    module = db.relationship("LearningModule")
+    lecture = db.relationship("Lecture")
+
+    @staticmethod
+    def _json(value, fallback):
+        try:
+            parsed = json.loads(value or "")
+        except (json.JSONDecodeError, TypeError):
+            return fallback
+        return parsed
+
+    @property
+    def content(self) -> dict:
+        parsed = self._json(self.content_json, {})
+        return parsed if isinstance(parsed, dict) else {}
+
+    @property
+    def sources(self) -> list:
+        parsed = self._json(self.sources_json, [])
+        return parsed if isinstance(parsed, list) else []
+
+    @property
+    def answers(self) -> dict:
+        parsed = self._json(self.answers_json, {})
+        return parsed if isinstance(parsed, dict) else {}
+
+    @property
+    def weak_areas(self) -> list:
+        parsed = self._json(self.weak_areas_json, [])
         return parsed if isinstance(parsed, list) else []
 
 
