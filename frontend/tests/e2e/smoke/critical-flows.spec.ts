@@ -32,7 +32,7 @@ test("Document Brain detail keeps detect, verify and grounded Ask AI interaction
   await expect(page.getByRole("heading", { name: "LifeOS_Master_Plan.pdf" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Project Plan at a glance", exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Detect type" }).click();
+  await page.getByRole("button", { name: "Re-analyse" }).click();
   await expect(page.getByRole("heading", { name: "Project Plan", exact: true })).toBeVisible();
   await expect(page.getByText("high confidence")).toBeVisible();
 
@@ -41,7 +41,7 @@ test("Document Brain detail keeps detect, verify and grounded Ask AI interaction
   await question.fill("What should happen next?");
   const askForm = question.locator("xpath=ancestor::form[1]");
   await askForm.getByRole("button", { name: "Ask AI", exact: true }).click();
-  const answerCard = page.locator(".qa-card").filter({ hasText: "Finish the frontend reliability gate, then continue the roadmap." }).first();
+  const answerCard = page.locator(".brain-qa-card").filter({ hasText: "Finish the frontend reliability gate, then continue the roadmap." }).first();
   await expect(answerCard).toBeVisible();
   await answerCard.getByRole("button", { name: /Verify/i }).first().click();
   await expect(answerCard.getByText(/R0 exit condition/i)).toBeVisible();

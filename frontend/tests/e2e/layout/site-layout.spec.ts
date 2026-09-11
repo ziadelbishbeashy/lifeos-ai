@@ -9,16 +9,17 @@ const routes = [
   ["Notes", "/notes", ".notes-studio-page"],
   ["Analytics", "/analytics", ".analytics-page"],
   ["Notifications", "/notifications/settings", ".workspace-page"],
-  ["Document Brain", "/documents", ".db-library"],
+  ["Document Brain", "/documents", ".brain-library-page"],
 ] as const;
 
 test.describe("desktop layout contract", () => {
   for (const [label, path, root] of routes) {
-    test(`${label} fills the separated React canvas`, async ({ page }) => {
+    test(`${label} fills the separated React canvas`, async ({ page }, testInfo) => {
       await installLifeosApiMock(page);
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(path);
       await expect(page.locator(root)).toBeVisible();
+      if (process.env.VSPACE_CAPTURE) await page.screenshot({ path: testInfo.outputPath(`${label.replaceAll(" ","-")}.png`), fullPage:true, animations:"disabled" });
       await expectNoFrontendCrash(page);
       await expectDesktopShell(page);
       await expectNoHorizontalOverflow(page);
@@ -50,8 +51,8 @@ test.describe("desktop layout contract", () => {
   test("Document Brain cannot regress to a blank blue workspace", async ({ page }) => {
     await installLifeosApiMock(page);
     await page.goto("/documents");
-    await expect(page.getByRole("heading", { name: "Turn every PDF into a searchable, actionable workspace." })).toBeVisible();
-    await expect(page.locator(".db-document-card")).toHaveCount(2);
+    await expect(page.getByRole("heading", { name: "Document Brain", exact: true })).toBeVisible();
+    await expect(page.locator(".brain-document-row")).toHaveCount(2);
     await expectNoFrontendCrash(page);
   });
 });

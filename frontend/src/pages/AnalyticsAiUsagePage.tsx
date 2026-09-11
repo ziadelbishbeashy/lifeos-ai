@@ -23,7 +23,7 @@ function operationLabel(endpoint: unknown, features: unknown) {
   const featureList = Array.isArray(features) ? features : [];
   if (raw.includes("detect_type")) return "Detect document type";
   if (raw.includes("analyze_route")) return "Analyse document";
-  if (raw.includes("ask")) return "Ask LifeOS";
+  if (raw.includes("ask")) return "Ask V-SPACE";
   if (raw.includes("assessment") && raw.includes("import")) return "Import academic schedule";
   if (featureList.length) return featureList.map(friendly).join(" + ");
   return raw ? raw.split(".").pop() || raw : "Internal AI operation";
@@ -37,8 +37,8 @@ export function AnalyticsAiUsagePage() {
     queryFn: () => apiGet<any>(`/api/v1/ai-usage/summary?days=${days}`),
   });
 
-  if (ai.isPending) return <PageState title="Loading AI usage" text="Reading LifeOS token and provider-cost telemetry…" />;
-  if (ai.isError || !ai.data) return <PageState title="AI usage unavailable" text="LifeOS could not load AI usage telemetry." error retry={() => ai.refetch()} />;
+  if (ai.isPending) return <PageState title="Loading AI usage" text="Reading V-SPACE token and provider-cost telemetry…" />;
+  if (ai.isError || !ai.data) return <PageState title="AI usage unavailable" text="V-SPACE could not load AI usage telemetry." error retry={() => ai.refetch()} />;
 
   const usage = ai.data;
   const u = usage.totals || {};
@@ -51,7 +51,7 @@ export function AnalyticsAiUsagePage() {
       <div>
         <span className="analytics-eyebrow">Analytics · Development</span>
         <h1>AI usage & cost</h1>
-        <p>Track provider calls, token consumption and estimated AI cost while LifeOS is under development.</p>
+        <p>Track provider calls, token consumption and estimated AI cost while V-SPACE is under development.</p>
       </div>
       <div className="analytics-header-actions">
         <a href="/analytics" className="analytics-action-button secondary">Back to Analytics</a>
@@ -59,7 +59,7 @@ export function AnalyticsAiUsagePage() {
     </header>
 
     <div className="analytics-filter-bar">
-      <div className="analytics-filter-copy"><strong>AI usage period</strong><span>Provider telemetry recorded by LifeOS</span></div>
+      <div className="analytics-filter-copy"><strong>AI usage period</strong><span>Provider telemetry recorded by V-SPACE</span></div>
       <label><span>Range</span><select value={period} onChange={e => setPeriod(e.target.value)}><option value="today">Today</option><option value="week">This week</option><option value="month">This month</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option></select></label>
     </div>
 

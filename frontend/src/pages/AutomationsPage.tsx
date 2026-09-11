@@ -43,7 +43,7 @@ function triggerLabel(item: LifeOSAutomation) {
     "document.intelligence_stale": "When a document becomes stale",
     "document.version_changed": "When a document changes",
   };
-  return eventLabels[eventType] ?? (eventType ? `When ${eventType.replace(/\./g, " ")}` : "When a LifeOS event happens");
+  return eventLabels[eventType] ?? (eventType ? `When ${eventType.replace(/\./g, " ")}` : "When a V-SPACE event happens");
 }
 
 const FRIENDLY_FLOW_STEPS: Record<string, string> = {
@@ -56,7 +56,7 @@ const FRIENDLY_FLOW_STEPS: Record<string, string> = {
   "trigger.project_deadline_approaching": "When a project deadline is approaching",
   "trigger.document_stale": "When a document becomes stale",
   "trigger.document_version_changed": "When a document changes",
-  "context.all_lifeos": "my LifeOS workspace",
+  "context.all_lifeos": "my V-SPACE workspace",
   "context.project": "the selected project",
   "context.document": "the selected document",
   "context.module": "the selected module",
@@ -99,7 +99,7 @@ function automationSentence(item: LifeOSAutomation, registry: AutomationRegistry
       ? `Every ${weekdays[Number(config.weekday ?? 0)] ?? "week"} at ${String(config.hour ?? 8).padStart(2, "0")}:${String(config.minute ?? 0).padStart(2, "0")}`
       : triggerLabel(item);
   const steps = item.compiled_plan?.steps ?? [];
-  if (!steps.length) return `${when}, ask LifeOS to ${lowerFirst(actionLabel(registry, item.action.type))}.`;
+  if (!steps.length) return `${when}, ask V-SPACE to ${lowerFirst(actionLabel(registry, item.action.type))}.`;
 
   const contexts = steps.filter((step) => step.category === "context").map((step) => lowerFirst(friendlyFlowStep(step)));
   const intelligence = steps.filter((step) => step.category === "intelligence").map((step) => lowerFirst(friendlyFlowStep(step)));
@@ -108,7 +108,7 @@ function automationSentence(item: LifeOSAutomation, registry: AutomationRegistry
 
   let sentence = when;
   if (contexts.length) sentence += `, look at ${contexts.join(" and ")}`;
-  if (intelligence.length) sentence += `, ask LifeOS to ${intelligence.join(", then ")}`;
+  if (intelligence.length) sentence += `, ask V-SPACE to ${intelligence.join(", then ")}`;
   if (conditions.length) sentence += `, ${conditions.join(", then ")}`;
   if (outcomes.length) sentence += `, then ${outcomes.join(", then ")}`;
   return `${sentence}.`;
@@ -216,10 +216,10 @@ function NodeResultDetails({ node }: { node: VisualNodeRun }) {
   const conditionValue = result?.condition_passed;
   const conditionPassed = typeof conditionValue === "boolean" ? conditionValue : null;
   return <div className="automation-node-result-details">
-    {text ? <div className="automation-node-result-answer"><span>{node.capability?.startsWith("intelligence.") ? "LifeOS answer" : "Step result"}</span><p>{text}</p></div> : null}
+    {text ? <div className="automation-node-result-answer"><span>{node.capability?.startsWith("intelligence.") ? "V-SPACE answer" : "Step result"}</span><p>{text}</p></div> : null}
     {priorities.length ? <div className="automation-node-result-priorities"><span>Top findings</span>{priorities.map((priority, index) => <div key={`${node.node_id}-priority-${index}`}><strong>{String(priority.title || `Finding ${index + 1}`)}</strong>{priority.reason ? <p>{String(priority.reason)}</p> : null}{priority.recommended_action ? <small>Next: {String(priority.recommended_action)}</small> : null}</div>)}</div> : null}
-    {conditionPassed !== null ? <div className={`automation-node-result-condition ${conditionPassed ? "passed" : "stopped"}`}><strong>{conditionPassed ? "Condition passed" : "Flow stopped here"}</strong><span>{conditionPassed ? "LifeOS continued to the next step." : "Later steps were skipped because this condition was not met."}</span></div> : null}
-    {proposal ? <div className="automation-node-result-proposal"><span>Proposed action</span><strong>{proposal}</strong><small>Important workspace changes still require I9 confirmation.</small></div> : null}
+    {conditionPassed !== null ? <div className={`automation-node-result-condition ${conditionPassed ? "passed" : "stopped"}`}><strong>{conditionPassed ? "Condition passed" : "Flow stopped here"}</strong><span>{conditionPassed ? "V-SPACE continued to the next step." : "Later steps were skipped because this condition was not met."}</span></div> : null}
+    {proposal ? <div className="automation-node-result-proposal"><span>Proposed action</span><strong>{proposal}</strong><small>Important workspace changes still require your confirmation.</small></div> : null}
     {node.error ? <div className="automation-node-result-error">{node.error}</div> : null}
     {node.skip_reason ? <div className="automation-node-result-skip">{node.skip_reason}</div> : null}
   </div>;
@@ -231,7 +231,7 @@ function PreviewInsight({ node }: { node: VisualNodeRun }) {
   if (!answer) return null;
   const priorities = resultPriorities(result);
   return <section className="automation-preview-insight">
-    <span className="panel-kicker">LifeOS result</span>
+    <span className="panel-kicker">V-SPACE result</span>
     <strong>{resultTitle(result, node.label || "AI result")}</strong>
     <p>{answer}</p>
     {priorities.length ? <details className="automation-preview-evidence"><summary>View evidence and findings ({priorities.length})</summary><div className="automation-preview-findings">{priorities.map((priority, index) => <div key={`preview-finding-${node.node_id}-${index}`}><b>{String(priority.title || `Finding ${index + 1}`)}</b>{priority.reason ? <span>{String(priority.reason)}</span> : null}{priority.recommended_action ? <small>Next: {String(priority.recommended_action)}</small> : null}</div>)}</div></details> : null}
@@ -253,9 +253,9 @@ function PreviewApproval({ node }: { node: VisualNodeRun }) {
     <div className="automation-approval-icon" aria-hidden="true">✓</div>
     <div>
       <span className="panel-kicker">Needs your approval</span>
-      <strong>LifeOS recommends that you {action}</strong>
+      <strong>V-SPACE recommends that you {action}</strong>
       {title ? <p>{title}</p> : null}
-      <small>Nothing changes during this test. Run the automation to create a real proposal, then you can approve or reject it through I9.</small>
+      <small>Nothing changes during this test. Run the automation to create a real proposal, then you can approve or dismiss it.</small>
     </div>
     <span className="automation-approval-badge">Preview only</span>
   </section>;
@@ -271,7 +271,7 @@ function LiveApproval({ proposal, busy, error, onConfirm, onDismiss }: { proposa
       <strong>{proposal.title}</strong>
       {proposal.reason ? <p>{proposal.reason}</p> : null}
       {payloadTitle ? <div className="automation-live-approval-preview"><b>{actionLabels[proposal.action_type] ?? proposal.action_type.replace(/_/g, " ")}</b><span>{payloadTitle}</span></div> : null}
-      <small>{proposal.status === "pending" ? "LifeOS has not changed your workspace. Confirm only if this is the action you want." : proposal.status === "confirmed" ? "The approved application service completed the workspace change." : proposal.status === "dismissed" ? "Nothing was changed." : "I9 continues to own this action boundary."}</small>
+      <small>{proposal.status === "pending" ? "V-SPACE has not changed your workspace. Confirm only if this is the action you want." : proposal.status === "confirmed" ? "The approved application service completed the workspace change." : proposal.status === "dismissed" ? "Nothing was changed." : "This action still requires the normal confirmation checks."}</small>
       {proposal.failure_message || error ? <div className="automation-live-approval-error">{proposal.failure_message || error}</div> : null}
       {proposal.status === "pending" ? <div className="automation-live-approval-actions"><button type="button" className="secondary-button" disabled={busy} onClick={onDismiss}>Dismiss</button><button type="button" className="primary-button" disabled={busy} onClick={onConfirm}>{busy ? "Working…" : "Confirm action"}</button></div> : null}
     </div>
@@ -288,15 +288,15 @@ function TemplateCard({ template, busy, create }: { template: AutomationTemplate
 
 function friendlyVisualTemplateDescription(template: AutomationVisualTemplate) {
   const descriptions: Record<string, string> = {
-    visual_morning_focus: "Every morning, look across LifeOS, build your briefing, rank what matters most, and notify you.",
+    visual_morning_focus: "Every morning, look across V-SPACE, build your briefing, rank what matters most, and notify you.",
     visual_weekly_review: "Every week, review your workspace and recent activity, explain what changed, and notify you.",
     visual_weekly_risk: "Every week, review your workspace, evaluate important risks, and notify you.",
     visual_quiet_risk_alert: "Check for risk every day, but stay quiet unless the verified result actually needs attention.",
-    visual_custom_question: "Run your own read-only Ask LifeOS question on demand and keep the verified answer in run history.",
+    visual_custom_question: "Run your own read-only Ask V-SPACE question on demand and keep the verified answer in run history.",
     visual_project_deadline_watch: "When a project deadline gets close, review that project, find important risks, and notify you.",
     visual_stale_document_review: "When a document becomes stale, review that document with Document Brain and notify you about what needs attention.",
     visual_manual_review: "When you click Run now, review your workspace, rank priorities, and keep the result in run history.",
-    visual_i9_note_proposal: "Review your priorities and suggest saving a useful note. LifeOS will still ask you before anything is saved.",
+    visual_i9_note_proposal: "Review your priorities and suggest saving a useful note. V-SPACE will still ask you before anything is saved.",
   };
   return descriptions[template.key] ?? template.description;
 }
@@ -435,7 +435,7 @@ export function AutomationsPage() {
       setFlowStudio(null);
       await refreshAutomationEvidence();
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "LifeOS could not create that automation."),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "V-SPACE could not create that automation."),
   });
 
   const updateMutation = useMutation({
@@ -444,7 +444,7 @@ export function AutomationsPage() {
       setError(null);
       if ("visual_graph" in variables.payload) {
         setMessage(data.automation.execution.mode === "compiled_visual"
-          ? `Saved “${data.automation.name}”. LifeOS validated the flow and it is ready to run.`
+          ? `Saved “${data.automation.name}”. V-SPACE validated the flow and it is ready to run.`
           : `Saved “${data.automation.name}”.`);
         setFlowStudio(null);
       } else if ("enabled" in variables.payload) {
@@ -460,15 +460,15 @@ export function AutomationsPage() {
     onSuccess: async (data, id) => {
       setError(null);
       const output = data.execution.output;
-      const summary = String(output.summary || output.title || "Automation completed from verified LifeOS state.");
+      const summary = String(output.summary || output.title || "Automation completed from verified V-SPACE state.");
       const proposal = recordValue(output.proposal);
       if (proposal && typeof proposal.id === "number") {
         setRunProposals((current) => ({ ...current, [id]: proposal as unknown as IntelligenceActionProposal }));
         setProposalErrors((current) => { const next = { ...current }; delete next[id]; return next; });
         setActivePanel({ id, view: "test" });
-        setMessage("LifeOS finished the run and prepared an action for your approval.");
+        setMessage("V-SPACE finished the run and prepared an action for your approval.");
       } else {
-        setMessage(data.execution.notification_event_id ? `${summary} A LifeOS notification was prepared.` : summary);
+        setMessage(data.execution.notification_event_id ? `${summary} A V-SPACE notification was prepared.` : summary);
       }
       await refreshAutomationEvidence(id);
       await qc.invalidateQueries({ queryKey: ["lifeos-proactive-notifications"] });
@@ -488,7 +488,7 @@ export function AutomationsPage() {
     },
     onSuccess: async (data, id) => {
       setError(null);
-      const summary = String(data.preview.output.summary || data.preview.output.headline || data.preview.output.message || "Safe AI test completed from verified LifeOS state.");
+      const summary = String(data.preview.output.summary || data.preview.output.headline || data.preview.output.message || "Safe AI test completed from verified V-SPACE state.");
       setPreviewResults((current) => ({ ...current, [id]: { summary, output: data.preview.output } }));
       await refreshAutomationEvidence(id);
     },
@@ -506,14 +506,14 @@ export function AutomationsPage() {
     },
     onSuccess: async (data, variables) => {
       setRunProposals((current) => ({ ...current, [variables.automationId]: data.proposal }));
-      setMessage(data.proposal.status === "confirmed" ? "Approved action completed through I9." : data.proposal.status === "dismissed" ? "Proposal dismissed. Nothing was changed." : "Proposal updated.");
+      setMessage(data.proposal.status === "confirmed" ? "Your approved action is complete." : data.proposal.status === "dismissed" ? "Proposal dismissed. Nothing was changed." : "Proposal updated.");
       await qc.invalidateQueries({ queryKey: ["projects"] });
       await qc.invalidateQueries({ queryKey: ["tasks"] });
       await qc.invalidateQueries({ queryKey: ["dashboard"] });
       await refreshAutomationEvidence(variables.automationId);
     },
     onError: (err, variables) => {
-      setProposalErrors((current) => ({ ...current, [variables.automationId]: err instanceof ApiError ? err.message : "LifeOS could not update that proposal." }));
+      setProposalErrors((current) => ({ ...current, [variables.automationId]: err instanceof ApiError ? err.message : "V-SPACE could not update that proposal." }));
     },
   });
 
@@ -524,7 +524,7 @@ export function AutomationsPage() {
       setMessage(`Cleared the current error state for “${data.automation.name}”. Run history was preserved.`);
       await refreshAutomationEvidence(data.automation.id);
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "LifeOS could not clear that error state."),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "V-SPACE could not clear that error state."),
   });
 
   const deleteMutation = useMutation({
@@ -533,8 +533,8 @@ export function AutomationsPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : "Automation could not be deleted."),
   });
 
-  if (registryQuery.isPending || listQuery.isPending) return <PageState title="Loading Automations" text="Loading the LifeOS intelligence automation engine…" />;
-  if (registryQuery.isError || listQuery.isError || !registryQuery.data || !listQuery.data) return <PageState title="Automations unavailable" text="LifeOS could not load the automation engine." error retry={() => { registryQuery.refetch(); listQuery.refetch(); }} />;
+  if (registryQuery.isPending || listQuery.isPending) return <PageState title="Loading Automations" text="Loading the V-SPACE intelligence automation engine…" />;
+  if (registryQuery.isError || listQuery.isError || !registryQuery.data || !listQuery.data) return <PageState title="Automations unavailable" text="V-SPACE could not load the automation engine." error retry={() => { registryQuery.refetch(); listQuery.refetch(); }} />;
 
   const registry = registryQuery.data.registry;
   const runtime = registryQuery.data.runtime;
@@ -581,7 +581,7 @@ export function AutomationsPage() {
     setMessage(null); setError(null);
     createMutation.mutate({
       name,
-      description: "Created in LifeOS Automations.",
+      description: "Created in V-SPACE Automations.",
       enabled: false,
       trigger_type: triggerType,
       trigger_config: triggerConfig,
@@ -599,20 +599,20 @@ export function AutomationsPage() {
     <PageHeader
       eyebrow="AI automations"
       title="Automations"
-      description="Tell LifeOS when to think for you, what information to use, and what you want to happen with the result."
+      description="Tell V-SPACE when to think for you, what information to use, and what you want to happen with the result."
       actions={<div className="automation-header-actions"><button type="button" className="primary-button" onClick={() => { setBuilderOpen(false); setFlowStudio("new"); }}>✦ Build visual automation</button><button type="button" className="secondary-button" onClick={() => { setFlowStudio(null); setBuilderOpen((value) => !value); }}>{builderOpen ? "Close simple builder" : "+ Simple automation"}</button></div>}
     />
 
     <section className="automation-safety-banner">
-      <div><span className={`automation-live-dot ${runtime.worker_enabled ? "enabled" : ""}`} /><div><strong>{runtime.worker_enabled ? "Background automations are on" : "Automations are ready to test"}</strong><p>{runtime.worker_enabled ? `LifeOS checks enabled automations about every ${runtime.poll_seconds} seconds and runs them when their time or event arrives.` : "Run now and Preview work immediately. Start the automation worker when you want scheduled and event automations to run in the background."}</p></div></div>
-      <div className="automation-safety-pills"><span>Approved LifeOS steps only</span><span>Run history included</span><span>No direct database writes</span><span>Important changes ask first</span></div>
+      <div><span className={`automation-live-dot ${runtime.worker_enabled ? "enabled" : ""}`} /><div><strong>{runtime.worker_enabled ? "Background automations are on" : "Automations are ready to test"}</strong><p>{runtime.worker_enabled ? `V-SPACE checks enabled automations about every ${runtime.poll_seconds} seconds and runs them when their time or event arrives.` : "Run now and Preview work immediately. Start the automation worker when you want scheduled and event automations to run in the background."}</p></div></div>
+      <div className="automation-safety-pills"><span>Approved V-SPACE steps only</span><span>Run history included</span><span>No direct database writes</span><span>Important changes ask first</span></div>
     </section>
 
     <section className="automation-explainer automation-explainer-compact panel-card">
       <div className="automation-explainer-copy">
         <span className="panel-kicker">How it works</span>
-        <h2>When → Look at → Ask LifeOS to → Then</h2>
-        <p>That is the whole automation. LifeOS only uses AI for reasoning; schedules, access, notifications, and approval stay controlled by normal application code.</p>
+        <h2>When → Look at → Ask V-SPACE to → Then</h2>
+        <p>That is the whole automation. V-SPACE only uses AI for reasoning; schedules, access, notifications, and approval stay controlled by normal application code.</p>
       </div>
       <details className="automation-explainer-details">
         <summary>See a quick example</summary>
@@ -643,7 +643,7 @@ export function AutomationsPage() {
     /> : null}
 
     {builderOpen ? <section className="panel-card automation-builder-card">
-      <div className="section-heading"><div><span className="panel-kicker">Simple automation</span><h2>Create a one-step automation</h2><p>Choose when it should run and one LifeOS intelligence action. Use the visual builder when you want several steps.</p></div></div>
+      <div className="section-heading"><div><span className="panel-kicker">Simple automation</span><h2>Create a one-step automation</h2><p>Choose when it should run and one V-SPACE intelligence action. Use the visual builder when you want several steps.</p></div></div>
       <div className="automation-builder-grid">
         <label className="field-label">Name<input value={name} maxLength={160} onChange={(event) => setName(event.target.value)} /></label>
         <label className="field-label">When should it run?<select value={triggerType} onChange={(event) => setTriggerType(event.target.value)}>{registry.triggers.map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select></label>
@@ -652,7 +652,7 @@ export function AutomationsPage() {
           <label className="field-label">Hour<input type="number" min={0} max={23} value={hour} onChange={(event) => setHour(Number(event.target.value))} /></label>
           <label className="field-label">Minute<input type="number" min={0} max={59} value={minute} onChange={(event) => setMinute(Number(event.target.value))} /></label>
         </>}
-        <label className="field-label">What should LifeOS do?<select value={actionType} onChange={(event) => setActionType(event.target.value)}>{registry.actions.filter((item) => !item.visual_only).map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select></label>
+        <label className="field-label">What should V-SPACE do?<select value={actionType} onChange={(event) => setActionType(event.target.value)}>{registry.actions.filter((item) => !item.visual_only).map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select></label>
         {actionType === "project_review" ? <label className="field-label">Project<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">Choose project</option>{(projectsQuery.data?.items ?? []).map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}</select></label> : null}
         <label className="field-label">Timezone<input value={browserTimezone} readOnly /></label>
       </div>
@@ -694,7 +694,7 @@ export function AutomationsPage() {
         const sentence = automationSentence(item, registry);
         return <article className={`automation-row automation-product-card ${item.status === "error" ? "has-error" : ""}`} key={item.id}>
           <div className="automation-row-main automation-product-head">
-            <div className="automation-row-title"><span className={`automation-status-dot ${item.enabled ? "enabled" : ""}`} /><div><strong>{item.name}</strong><small>{item.description || (isCompiledVisual ? "Visual LifeOS automation" : "Simple LifeOS automation")}</small></div></div>
+            <div className="automation-row-title"><span className={`automation-status-dot ${item.enabled ? "enabled" : ""}`} /><div><strong>{item.name}</strong><small>{item.description || (isCompiledVisual ? "Visual V-SPACE automation" : "Simple V-SPACE automation")}</small></div></div>
             <div className="automation-product-status"><span className={`automation-current-status ${item.status}`}>{item.status}</span><span className={`automation-enabled-pill ${item.enabled ? "enabled" : ""}`}>{item.enabled ? "On" : item.execution.background_available ? "Off" : "Manual"}</span></div>
           </div>
 
@@ -734,12 +734,12 @@ export function AutomationsPage() {
             <div className="automation-mode-panel-head"><div><span className="panel-kicker">Test</span><strong>See the result without changing your workspace</strong><small>The flow below is already backend-validated. Running the safe test can reason with AI, but approval steps are only simulated.</small></div><span className="automation-preview-safe">Read-only test</span></div>
             <div className="automation-preview-flow">{flowLabels.map((label, index) => <span key={`preview-${item.id}-${index}-${label}`}>{index > 0 ? <b>→</b> : null}<em>{label}</em></span>)}</div>
             <div className="automation-preview-actions">
-              <div><strong>{previewResult ? "Test again with current LifeOS data" : "Ready to test the real output"}</strong><small>Common project risk questions use fast verified intelligence. Open-ended questions may call the AI provider and take longer.</small></div>
-              <button type="button" className="primary-button" disabled={previewingThis || !item.execution.preview_available} onClick={() => previewMutation.mutate(item.id)}>{previewingThis ? "LifeOS is thinking…" : previewResult ? "Test again" : "Test AI safely"}</button>
+              <div><strong>{previewResult ? "Test again with current V-SPACE data" : "Ready to test the real output"}</strong><small>Common project risk questions use fast verified intelligence. Open-ended questions may call the AI provider and take longer.</small></div>
+              <button type="button" className="primary-button" disabled={previewingThis || !item.execution.preview_available} onClick={() => previewMutation.mutate(item.id)}>{previewingThis ? "V-SPACE is thinking…" : previewResult ? "Test again" : "Test AI safely"}</button>
             </div>
-            {previewingThis ? <div className="automation-preview-progress"><span className="automation-preview-spinner" aria-hidden="true" /><div><strong>LifeOS is reasoning…</strong><small>This test cannot create tasks, save notes, or change your workspace.</small></div></div> : null}
+            {previewingThis ? <div className="automation-preview-progress"><span className="automation-preview-spinner" aria-hidden="true" /><div><strong>V-SPACE is reasoning…</strong><small>This test cannot create tasks, save notes, or change your workspace.</small></div></div> : null}
             {previewResult && !previewingThis ? <div className="automation-preview-result automation-preview-result-clean">
-              {previewAiNode ? <PreviewInsight node={previewAiNode} /> : <div className="automation-preview-result-head"><span className="panel-kicker">LifeOS result</span><strong>{previewResult.summary}</strong></div>}
+              {previewAiNode ? <PreviewInsight node={previewAiNode} /> : <div className="automation-preview-result-head"><span className="panel-kicker">V-SPACE result</span><strong>{previewResult.summary}</strong></div>}
               {previewStoppedNode ? <div className="automation-condition-stopped"><strong>Flow stopped safely</strong><span>The condition was not met, so later notification or approval steps were skipped.</span></div> : null}
               {liveProposal ? <LiveApproval proposal={liveProposal} busy={proposalBusy} error={proposalErrors[item.id]} onDismiss={() => proposalResolutionMutation.mutate({ automationId: item.id, proposalId: liveProposal.id, mode: "dismiss" })} onConfirm={() => proposalResolutionMutation.mutate({ automationId: item.id, proposalId: liveProposal.id, mode: "confirm" })} /> : previewProposalNode ? <PreviewApproval node={previewProposalNode} /> : null}
               <details className="automation-preview-technical"><summary>View technical execution · {previewCounts.completed} completed · {previewCounts.skipped} skipped · {previewCounts.failed} failed</summary>
@@ -754,7 +754,7 @@ export function AutomationsPage() {
             <RunHistory runs={historyQuery.data?.runs ?? []} loading={historyQuery.isPending} />
           </section> : null}
         </article>;
-      })}</div> : <div className="dashboard-empty-state compact-empty-state"><div className="empty-state-icon">↻</div><h3>No automations yet</h3><p>Choose a recipe, build your own visual automation, or create a simple one-step automation. LifeOS keeps run history so you can always see what happened.</p></div>}
+      })}</div> : <div className="dashboard-empty-state compact-empty-state"><div className="empty-state-icon">↻</div><h3>No automations yet</h3><p>Choose a recipe, build your own visual automation, or create a simple one-step automation. V-SPACE keeps run history so you can always see what happened.</p></div>}
     </section>
   </section>;
 }

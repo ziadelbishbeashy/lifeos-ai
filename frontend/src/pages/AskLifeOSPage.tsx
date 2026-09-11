@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ApiError, apiGet, apiPost } from "../api/client";
+import { BrandMark, Icon } from "../components/VSpaceUi";
 import { useSession } from "../auth/session";
 import type { AgentActionSuggestion, AgentPlan, AgentRun } from "../api/types";
 
@@ -13,7 +14,7 @@ type AskModelTier = "cheap" | "normal" | "deep";
 
 const askModelTierOptions: Array<{ value: AskModelTier; label: string; description: string }> = [
   { value: "cheap", label: "Fast", description: "Quick answers with lower AI cost" },
-  { value: "normal", label: "Balanced", description: "Best for most LifeOS questions" },
+  { value: "normal", label: "Balanced", description: "Best for most V-SPACE questions" },
   { value: "deep", label: "Deep", description: "More reasoning for difficult requests" },
 ];
 
@@ -294,7 +295,7 @@ const generalSuggestions = [
   "What should I do today?",
   "Which tasks are overdue?",
   "Help me get this project ready for deployment.",
-  "What changed in LifeOS this week?",
+  "What changed in V-SPACE this week?",
   "Which documents need review?",
   "Help me make meaningful progress this week.",
   "What should I study next?",
@@ -305,7 +306,7 @@ function friendlyGoalTool(name: string) {
   const labels: Record<string, string> = {
     "workspace.get_home": "Check current priorities and deadlines",
     "workspace.get_recent_activity": "Check recent workspace changes",
-    "workspace.get_portfolio_review": "Review project risks across LifeOS",
+    "workspace.get_portfolio_review": "Review project risks across V-SPACE",
     "project.get_summary": "Read the project state",
     "project.get_tasks": "Check tasks, blockers and deadlines",
     "project.review": "Review project priorities and risks",
@@ -331,7 +332,7 @@ function goalEvidenceGroups(evidence: AgentRun["output"]["evidence"] = []) {
       ? sourceRef.label
       : typeof sourceRef?.filename === "string"
         ? sourceRef.filename
-        : entry.project_title || "LifeOS workspace";
+        : entry.project_title || "V-SPACE workspace";
     const current = groups.get(label) || { label, items: [] };
     current.items.push(entry);
     groups.set(label, current);
@@ -486,7 +487,7 @@ function CapabilityEvidence({ capabilities }: { capabilities?: AskCapabilities |
   const [sourcesOpen, setSourcesOpen] = useState(sourceCount <= 3);
   if (!capabilities || (!sourceCount && !calculation && !warnings.length)) return null;
   return <section className="ask-lifeos-capability-evidence">
-    {calculation ? <div className="ask-lifeos-calculation-card"><div><span>Deterministic calculation</span><small>Computed by LifeOS code, not estimated by the model</small></div><strong>{calculation.formatted_result}</strong><code>{calculation.expression}</code></div> : null}
+    {calculation ? <div className="ask-lifeos-calculation-card"><div><span>Deterministic calculation</span><small>Computed by V-SPACE code, not estimated by the model</small></div><strong>{calculation.formatted_result}</strong><code>{calculation.expression}</code></div> : null}
     {sourceCount ? <details className="ask-lifeos-evidence-panel" open={sourcesOpen} onToggle={(event) => setSourcesOpen(event.currentTarget.open)}>
       <summary>
         <div className="ask-lifeos-evidence-summary-copy">
@@ -497,7 +498,7 @@ function CapabilityEvidence({ capabilities }: { capabilities?: AskCapabilities |
       </summary>
       <div className="ask-lifeos-evidence-body">
         {webSources.length ? <div className="ask-lifeos-source-group"><div className="ask-lifeos-source-heading"><strong>Web sources</strong><span>Read-only research</span></div><div className="ask-lifeos-source-cards">{webSources.slice(0, 8).map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.id}><span>{source.id}</span><strong>{source.title}</strong><small>{(() => { try { return new URL(source.url).hostname; } catch { return "Public web"; } })()}</small><em aria-hidden="true">↗</em></a>)}</div></div> : null}
-        {documentSources.length ? <div className="ask-lifeos-source-group"><div className="ask-lifeos-source-heading"><strong>Document evidence</strong><span>Owned LifeOS knowledge</span></div><div className="ask-lifeos-source-cards documents">{documentSources.slice(0, 8).map((source) => <a href={`/documents/${source.document_id}`} key={source.id}><span>{source.id}</span><strong>{source.filename}</strong><small>{[source.page ? `page ${source.page}` : null, source.section].filter(Boolean).join(" · ") || "Document Brain"}</small><em aria-hidden="true">→</em></a>)}</div></div> : null}
+        {documentSources.length ? <div className="ask-lifeos-source-group"><div className="ask-lifeos-source-heading"><strong>Document evidence</strong><span>Owned V-SPACE knowledge</span></div><div className="ask-lifeos-source-cards documents">{documentSources.slice(0, 8).map((source) => <a href={`/documents/${source.document_id}`} key={source.id}><span>{source.id}</span><strong>{source.filename}</strong><small>{[source.page ? `page ${source.page}` : null, source.section].filter(Boolean).join(" · ") || "Document Brain"}</small><em aria-hidden="true">→</em></a>)}</div></div> : null}
       </div>
     </details> : null}
     {warnings.length ? <details className="ask-lifeos-capability-warnings"><summary>Capability notes</summary>{warnings.map((warning, warningIndex) => <p key={warningIndex}>{warning}</p>)}</details> : null}
@@ -556,7 +557,7 @@ function AskResponseCopyButton({ text }: { text: string }) {
     }
   }
 
-  return <button type="button" className={`ask-lifeos-response-copy ${copied ? "copied" : ""}`} onClick={copyAnswer} aria-label="Copy LifeOS answer" title="Copy answer">
+  return <button type="button" className={`ask-lifeos-response-copy ${copied ? "copied" : ""}`} onClick={copyAnswer} aria-label="Copy V-SPACE answer" title="Copy answer">
     <span className="ask-lifeos-response-copy-icon" aria-hidden="true">{copied ? "✓" : "⧉"}</span>
     <span>{copied ? "Copied" : "Copy"}</span>
   </button>;
@@ -599,7 +600,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       });
       setProposal(response.proposal);
     } catch (err) {
-      setProposalError(err instanceof ApiError ? err.message : "LifeOS could not prepare that action.");
+      setProposalError(err instanceof ApiError ? err.message : "V-SPACE could not prepare that action.");
     } finally {
       setProposalBusy(false);
     }
@@ -613,7 +614,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       const response = await apiPost<{ proposal: ActionProposal }>(`/api/v1/intelligence/action-proposals/${proposal.id}/confirm`, {});
       setProposal(response.proposal);
     } catch (err) {
-      setProposalError(err instanceof ApiError ? err.message : "LifeOS could not complete that action.");
+      setProposalError(err instanceof ApiError ? err.message : "V-SPACE could not complete that action.");
     } finally {
       setProposalBusy(false);
     }
@@ -627,7 +628,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       const response = await apiPost<{ proposal: ActionProposal }>(`/api/v1/intelligence/action-proposals/${proposal.id}/dismiss`, {});
       setProposal(response.proposal);
     } catch (err) {
-      setProposalError(err instanceof ApiError ? err.message : "LifeOS could not dismiss that action.");
+      setProposalError(err instanceof ApiError ? err.message : "V-SPACE could not dismiss that action.");
     } finally {
       setProposalBusy(false);
     }
@@ -650,10 +651,10 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       });
       setGoalRun(response.run);
       if (response.run.status === "failed") {
-        setGoalRunError(response.run.failure_message || "LifeOS could not complete this goal review.");
+        setGoalRunError(response.run.failure_message || "V-SPACE could not complete this goal review.");
       }
     } catch (err) {
-      setGoalRunError(err instanceof ApiError ? err.message : "LifeOS could not complete this goal review.");
+      setGoalRunError(err instanceof ApiError ? err.message : "V-SPACE could not complete this goal review.");
     } finally {
       setGoalRunBusy(false);
     }
@@ -670,21 +671,21 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       });
       setProposal(response.proposal);
     } catch (err) {
-      setProposalError(err instanceof ApiError ? err.message : "LifeOS could not prepare that action.");
+      setProposalError(err instanceof ApiError ? err.message : "V-SPACE could not prepare that action.");
     } finally {
       setProposalBusy(false);
     }
   }
 
   return <div className="ask-lifeos-message assistant-message">
-    <div className="ask-lifeos-avatar lifeos-avatar" aria-hidden="true">L</div>
+    <div className="ask-lifeos-avatar lifeos-avatar" aria-hidden="true"><BrandMark/></div>
     <div className="ask-lifeos-message-body">
-      <div className="ask-lifeos-message-label">LifeOS</div>
+      <div className="ask-lifeos-message-label">V-SPACE</div>
       <article className={`ask-lifeos-response-card ${responseSurfaceTone(result)}`}>
         <header className="ask-lifeos-response-head">
           <div className="ask-lifeos-response-status">
             <span className="ask-lifeos-response-spark" aria-hidden="true">✦</span>
-            {result ? <TrustBadge result={result} /> : <span className="ask-lifeos-trust neutral"><i />LifeOS response</span>}
+            {result ? <TrustBadge result={result} /> : <span className="ask-lifeos-trust neutral"><i />V-SPACE response</span>}
           </div>
           <AskResponseCopyButton text={item.text} />
         </header>
@@ -707,16 +708,16 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
           </div>)}
         </div> : null}
         {!goalRun ? <div className="ask-lifeos-goal-start">
-          <p>LifeOS has not run these checks yet. Starting the review can read only your owned workspace; any later change still needs I9 confirmation.</p>
+          <p>V-SPACE has not run these checks yet. Starting the review can read only your owned workspace; any later change still needs I9 confirmation.</p>
           <button type="button" className="primary" disabled={goalRunBusy} onClick={() => void startGoalReview()}>{goalRunBusy ? "Reviewing…" : "Start review"}</button>
         </div> : null}
-        {goalRunBusy ? <div className="ask-lifeos-goal-running"><span/><div><strong>Reviewing the goal with trusted LifeOS context…</strong><small>Checking project state, tasks, priorities and relevant knowledge. No workspace changes can happen during this review.</small></div></div> : null}
+        {goalRunBusy ? <div className="ask-lifeos-goal-running"><span/><div><strong>Reviewing the goal with trusted V-SPACE context…</strong><small>Checking project state, tasks, priorities and relevant knowledge. No workspace changes can happen during this review.</small></div></div> : null}
         {goalRunError ? <div className="ask-lifeos-goal-retry"><div className="ask-lifeos-action-error standalone">{goalRunError}</div><button type="button" disabled={goalRunBusy} onClick={() => void startGoalReview()}>Try review again</button></div> : null}
         {goalRun?.status === "succeeded" ? <div className="ask-lifeos-goal-result">
           <div className="ask-lifeos-goal-executive-head">
             <div>
               <span className="ask-lifeos-goal-result-kicker">Goal assessment</span>
-              <strong>{goalSummary?.headline || "LifeOS completed the trusted checks for this goal."}</strong>
+              <strong>{goalSummary?.headline || "V-SPACE completed the trusted checks for this goal."}</strong>
             </div>
             {goalSummary?.status_label ? <span className={`ask-lifeos-goal-status status-${goalSummary.status}`}>{goalSummary.status_label}</span> : null}
           </div>
@@ -725,7 +726,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
             <span>Biggest blocker</span>
             <strong>{goalSummary.biggest_blocker.title}</strong>
             {goalSummary.biggest_blocker.why ? <p>{goalSummary.biggest_blocker.why}</p> : null}
-          </section> : <div className="ask-lifeos-goal-answer">{goalRun.output.answer || "LifeOS completed the review but did not produce a stronger conclusion."}</div>}
+          </section> : <div className="ask-lifeos-goal-answer">{goalRun.output.answer || "V-SPACE completed the review but did not produce a stronger conclusion."}</div>}
 
           {goalSummary?.other_risks?.length ? <section className="ask-lifeos-goal-other-risks">
             <strong>Other important risks</strong>
@@ -737,8 +738,8 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
 
           <section className="ask-lifeos-goal-conclusion">
             <details>
-              <summary>LifeOS conclusion</summary>
-              <div className="ask-lifeos-goal-answer">{goalRun.output.answer || "LifeOS completed the review but did not produce a stronger conclusion."}</div>
+              <summary>V-SPACE conclusion</summary>
+              <div className="ask-lifeos-goal-answer">{goalRun.output.answer || "V-SPACE completed the review but did not produce a stronger conclusion."}</div>
             </details>
           </section>
 
@@ -748,7 +749,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
           </div> : null}
 
           {goalRun.output.action_suggestions?.length ? <div className="ask-lifeos-goal-actions">
-            <div><strong>Suggested actions</strong><span>LifeOS will ask before changing anything.</span></div>
+            <div><strong>Suggested actions</strong><span>V-SPACE will ask before changing anything.</span></div>
             {goalRun.output.action_suggestions.slice(0, 2).map((suggestion) => <article key={suggestion.id}>
               <div><strong>{suggestion.title}</strong><p>{suggestion.recommended_action || suggestion.reason}</p></div>
               <div className="ask-lifeos-goal-action-buttons">{suggestion.options.slice(0, 2).map((option) => <button type="button" key={option.type} disabled={proposalBusy || proposal?.status === "pending"} onClick={() => void prepareGoalProposal(suggestion, option.type)}>{goalActionLabel(option.type)}</button>)}</div>
@@ -840,7 +841,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
             {connection.resource.url ? <a href={connection.resource.url}>{connection.resource.label}</a> : <strong>{connection.resource.label}</strong>}
             {connection.resource.project_title ? <small>{connection.resource.project_title}</small> : null}
             {connection.reason ? <p>{connection.reason}</p> : null}
-            {connection.provenance.type === "ask_lifeos" ? <div className="ask-lifeos-context-provenance">Preserved from confirmed Ask LifeOS evidence</div> : null}
+            {connection.provenance.type === "ask_lifeos" ? <div className="ask-lifeos-context-provenance">Preserved from confirmed Ask V-SPACE evidence</div> : null}
           </article>)}
         </div> : connections.candidates.length ? null : <div className="ask-lifeos-insight-empty">No connected context is currently recorded for this resource.</div>}
         {connections.connections.length > 10 ? <div className="ask-lifeos-activity-more">Showing the first 10 of {connections.connections.length} connections.</div> : null}
@@ -848,7 +849,7 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
       {memory ? <div className="ask-lifeos-memory-list">
         <div className="ask-lifeos-memory-heading"><div><strong>Structured memory</strong><span>Inspectable · deletable · no hidden chat transcript</span></div><a href="/memory">Manage memory</a></div>
         {memory.items.length ? <div className="ask-lifeos-memory-grid">{memory.items.slice(0, 8).map((entry) => <article key={entry.id}>
-          <div><span>{entry.type.replace(/_/g, " ")}</span>{entry.source.user_confirmed ? <em>You saved</em> : <em>LifeOS derived</em>}</div>
+          <div><span>{entry.type.replace(/_/g, " ")}</span>{entry.source.user_confirmed ? <em>You saved</em> : <em>V-SPACE derived</em>}</div>
           <strong>{entry.label}</strong>
           <p>{typeof entry.value.text === "string" ? entry.value.text : typeof entry.value.project_title === "string" ? entry.value.project_title : typeof entry.value.event_type === "string" ? entry.value.event_type : "Structured workspace memory"}</p>
         </article>)}</div> : <div className="ask-lifeos-insight-empty">No structured memory is currently saved.</div>}
@@ -910,9 +911,11 @@ function AssistantMessage({ item, onReply, onRemember }: { item: ConversationIte
   </div>;
 }
 
-export function AskLifeOSPage() {
+export function AskLifeOSPage({ tutor = false }: { tutor?: boolean }) {
   const session = useSession();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => (new URLSearchParams(location.search).get("q") || "").slice(0,1200));
+  const [studyMode, setStudyMode] = useState("Explain");
+  const threadRef = useRef<HTMLDivElement>(null);
   const [modelTier, setModelTier] = useState<AskModelTier>("normal");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -920,7 +923,7 @@ export function AskLifeOSPage() {
   const [clarificationContext, setClarificationContext] = useState<ClarificationContext | null>(null);
   const [contextOptions, setContextOptions] = useState<AskContextOptions | null>(null);
   const [selectedContext, setSelectedContext] = useState<AskContextOption | null>(null);
-  const [contextPickerOpen, setContextPickerOpen] = useState(false);
+  const [contextPickerOpen, setContextPickerOpen] = useState(() => new URLSearchParams(location.search).get("contextPicker") === "1");
   const [contextSearch, setContextSearch] = useState("");
   const [memoryDraft, setMemoryDraft] = useState<ConversationMemorySuggestion | null>(null);
   const [memoryBusy, setMemoryBusy] = useState(false);
@@ -929,14 +932,19 @@ export function AskLifeOSPage() {
   const hasConversation = conversation.length > 0;
   const suggestions = useMemo(() => {
     const tailored = session.data?.user?.experience.ui.ask_prompts || [];
-    return [...new Set([...tailored, ...generalSuggestions])].slice(0, 8);
-  }, [session.data?.user?.experience.primary_experience, session.data?.user?.experience.enabled_experiences.join("|")]);
+    return tutor ? ["Explain a difficult concept step by step", "Summarize the key ideas in my notes", "Give me practice questions on this topic", "Help me build a revision plan"] : [...new Set([...tailored, ...generalSuggestions])].slice(0, 4);
+  }, [tutor, session.data?.user?.experience.primary_experience, session.data?.user?.experience.enabled_experiences.join("|")]);
 
   useEffect(() => {
     let cancelled = false;
     void apiGet<{ contexts: AskContextOptions }>("/api/v1/intelligence/context-options")
       .then((response) => {
-        if (!cancelled) setContextOptions(response.contexts);
+        if (!cancelled) {
+          setContextOptions(response.contexts);
+          const params = new URLSearchParams(location.search);
+          const ownedContext = Object.values(response.contexts.groups).flat().find(item => item.type === params.get("context_type") && item.id === Number(params.get("context_id")));
+          if (ownedContext) setSelectedContext(ownedContext);
+        }
       })
       .catch(() => {
         if (!cancelled) setContextOptions(null);
@@ -944,10 +952,12 @@ export function AskLifeOSPage() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => { threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "auto" }); }, [conversation.length, busy]);
+
   const statusText = useMemo(() => {
-    if (busy) return "Checking current LifeOS state…";
+    if (busy) return selectedContext ? "Reading your selected context…" : "Checking your workspace…";
     if (selectedContext) return `Context locked to ${selectedContext.label}`;
-    return "Trusted context · verified answers · confirmed actions only";
+    return "Your workspace. Your sources. Your decisions.";
   }, [busy, selectedContext]);
 
   const visibleContextGroups = useMemo(() => {
@@ -983,7 +993,7 @@ export function AskLifeOSPage() {
         setMemoryStatus(response.message || "That message does not look like reusable memory.");
       }
     } catch (err) {
-      setMemoryStatus(err instanceof ApiError ? err.message : "LifeOS could not prepare that memory.");
+      setMemoryStatus(err instanceof ApiError ? err.message : "V-SPACE could not prepare that memory.");
     } finally {
       setMemoryBusy(false);
     }
@@ -1003,7 +1013,7 @@ export function AskLifeOSPage() {
       setMemoryDraft(null);
       setMemoryStatus(`Remembered: ${suggestion.label}`);
     } catch (err) {
-      setMemoryStatus(err instanceof ApiError ? err.message : "LifeOS could not save that memory.");
+      setMemoryStatus(err instanceof ApiError ? err.message : "V-SPACE could not save that memory.");
     } finally {
       setMemoryBusy(false);
     }
@@ -1023,7 +1033,7 @@ export function AskLifeOSPage() {
 
     try {
       const result = await apiPost<AskLifeOSResponse>("/api/v1/intelligence/ask", {
-        query: text,
+        query: tutor ? `${studyMode === "Explain" ? "Explain this clearly, step by step, with examples" : studyMode === "Summarize" ? "Summarize the key ideas, definitions and takeaways" : studyMode === "Quiz me" ? "Create a short self-check quiz. Put each question under its own heading, and put answers in a separate answer key at the end" : studyMode === "Practice questions" ? "Give practice questions with worked solutions under separate headings" : "Create question-and-answer study flashcards, each under its own heading"}: ${text}. Use the selected material when provided, preserve source citations, and say when it does not support an answer.` : text,
         clarification_context: clarificationContext,
         selected_context: contextSnapshot,
         model_tier: modelTier,
@@ -1031,8 +1041,8 @@ export function AskLifeOSPage() {
       const responseText = result.answer
         || result.clarification
         || (result.status === "unsupported_intent"
-          ? "I understood what you are asking, but that LifeOS intelligence workflow is not connected yet. I did not guess or use an unsafe fallback."
-          : "LifeOS could not produce a trusted answer for this request yet.");
+          ? "I understood what you are asking, but that V-SPACE intelligence workflow is not connected yet. I did not guess or use an unsafe fallback."
+          : "V-SPACE could not produce a trusted answer for this request yet.");
       setConversation((items) => [...items, {
         id: nextId.current++,
         role: "assistant",
@@ -1046,8 +1056,9 @@ export function AskLifeOSPage() {
           : null,
       );
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "LifeOS could not process that request.";
+      const message = err instanceof ApiError ? err.message : "V-SPACE could not process that request.";
       setError(message);
+      setQuery(text);
     } finally {
       setBusy(false);
     }
@@ -1065,27 +1076,28 @@ export function AskLifeOSPage() {
     }
   }
 
-  return <section className="ask-lifeos-page">
+  return <section className={`ask-lifeos-page ${tutor ? "vs-tutor-page" : ""}`}>
     <header className="ask-lifeos-hero">
       <div className="ask-lifeos-hero-copy">
-        <span className="ask-lifeos-eyebrow"><i />LifeOS Intelligence</span>
-        <h1>Ask a question or give LifeOS a goal.</h1>
-        <p>Simple questions answer directly. Bigger goals can become a safe multi-step review inside the same conversation, using only approved LifeOS context and asking before any change.</p>
+        <span className="ask-lifeos-eyebrow"><Icon name={tutor ? "book" : "spark"}/>{tutor ? "Learn at your pace" : "Your connected intelligence"}</span>
+        <h1>{tutor ? "Private Tutor" : "Ask V-SPACE"}</h1>
+        <p>{tutor ? "Choose a topic or connect your study materials. Let’s make it click." : "Think it through. Find an answer. Take the next step."}</p>
       </div>
       <div className="ask-lifeos-safety-card">
         <span className="ask-lifeos-safety-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5.2-3.4 9.2-8 11-4.6-1.8-8-5.8-8-11V5l8-3Zm-1 13.2 5.3-5.3-1.4-1.4-3.9 3.9-1.9-1.9-1.4 1.4 3.3 3.3Z"/></svg>
         </span>
-        <div><strong>Trust first</strong><span>{statusText}</span></div>
+        <div><strong>You’re in control</strong><span>{statusText}</span></div>
       </div>
     </header>
 
+    {tutor ? <div className="vs-tutor-modes" aria-label="Learning mode">{["Explain", "Summarize", "Quiz me", "Practice questions", "Flashcards"].map(mode => <button type="button" key={mode} disabled={busy} aria-pressed={studyMode === mode} className={studyMode === mode ? "active" : ""} onClick={() => setStudyMode(mode)}>{mode}</button>)}</div> : null}
     <div className={`ask-lifeos-workspace ${hasConversation ? "has-conversation" : ""}`}>
-      <div className="ask-lifeos-thread" aria-live="polite">
+      <div className="ask-lifeos-thread" ref={threadRef} aria-live="polite">
         {!hasConversation ? <div className="ask-lifeos-empty">
-          <div className="ask-lifeos-orb" aria-hidden="true"><span>L</span></div>
-          <h2>What do you want to understand or accomplish?</h2>
-          <p>Ask normally, or describe a goal. LifeOS will choose the smallest trusted path: structured facts, grounded RAG, or a bounded multi-step review when the request really needs one.</p>
+          <div className="ask-lifeos-orb" aria-hidden="true"><BrandMark/></div>
+          <h2>{tutor ? "What would you like to learn?" : "A clearer way forward."}</h2>
+          <p>{tutor ? "Use the context selector below to choose a module, lecture, or document. Then tell me what you want to understand." : "Your projects, documents and plans, connected in one conversation. Ask naturally — I’ll check the context and help you move forward."}</p>
           <div className="ask-lifeos-suggestion-grid">
             {suggestions.map((item) => <button type="button" key={item} onClick={() => void submit(item)} disabled={busy}>
               <span>{item}</span><em>→</em>
@@ -1110,8 +1122,8 @@ export function AskLifeOSPage() {
               <div className="ask-lifeos-avatar user-avatar" aria-hidden="true">Y</div>
             </div>)}
         {busy ? <div className="ask-lifeos-message assistant-message ask-lifeos-thinking">
-          <div className="ask-lifeos-avatar lifeos-avatar">L</div>
-          <div className="ask-lifeos-message-body"><div className="ask-lifeos-message-label">LifeOS</div><div className="ask-lifeos-thinking-line"><span/><span/><span/>Checking trusted context</div></div>
+          <div className="ask-lifeos-avatar lifeos-avatar"><BrandMark/></div>
+          <div className="ask-lifeos-message-body"><div className="ask-lifeos-message-label">V-SPACE</div><div className="ask-lifeos-thinking-line"><span/><span/><span/>{selectedContext ? "Reading your selected context…" : "Checking your workspace…"}</div></div>
         </div> : null}
       </div>
 
@@ -1122,7 +1134,7 @@ export function AskLifeOSPage() {
             <span>{memoryDraft.type === "current_focus" ? "CURRENT FOCUS" : "PREFERENCE"}</span>
             <strong>Remember this for later?</strong>
             <p>{memoryDraft.value}</p>
-            {memoryDraft.project_id ? <small>Scoped to the selected project.</small> : <small>Applies across LifeOS.</small>}
+            {memoryDraft.project_id ? <small>Scoped to the selected project.</small> : <small>Applies across V-SPACE.</small>}
           </div>
           <div className="ask-lifeos-inline-memory-actions">
             <button type="button" onClick={() => setMemoryDraft(null)} disabled={memoryBusy}>Cancel</button>
@@ -1139,27 +1151,27 @@ export function AskLifeOSPage() {
             aria-expanded={contextPickerOpen}
           >
             <span className="ask-lifeos-context-plus">+</span>
-            <span>{selectedContext ? selectedContext.label : "All LifeOS"}</span>
+            <span>{selectedContext ? selectedContext.label : tutor ? "Choose study material" : "Your workspace"}</span>
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.8 7.5 4.2 4.2 4.2-4.2"/></svg>
           </button>
           {selectedContext ? <button type="button" className="ask-lifeos-context-clear" onClick={() => chooseContext(null)} aria-label="Clear selected context">×</button> : null}
 
           <label className="ask-lifeos-model-tier" title={askModelTierOptions.find((option) => option.value === modelTier)?.description}>
             <span>Model</span>
-            <select value={modelTier} onChange={(event) => setModelTier(event.target.value as AskModelTier)} disabled={busy} aria-label="Ask LifeOS model">
+            <select value={modelTier} onChange={(event) => setModelTier(event.target.value as AskModelTier)} disabled={busy} aria-label="Ask V-SPACE model">
               {askModelTierOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
             </select>
           </label>
 
           {contextPickerOpen ? <div className="ask-lifeos-context-picker">
             <div className="ask-lifeos-context-picker-head">
-              <div><strong>Ask about</strong><span>Choose one verified LifeOS context</span></div>
+              <div><strong>Ask about</strong><span>Choose one verified V-SPACE context</span></div>
               <button type="button" onClick={() => setContextPickerOpen(false)} aria-label="Close context picker">×</button>
             </div>
             <input value={contextSearch} onChange={(event) => setContextSearch(event.target.value)} placeholder="Search projects, PDFs, modules…" autoFocus />
             <button type="button" className={`ask-lifeos-context-all ${!selectedContext ? "selected" : ""}`} onClick={() => chooseContext(null)}>
               <span className="ask-lifeos-context-option-icon">L</span>
-              <span><strong>All LifeOS</strong><small>Workspace-wide intelligence</small></span>
+              <span><strong>All V-SPACE</strong><small>Workspace-wide intelligence</small></span>
               {!selectedContext ? <em>✓</em> : null}
             </button>
             <div className="ask-lifeos-context-groups">
@@ -1171,7 +1183,7 @@ export function AskLifeOSPage() {
                   {selectedContext?.type === item.type && selectedContext.id === item.id ? <em>✓</em> : null}
                 </button>)}
               </section>)}
-              {!visibleContextGroups.length ? <div className="ask-lifeos-context-empty">No matching LifeOS context.</div> : null}
+              {!visibleContextGroups.length ? <div className="ask-lifeos-context-empty">No matching V-SPACE context.</div> : null}
             </div>
           </div> : null}
         </div>
@@ -1181,14 +1193,14 @@ export function AskLifeOSPage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={clarificationContext ? "Choose a project, or type all…" : selectedContext ? `Ask about ${selectedContext.label}…` : "Ask LifeOS about your workspace…"}
+            placeholder={clarificationContext ? "Choose a project, or type all…" : selectedContext ? `Ask about ${selectedContext.label}…` : tutor ? "What do you want to learn?" : "Ask V-SPACE about your workspace…"}
             maxLength={1200}
             rows={2}
             disabled={busy}
-            aria-label="Ask LifeOS"
+            aria-label="Ask V-SPACE"
           />
-          <button type="submit" className="ask-lifeos-send" disabled={busy || !query.trim()} aria-label="Send to LifeOS">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 20 18-8L3 4v6l13 2-13 2v6Z"/></svg>
+          <button type="submit" className="ask-lifeos-send" disabled={busy || !query.trim()} aria-label="Send to V-SPACE">
+            <Icon name="arrow"/>
           </button>
         </div>
         <div className="ask-lifeos-composer-footer">

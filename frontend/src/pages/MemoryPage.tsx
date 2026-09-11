@@ -127,16 +127,16 @@ export function MemoryPage() {
     save.mutate({ type: "current_focus", label: "Current focus", value: focusValue });
   }
 
-  if (query.isPending) return <PageState title="Opening Memory" text="Refreshing your controlled LifeOS memory…" />;
-  if (query.isError || !query.data) return <PageState title="Memory unavailable" text="LifeOS could not load structured memory." error retry={() => query.refetch()} />;
+  if (query.isPending) return <PageState title="Opening Memory" text="Refreshing your controlled V-SPACE memory…" />;
+  if (query.isError || !query.data) return <PageState title="Memory unavailable" text="V-SPACE could not load structured memory." error retry={() => query.refetch()} />;
 
   const policy = query.data.memory.policy;
   return <section className="workspace-page memory-page">
     <PageHeader
       eyebrow="I16 · Structured intelligence"
       title="Memory"
-      description="Remember preferences naturally while talking to Ask LifeOS. This page is the control center where you inspect, correct, or delete what was saved."
-      actions={<><button type="button" className="secondary-button" disabled={refresh.isPending} onClick={() => refresh.mutate()}>{refresh.isPending ? "Refreshing…" : "Refresh recent context"}</button><a className="secondary-button" href="/ask">Ask LifeOS</a></>}
+      description="Remember preferences naturally while talking to Ask V-SPACE. This page is the control center where you inspect, correct, or delete what was saved."
+      actions={<><button type="button" className="secondary-button" disabled={refresh.isPending} onClick={() => refresh.mutate()}>{refresh.isPending ? "Refreshing…" : "Refresh recent context"}</button><a className="secondary-button" href="/ask">Ask V-SPACE</a></>}
     />
 
     {message ? <div className="form-alert success">{message}</div> : null}
@@ -149,8 +149,8 @@ export function MemoryPage() {
     </div>
 
     <section className="memory-conversation-card">
-      <div><span className="panel-kicker">Recommended</span><h2>Save memory while you talk</h2><p>Tell Ask LifeOS things like “I prefer short project reviews with risks first.” LifeOS will propose a memory and wait for your confirmation before saving it.</p></div>
-      <a className="primary-button" href="/ask">Open Ask LifeOS</a>
+      <div><span className="panel-kicker">Recommended</span><h2>Save memory while you talk</h2><p>Tell Ask V-SPACE things like “I prefer short project reviews with risks first.” V-SPACE will propose a memory and wait for your confirmation before saving it.</p></div>
+      <a className="primary-button" href="/ask">Open Ask V-SPACE</a>
     </section>
 
     <details className="memory-manual-details">
@@ -158,7 +158,7 @@ export function MemoryPage() {
       <div className="memory-editor-grid">
         <form className="panel-card memory-editor-card" onSubmit={saveFocus}>
           <div className="section-heading"><div><span className="panel-kicker">Current focus</span><h2>What are you focused on?</h2><p>Saving a new focus replaces the previous one.</p></div></div>
-          <label className="field-label">Focus<input value={focusValue} onChange={(event) => setFocusValue(event.target.value)} maxLength={500} placeholder="e.g. Finish LifeOS core intelligence before automations" /></label>
+          <label className="field-label">Focus<input value={focusValue} onChange={(event) => setFocusValue(event.target.value)} maxLength={500} placeholder="e.g. Finish V-SPACE core intelligence before automations" /></label>
           <button className="primary-button" disabled={save.isPending || !focusValue.trim()}>Save current focus</button>
         </form>
 
@@ -172,12 +172,12 @@ export function MemoryPage() {
     </details>
 
     <section className="panel-card memory-library-card">
-      <div className="section-heading"><div><span className="panel-kicker">Inspectable memory</span><h2>What LifeOS remembers</h2><p>{items.length} active memory item{items.length === 1 ? "" : "s"}. Derived memories expire automatically and are refreshed only when LifeOS checks recent context.</p></div>{items.length ? <button type="button" className="secondary-button danger-soft" disabled={clear.isPending} onClick={() => { if (window.confirm("Clear all LifeOS structured memory? This does not delete projects, tasks, notes, or documents.")) clear.mutate(); }}>Clear memory</button> : null}</div>
+      <div className="section-heading"><div><span className="panel-kicker">Inspectable memory</span><h2>What V-SPACE remembers</h2><p>{items.length} active memory item{items.length === 1 ? "" : "s"}. Derived memories expire automatically and are refreshed only when V-SPACE checks recent context.</p></div>{items.length ? <button type="button" className="secondary-button danger-soft" disabled={clear.isPending} onClick={() => { if (window.confirm("Clear all V-SPACE structured memory? This does not delete projects, tasks, notes, or documents.")) clear.mutate(); }}>Clear memory</button> : null}</div>
 
       {groups.controlled.length ? <div className="memory-group"><h3>You control</h3><div className="memory-card-grid">{groups.controlled.map((item) => <MemoryCard item={item} key={item.id} remove={() => remove.mutate(item.id)} busy={remove.isPending} />)}</div></div> : null}
       {groups.recent.length ? <div className="memory-group"><h3>Recently active projects</h3><div className="memory-card-grid">{groups.recent.map((item) => <MemoryCard item={item} key={item.id} remove={() => remove.mutate(item.id)} busy={remove.isPending} />)}</div></div> : null}
       {groups.dismissed.length ? <div className="memory-group"><h3>Dismissed suggestions</h3><div className="memory-card-grid">{groups.dismissed.map((item) => <MemoryCard item={item} key={item.id} remove={() => remove.mutate(item.id)} busy={remove.isPending} />)}</div></div> : null}
-      {!items.length ? <div className="dashboard-empty-state compact-empty-state"><div className="empty-state-icon">M</div><h3>No structured memory yet</h3><p>Tell Ask LifeOS a preference or current focus, then confirm when it asks whether to remember it. Recent projects appear automatically when you use your workspace.</p></div> : null}
+      {!items.length ? <div className="dashboard-empty-state compact-empty-state"><div className="empty-state-icon">M</div><h3>No structured memory yet</h3><p>Tell Ask V-SPACE a preference or current focus, then confirm when it asks whether to remember it. Recent projects appear automatically when you use your workspace.</p></div> : null}
     </section>
   </section>;
 }

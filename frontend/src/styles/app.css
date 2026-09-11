@@ -1,3 +1,4 @@
+@import "@fontsource-variable/inter";
 /*
  * LifeOS frontend stylesheet entrypoint.
  *
@@ -26,3 +27,5 @@
 
 
 @import "./smart-planner.css";
+
+@import "./vspace.css";

@@ -35,7 +35,7 @@ function AssessmentFields({ value, editing = false }: { value?: ModuleAssessment
 
 export function ModuleAssessmentsPanel({ moduleId, assessments, refresh }: { moduleId: number; assessments: ModuleAssessment[]; refresh: () => Promise<void> }) {
   const [showForm, setShowForm] = useState(false); const [editingId, setEditingId] = useState<number | null>(null); const [error, setError] = useState<string | null>(null);
-  const fail = (v: unknown) => setError(v instanceof ApiError ? v.message : "LifeOS could not update the assessment.");
+  const fail = (v: unknown) => setError(v instanceof ApiError ? v.message : "V-SPACE could not update the assessment.");
   const create = useMutation({ mutationFn: (input: Record<string, unknown>) => createModuleAssessment(moduleId, input), onSuccess: async () => { setError(null); setShowForm(false); await refresh(); }, onError: fail });
   const update = useMutation({ mutationFn: ({ id, input }: { id: number; input: Record<string, unknown> }) => updateModuleAssessment(moduleId, id, input), onSuccess: async () => { setError(null); setEditingId(null); await refresh(); }, onError: fail });
   const remove = useMutation({ mutationFn: (id: number) => deleteModuleAssessment(moduleId, id), onSuccess: async () => { setError(null); await refresh(); }, onError: fail });

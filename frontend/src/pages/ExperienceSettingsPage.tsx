@@ -48,26 +48,26 @@ export function ExperienceSettingsPage() {
       });
       await queryClient.invalidateQueries({ queryKey: ["session"] });
       await session.refetch();
-      setMessage("Your LifeOS experience has been updated.");
+      setMessage("Your V-SPACE experience has been updated.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "LifeOS could not update your experience.");
+      setError(err instanceof ApiError ? err.message : "V-SPACE could not update your experience.");
     } finally {
       setBusy(false);
     }
   }
 
-  if (!profile) return <section className="workspace-page"><div className="dashboard-empty-state"><h3>Experience settings unavailable</h3><p>LifeOS could not load your profile.</p></div></section>;
+  if (!profile) return <section className="workspace-page"><div className="dashboard-empty-state"><h3>Experience settings unavailable</h3><p>V-SPACE could not load your profile.</p></div></section>;
 
   return <section className="workspace-page experience-settings-page">
-    <header className="workspace-page-header"><div><span className="panel-kicker">My LifeOS</span><h1>Experience settings</h1><p>Choose what LifeOS should emphasize without changing the underlying product or your data.</p></div></header>
+    <header className="workspace-page-header"><div><span className="panel-kicker">My V-SPACE</span><h1>Experience settings</h1><p>Choose what V-SPACE should emphasize without changing the underlying product or your data.</p></div></header>
 
     <article className="experience-settings-panel">
-      <div className="experience-settings-copy"><span>Primary experience</span><h2>What should LifeOS optimize for first?</h2><p>Your primary experience controls the default language, Home emphasis and Ask LifeOS suggestions.</p></div>
+      <div className="experience-settings-copy"><span>Primary experience</span><h2>What should V-SPACE optimize for first?</h2><p>Your primary experience controls the default language, Home emphasis and Ask V-SPACE suggestions.</p></div>
       <ExperienceSelector options={options} selected={primary} onChange={choosePrimary} compact />
     </article>
 
     <article className="experience-settings-panel">
-      <div className="experience-settings-copy"><span>Additional experiences</span><h2>Use more than one side of LifeOS</h2><p>Enable extra experiences without creating another account. Your primary experience stays the default.</p></div>
+      <div className="experience-settings-copy"><span>Additional experiences</span><h2>Use more than one side of V-SPACE</h2><p>Enable extra experiences without creating another account. Your primary experience stays the default.</p></div>
       <div className="experience-toggle-list">
         {options.map((option) => {
           const checked = enabled.includes(option.key) || option.key === primary;
@@ -81,8 +81,8 @@ export function ExperienceSettingsPage() {
     </article>
 
     <article className="experience-settings-summary">
-      <div><span>Current default</span><strong>{primaryOption?.label || "Not selected"}</strong><small>{primaryOption?.workspace_label || "LifeOS workspace"}</small></div>
-      <div><span>Enabled experiences</span><strong>{new Set([primary, ...enabled].filter(Boolean)).size}</strong><small>Same LifeOS core</small></div>
+      <div><span>Current default</span><strong>{primaryOption?.label || "Not selected"}</strong><small>{primaryOption?.workspace_label || "V-SPACE workspace"}</small></div>
+      <div><span>Enabled experiences</span><strong>{new Set([primary, ...enabled].filter(Boolean)).size}</strong><small>Same V-SPACE core</small></div>
       <button type="button" className="primary-button" onClick={() => void save()} disabled={!primary || busy}>{busy ? "Saving…" : "Save experience"}</button>
     </article>
     {message ? <div className="experience-settings-message success">{message}</div> : null}

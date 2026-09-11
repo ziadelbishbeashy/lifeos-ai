@@ -1,2 +1,2 @@
-// Retired prototype compatibility stub. Goals are not a standalone LifeOS module.
+// Retired prototype compatibility stub. Goals are not a standalone V-SPACE module.
 export {};

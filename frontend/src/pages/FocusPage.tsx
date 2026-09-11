@@ -164,7 +164,7 @@ export function FocusPage() {
   }, []);
 
   if (query.isPending) return <PageState title="Opening Focus Studio" text="Preparing your focus workspace…" />;
-  if (query.isError || !query.data) return <PageState title="Focus unavailable" text="LifeOS could not load Focus Mode." error retry={() => query.refetch()} />;
+  if (query.isError || !query.data) return <PageState title="Focus unavailable" text="V-SPACE could not load Focus Mode." error retry={() => query.refetch()} />;
 
   return query.data.active_session
     ? <ActiveFocusSession data={query.data} refetch={() => query.refetch()} />
@@ -290,7 +290,7 @@ function FocusSetup({ data, refetch }: { data: FocusData; refetch: () => Promise
           </section>
 
           <section className="focus-tool-setting">
-            <div><h3>Workspace color</h3><p>Choose the active timer palette. The Focus dashboard follows your LifeOS theme.</p></div>
+            <div><h3>Workspace color</h3><p>Choose the active timer palette. The Focus dashboard follows your V-SPACE theme.</p></div>
             <div className="focus-theme-options" id="setupThemeOptions">
               {(["mist", "sage", "lavender", "sand"] as FocusTheme[]).map((theme) => (
                 <button key={theme} type="button" className={settings.theme === theme ? "active" : ""} onClick={() => setSettings((current) => ({ ...current, theme }))}><i className={`theme-${theme}`} /><span>{themeNames[theme]}</span></button>
@@ -373,8 +373,8 @@ function ActiveFocusSession({ data, refetch }: { data: FocusData; refetch: () =>
   }, [session.status, session.id]);
 
   useEffect(() => {
-    document.title = `${timerText} · LifeOS Focus`;
-    return () => { document.title = "LifeOS AI"; };
+    document.title = `${timerText} · V-SPACE Focus`;
+    return () => { document.title = "V-SPACE AI"; };
   }, [timerText]);
 
   useEffect(() => {
@@ -638,7 +638,7 @@ function ActiveFocusSession({ data, refetch }: { data: FocusData; refetch: () =>
         <header className="focus-session-topbar">
           <div className="focus-session-identity">
             <span className="focus-session-logo">L</span>
-            <div><strong>LifeOS Focus</strong><span>{session.task ? `${session.task.title}${taskProject ? ` · ${taskProject}` : ""}` : "General focus session"}</span></div>
+            <div><strong>V-SPACE Focus</strong><span>{session.task ? `${session.task.title}${taskProject ? ` · ${taskProject}` : ""}` : "General focus session"}</span></div>
           </div>
           <div className="focus-session-top-actions">
             <button type="button" className="focus-icon-button" onClick={() => setToolsOpen(true)} aria-label="Open focus tools" title="Focus tools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.43-2.53c.04-.32.07-.65.07-.97s-.03-.65-.08-.97l2.11-1.65-2-3.46-2.49 1a7.55 7.55 0 0 0-1.68-.97L15 3.27h-4l-.37 2.68c-.6.24-1.16.56-1.68.97l-2.49-1-2 3.46 2.11 1.65c-.04.32-.07.65-.07.97s.03.65.08.97l-2.11 1.65 2 3.46 2.49-1c.52.41 1.08.73 1.68.97l.36 2.68h4l.37-2.68c.6-.24 1.16-.56 1.68-.97l2.49 1 2-3.46-2.11-1.65Z" /></svg></button>

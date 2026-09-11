@@ -52,9 +52,9 @@ export function ContextConnectionsPanel({ resourceType, resourceId }: { resource
         {connection.resource.url ? <a href={connection.resource.url}>{connection.resource.label}</a> : <strong>{connection.resource.label}</strong>}
         {connection.resource.project_title ? <small>{connection.resource.project_title}</small> : null}
         {connection.reason ? <p>{connection.reason}</p> : null}
-        {connection.provenance.type === "ask_lifeos" ? <div className="context-connection-origin">From confirmed Ask LifeOS evidence</div> : null}
+        {connection.provenance.type === "ask_lifeos" ? <div className="context-connection-origin">From confirmed Ask V-SPACE evidence</div> : null}
       </div>)}
-    </div> : <div className="empty-workspace compact-empty"><strong>No explicit connected context yet</strong><span>Project, Module, Collection, and confirmed Ask LifeOS provenance will appear here when they exist.</span></div>}
+    </div> : <div className="empty-workspace compact-empty"><strong>No explicit connected context yet</strong><span>Project, Module, Collection, and confirmed Ask V-SPACE provenance will appear here when they exist.</span></div>}
     {packet.connections.length > visible.length ? <div className="context-connection-footer">Showing {visible.length} of {packet.connections.length} verified connections.</div> : null}
   </article>;
 }

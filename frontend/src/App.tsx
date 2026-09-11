@@ -7,6 +7,8 @@ import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsAiUsagePage } from "./pages/AnalyticsAiUsagePage";
 import { AutomationsPage } from "./pages/AutomationsPage";
 import { AskLifeOSPage } from "./pages/AskLifeOSPage";
+import { ExperienceSettingsPage } from "./pages/ExperienceSettingsPage";
+import { ExperienceOnboardingPage } from "./pages/ExperienceOnboardingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocumentComparePage, DocumentComparisonDetailsPage } from "./pages/DocumentComparePage";
 import { DocumentCollectionsPage } from "./pages/DocumentCollectionsPage";
@@ -35,11 +37,11 @@ function PrivateArea({ active, children }: { active: NativeSection; children: Re
   const session = useSession();
 
   if (session.isPending) {
-    return <PageState title="Opening LifeOS" text="Restoring your private workspace…" />;
+    return <PageState title="Opening V-SPACE" text="Restoring your private workspace…" />;
   }
 
   if (session.isError) {
-    return <PageState title="Workspace unavailable" text="LifeOS could not verify your session." error retry={() => session.refetch()} />;
+    return <PageState title="Workspace unavailable" text="V-SPACE could not verify your session." error retry={() => session.refetch()} />;
   }
 
   if (!session.data?.authenticated || !session.data.user) {
@@ -54,7 +56,7 @@ function PrivateArea({ active, children }: { active: NativeSection; children: Re
 function NotFoundPage() {
   return (
     <section className="workspace-page">
-      <PageState title="Page not found" text="This LifeOS screen does not exist." />
+      <PageState title="Page not found" text="This V-SPACE screen does not exist." />
       <div className="center-actions"><a className="primary-button" href="/dashboard">Return to dashboard</a></div>
     </section>
   );
@@ -66,6 +68,9 @@ export function App() {
   if (path === "/") return <LandingPage />;
   if (path === "/login") return <LoginPage />;
   if (path === "/register") return <RegisterPage />;
+  if (path === "/onboarding") return <ExperienceOnboardingPage />;
+  if (path === "/settings") return <PrivateArea active="settings"><ExperienceSettingsPage /></PrivateArea>;
+  if (path === "/tutor") return <PrivateArea active="tutor"><AskLifeOSPage tutor /></PrivateArea>;
 
   if (path === "/dashboard") return <PrivateArea active="dashboard"><DashboardPage /></PrivateArea>;
   if (path === "/ask" || path === "/intelligence") return <PrivateArea active="intelligence"><AskLifeOSPage /></PrivateArea>;

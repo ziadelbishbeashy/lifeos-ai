@@ -160,7 +160,7 @@ function edgePath(source: AutomationVisualNode, target: AutomationVisualNode) {
 function categoryName(value: AutomationVisualNodeCategory) {
   if (value === "trigger") return "When";
   if (value === "context") return "Look at";
-  if (value === "intelligence") return "Ask LifeOS to";
+  if (value === "intelligence") return "Ask V-SPACE to";
   if (value === "condition") return "Only continue if";
   if (value === "output") return "Then";
   if (value === "proposal") return "Then · ask me first";
@@ -169,12 +169,12 @@ function categoryName(value: AutomationVisualNodeCategory) {
 
 function categoryHelp(value: AutomationVisualNodeCategory) {
   if (value === "trigger") return "Choose when this automation should start.";
-  if (value === "context") return "Choose the information LifeOS is allowed to use.";
-  if (value === "intelligence") return "Choose what you want LifeOS to figure out.";
+  if (value === "context") return "Choose the information V-SPACE is allowed to use.";
+  if (value === "intelligence") return "Choose what you want V-SPACE to figure out.";
   if (value === "condition") return "Optional: stop quietly when the previous result does not need action.";
   if (value === "output") return "Choose what should happen with the result.";
-  if (value === "proposal") return "LifeOS can suggest a change, but you still confirm it.";
-  return "Approved LifeOS step.";
+  if (value === "proposal") return "V-SPACE can suggest a change, but you still confirm it.";
+  return "Approved V-SPACE step.";
 }
 
 const FRIENDLY_NODE_LABELS: Record<string, string> = {
@@ -188,7 +188,7 @@ const FRIENDLY_NODE_LABELS: Record<string, string> = {
   "trigger.project_deadline_approaching": "When a project deadline is approaching",
   "trigger.document_stale": "When a document becomes stale",
   "trigger.document_version_changed": "When a document changes",
-  "context.all_lifeos": "All of LifeOS",
+  "context.all_lifeos": "All of V-SPACE",
   "context.project": "A project",
   "context.document": "A document",
   "context.module": "A module",
@@ -203,7 +203,7 @@ const FRIENDLY_NODE_LABELS: Record<string, string> = {
   "intelligence.what_changed": "Tell me what changed",
   "intelligence.find_unhandled_findings": "Find things I have not handled",
   "intelligence.event_context_review": "Understand what happened",
-  "intelligence.ask_lifeos": "Ask LifeOS my own question",
+  "intelligence.ask_lifeos": "Ask V-SPACE my own question",
   "condition.attention_needed": "Something needs attention",
   "condition.results_found": "Results were actually found",
   "output.notify_me": "Notify me",
@@ -215,7 +215,7 @@ const FRIENDLY_NODE_LABELS: Record<string, string> = {
 };
 
 function friendlyNodeLabel(definition?: AutomationVisualNodeDefinition) {
-  if (!definition) return "LifeOS step";
+  if (!definition) return "V-SPACE step";
   return FRIENDLY_NODE_LABELS[definition.type] ?? definition.label;
 }
 
@@ -239,7 +239,7 @@ export function VisualAutomationFlowBuilder({
   const initial = useMemo(() => cloneGraph(automation?.visual_graph), [automation]);
   const definitions = useMemo(() => definitionMap(registry), [registry]);
   const [name, setName] = useState(automation?.name ?? "My intelligence flow");
-  const [description, setDescription] = useState(automation?.description ?? "Built visually with LifeOS Flow Studio.");
+  const [description, setDescription] = useState(automation?.description ?? "Built visually with V-SPACE Flow Studio.");
   const [flowTimezone] = useState(automation?.timezone ?? timezone);
   const [nodes, setNodes] = useState<AutomationVisualNode[]>(initial.nodes);
   const [edges, setEdges] = useState<AutomationVisualGraph["edges"]>(initial.edges);
@@ -323,7 +323,7 @@ export function VisualAutomationFlowBuilder({
       if (ordered[0]?.category !== "trigger") issues.push("Start the automation with a WHEN step.");
       const outputIndex = ordered.findIndex((node) => node.category === "output");
       if (outputIndex >= 0 && ordered.slice(outputIndex + 1).some((node) => node.category === "context" || node.category === "intelligence")) {
-        issues.push("LOOK AT and ASK LIFEOS TO steps must come before THEN.");
+        issues.push("LOOK AT and ASK V-SPACE TO steps must come before THEN.");
       }
       const proposal = ordered.find((node) => node.category === "proposal");
       if (proposal) {
@@ -342,7 +342,7 @@ export function VisualAutomationFlowBuilder({
       }
     }
 
-    if (!anchorNode) issues.push("Add at least one ASK LIFEOS TO step that performs the main analysis.");
+    if (!anchorNode) issues.push("Add at least one ASK V-SPACE TO step that performs the main analysis.");
 
     const triggerType = String(triggerDefinition?.binding.trigger_type ?? "");
     if (triggerNode && (triggerType === "schedule_daily" || triggerType === "schedule_weekly")) {
@@ -357,7 +357,7 @@ export function VisualAutomationFlowBuilder({
     }
 
     for (const node of nodes) {
-      if (node.type === "intelligence.project_review" && !Number(node.config?.project_id) && !Number(selectedProjectContext?.config?.project_id)) issues.push("Choose which project LifeOS should review, or add that project in LOOK AT.");
+      if (node.type === "intelligence.project_review" && !Number(node.config?.project_id) && !Number(selectedProjectContext?.config?.project_id)) issues.push("Choose which project V-SPACE should review, or add that project in LOOK AT.");
       if (node.type === "context.project") {
         const mode = String(node.config?.scope_mode ?? "selected");
         if (mode === "selected" && !Number(node.config?.project_id)) issues.push("Choose a project in the LOOK AT step.");
@@ -375,8 +375,8 @@ export function VisualAutomationFlowBuilder({
       if (node.type === "context.collection" && !Number(node.config?.collection_id)) issues.push("Choose a collection in the LOOK AT step.");
       if (node.type === "intelligence.ask_lifeos") {
         const instruction = String(node.config?.instruction ?? "").trim();
-        if (instruction.length < 3) issues.push("Write what you want LifeOS to figure out in the custom AI step.");
-        if (instruction.length > 600) issues.push("Keep the custom LifeOS instruction under 600 characters.");
+        if (instruction.length < 3) issues.push("Write what you want V-SPACE to figure out in the custom AI step.");
+        if (instruction.length > 600) issues.push("Keep the custom V-SPACE instruction under 600 characters.");
       }
       if (node.type === "condition.attention_needed" && !["medium", "high", "critical"].includes(String(node.config?.minimum_attention ?? "medium"))) {
         issues.push("Choose a valid attention level for the condition.");
@@ -428,7 +428,7 @@ export function VisualAutomationFlowBuilder({
       setEdges((current) => [...current, { id: edgeId, source: tail.id, target: id }]);
       setNotice(`Added ${friendlyNodeLabel(definition)} and connected it to the previous step.`);
     } else {
-      setNotice(nodes.length ? `Added ${friendlyNodeLabel(definition)}. Connect it to the flow when you are ready.` : `Great — now add what LifeOS should look at or think about.`);
+      setNotice(nodes.length ? `Added ${friendlyNodeLabel(definition)}. Connect it to the flow when you are ready.` : `Great — now add what V-SPACE should look at or think about.`);
     }
     setSelectedNodeId(id);
   }
@@ -586,7 +586,7 @@ export function VisualAutomationFlowBuilder({
   }
 
   const plainEnglishSummary = useMemo(() => {
-    if (!orderedNodes.length) return "Choose a recipe below, or build from left to right: When → Look at → Ask LifeOS to → Then.";
+    if (!orderedNodes.length) return "Choose a recipe below, or build from left to right: When → Look at → Ask V-SPACE to → Then.";
     const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const trigger = orderedNodes.find((node) => node.category === "trigger");
     const triggerDef = trigger ? definitions.get(trigger.type) : undefined;
@@ -599,7 +599,7 @@ export function VisualAutomationFlowBuilder({
     }
 
     const contextNames = orderedNodes.filter((node) => node.category === "context").map((node) => {
-      if (node.type === "context.all_lifeos") return "my LifeOS workspace";
+      if (node.type === "context.all_lifeos") return "my V-SPACE workspace";
       if (node.type === "context.recent_activity") return String(node.config?.window ?? "week") === "today" ? "today’s recent activity" : "recent activity from this week";
       if (node.type === "context.project") {
         if (String(node.config?.scope_mode ?? "selected") === "trigger") return "the project from that event";
@@ -625,7 +625,7 @@ export function VisualAutomationFlowBuilder({
 
     let sentence = when;
     if (contextNames.length) sentence += `, look at ${contextNames.join(" and ")}`;
-    if (thinking.length) sentence += `, ask LifeOS to ${thinking.join(", then ")}`;
+    if (thinking.length) sentence += `, ask V-SPACE to ${thinking.join(", then ")}`;
     if (conditions.length) sentence += `, ${conditions.join(", then ")}`;
     if (results.length) sentence += `, then ${results.join(", then ")}`;
     return `${sentence}.`;
@@ -635,8 +635,8 @@ export function VisualAutomationFlowBuilder({
     <div className="visual-flow-studio-head">
       <div>
         <span className="panel-kicker">Visual automation builder</span>
-        <h2>{automation ? `Edit ${automation.name}` : "Tell LifeOS what should happen automatically"}</h2>
-        <p>Build the sentence from left to right: choose <strong>when</strong> it starts, <strong>what LifeOS should look at</strong>, <strong>what it should figure out</strong>, and <strong>what happens with the result</strong>.</p>
+        <h2>{automation ? `Edit ${automation.name}` : "Tell V-SPACE what should happen automatically"}</h2>
+        <p>Build the sentence from left to right: choose <strong>when</strong> it starts, <strong>what V-SPACE should look at</strong>, <strong>what it should figure out</strong>, and <strong>what happens with the result</strong>.</p>
       </div>
       <div className="visual-flow-head-actions">
         <button type="button" className="secondary-button" onClick={resetLayout}>Arrange steps</button>
@@ -651,12 +651,12 @@ export function VisualAutomationFlowBuilder({
       <label className="field-label">Your timezone<input value={flowTimezone} readOnly /></label>
     </div>
 
-    <div className="visual-flow-howto" aria-label="How a LifeOS automation works">
+    <div className="visual-flow-howto" aria-label="How a V-SPACE automation works">
       <div><span>1</span><strong>WHEN</strong><small>When should it start?</small></div>
       <b>→</b>
       <div><span>2</span><strong>LOOK AT</strong><small>What information should it use?</small></div>
       <b>→</b>
-      <div><span>3</span><strong>ASK LIFEOS TO</strong><small>What should AI figure out?</small></div>
+      <div><span>3</span><strong>ASK V-SPACE TO</strong><small>What should AI figure out?</small></div>
       <b>→</b>
       <div><span>4</span><strong>THEN</strong><small>What should happen next?</small></div>
     </div>
@@ -674,7 +674,7 @@ export function VisualAutomationFlowBuilder({
 
     {notice ? <div className="visual-flow-inline-notice">{notice}</div> : null}
     <div className={`visual-flow-compile-banner ${validationIssues.length ? "compiler-only" : "direct"}`}>
-      <div><strong>{validationIssues.length ? "Finish the flow before saving" : "LifeOS understands this flow"}</strong><span>{validationIssues.length ? "The panel on the right shows what still needs attention." : "When saved, LifeOS validates the steps again on the backend before anything can run."}</span></div>
+      <div><strong>{validationIssues.length ? "Finish the flow before saving" : "V-SPACE understands this flow"}</strong><span>{validationIssues.length ? "The panel on the right shows what still needs attention." : "When saved, V-SPACE validates the steps again on the backend before anything can run."}</span></div>
       <details className="visual-flow-technical-details"><summary>Technical details</summary><small>{savedPlan ? `Execution plan ${savedPlan.plan_id} · ${savedPlan.steps.length} steps · ${compiledVisualDraft ? "compiled visual" : "direct-compatible"}` : `${nodes.length} draft steps · backend compiler validates on save`}</small></details>
     </div>
 
@@ -685,7 +685,7 @@ export function VisualAutomationFlowBuilder({
 
     <div className="visual-flow-workbench">
       <aside className="visual-flow-palette">
-        <div className="visual-flow-palette-heading"><span className="panel-kicker">Add a step</span><small>Click in order · LifeOS connects steps automatically</small></div>
+        <div className="visual-flow-palette-heading"><span className="panel-kicker">Add a step</span><small>Click in order · V-SPACE connects steps automatically</small></div>
         {grouped.map((group) => <div className="visual-flow-palette-group" key={group.id}>
           <div className="visual-flow-palette-group-title"><strong>{group.label}</strong><small>{group.description}</small></div>
           {group.nodes.map((definition) => {
@@ -706,7 +706,7 @@ export function VisualAutomationFlowBuilder({
             </button>;
           })}
         </div>)}
-        <div className="visual-flow-palette-note"><strong>Safe by design</strong><p>LifeOS can analyze and notify automatically. If a step would change your workspace, it can only suggest the change and ask you to confirm it first.</p></div>
+        <div className="visual-flow-palette-note"><strong>Safe by design</strong><p>V-SPACE can analyze and notify automatically. If a step would change your workspace, it can only suggest the change and ask you to confirm it first.</p></div>
       </aside>
 
       <div className="visual-flow-canvas-scroll">
@@ -719,7 +719,7 @@ export function VisualAutomationFlowBuilder({
           onClick={() => setSelectedNodeId(null)}
         >
           <div className="visual-flow-grid" />
-          {nodes.length === 0 ? <div className="visual-flow-canvas-empty"><span>✦</span><strong>Build from left to right</strong><p>Start with WHEN, then add what to LOOK AT, what to ASK LIFEOS TO do, and what happens THEN.</p></div> : null}
+          {nodes.length === 0 ? <div className="visual-flow-canvas-empty"><span>✦</span><strong>Build from left to right</strong><p>Start with WHEN, then add what to LOOK AT, what to ASK V-SPACE TO do, and what happens THEN.</p></div> : null}
           <svg className="visual-flow-edges" viewBox={`0 0 ${canvasWidth} ${CANVAS_HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
             {edges.map((edge) => {
               const source = nodes.find((node) => node.id === edge.source);
@@ -758,7 +758,7 @@ export function VisualAutomationFlowBuilder({
 
       <aside className="visual-flow-inspector">
         <span className="panel-kicker">Set up this step</span>
-        {!selectedNode || !selectedDefinition ? <div className="visual-flow-inspector-empty"><strong>Select a step</strong><p>Click any box on the canvas. LifeOS will show only the settings that matter for that step.</p></div> : <>
+        {!selectedNode || !selectedDefinition ? <div className="visual-flow-inspector-empty"><strong>Select a step</strong><p>Click any box on the canvas. V-SPACE will show only the settings that matter for that step.</p></div> : <>
           <div className="visual-flow-inspector-title"><span>{iconFor(selectedDefinition)}</span><div><h3>{friendlyNodeLabel(selectedDefinition)}</h3><p>{categoryName(selectedDefinition.category)}</p></div></div>
           <p>{categoryHelp(selectedDefinition.category)}</p>
 
@@ -775,7 +775,7 @@ export function VisualAutomationFlowBuilder({
             </div>
           </> : null}
 
-          {selectedDefinition.category === "trigger" && selectedDefinition.binding.trigger_type === "event" ? <div className="visual-flow-locked-field"><span>Starts when</span><strong>{friendlyNodeLabel(selectedDefinition)}</strong><small>LifeOS verifies the event before the flow uses it.</small></div> : null}
+          {selectedDefinition.category === "trigger" && selectedDefinition.binding.trigger_type === "event" ? <div className="visual-flow-locked-field"><span>Starts when</span><strong>{friendlyNodeLabel(selectedDefinition)}</strong><small>V-SPACE verifies the event before the flow uses it.</small></div> : null}
 
           {selectedDefinition.category === "trigger" && selectedDefinition.binding.trigger_type === "manual" ? <div className="visual-flow-locked-field"><span>Starts when</span><strong>You click Run now</strong><small>This automation will not run by itself in the background.</small></div> : null}
 
@@ -786,7 +786,7 @@ export function VisualAutomationFlowBuilder({
 
           {selectedDefinition.type === "context.document" ? <>
             <label className="field-label">Which document?<select value={String(selectedNode.config?.scope_mode ?? "selected")} onChange={(event) => updateSelectedConfig({ scope_mode: event.target.value })}><option value="selected">Choose a document</option><option value="trigger" disabled={!triggerProvidesDocument}>Use the document from the event</option></select></label>
-            {String(selectedNode.config?.scope_mode ?? "selected") === "selected" ? <label className="field-label">Document<select value={String(selectedNode.config?.document_id ?? "")} onChange={(event) => updateSelectedConfig({ document_id: Number(event.target.value) })}><option value="">Choose document</option>{documents.map((document) => <option value={document.id} key={document.id}>{document.filename}</option>)}</select></label> : <div className="visual-flow-locked-field"><span>Document intelligence</span><strong>Uses Document Brain</strong><small>LifeOS keeps retrieval evidence with the result.</small></div>}
+            {String(selectedNode.config?.scope_mode ?? "selected") === "selected" ? <label className="field-label">Document<select value={String(selectedNode.config?.document_id ?? "")} onChange={(event) => updateSelectedConfig({ document_id: Number(event.target.value) })}><option value="">Choose document</option>{documents.map((document) => <option value={document.id} key={document.id}>{document.filename}</option>)}</select></label> : <div className="visual-flow-locked-field"><span>Document intelligence</span><strong>Uses Document Brain</strong><small>V-SPACE keeps retrieval evidence with the result.</small></div>}
           </> : null}
 
           {selectedDefinition.type === "context.module" ? <label className="field-label">Module<select value={String(selectedNode.config?.module_id ?? "")} onChange={(event) => updateSelectedConfig({ module_id: Number(event.target.value), scope_mode: "selected" })}><option value="">Choose module</option>{modules.map((module) => <option value={module.id} key={module.id}>{module.title}</option>)}</select></label> : null}
@@ -795,14 +795,14 @@ export function VisualAutomationFlowBuilder({
 
           {selectedDefinition.type === "context.recent_activity" ? <label className="field-label">Activity window<select value={String(selectedNode.config?.window ?? "week")} onChange={(event) => updateSelectedConfig({ window: event.target.value })}><option value="today">Today</option><option value="week">This week</option></select></label> : null}
 
-          {selectedDefinition.binding.action_type === "project_review" ? (selectedProjectContext ? <div className="visual-flow-locked-field"><span>Project</span><strong>{projects.find((project) => project.id === Number(selectedProjectContext.config?.project_id))?.title ?? "Selected project"}</strong><small>LifeOS reuses the project you already chose in LOOK AT, so you do not have to select it twice.</small></div> : <label className="field-label">Project<select value={String(selectedNode.config?.project_id ?? "")} onChange={(event) => updateSelectedConfig({ project_id: Number(event.target.value) })}><option value="">Choose project</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}</select></label>) : null}
+          {selectedDefinition.binding.action_type === "project_review" ? (selectedProjectContext ? <div className="visual-flow-locked-field"><span>Project</span><strong>{projects.find((project) => project.id === Number(selectedProjectContext.config?.project_id))?.title ?? "Selected project"}</strong><small>V-SPACE reuses the project you already chose in LOOK AT, so you do not have to select it twice.</small></div> : <label className="field-label">Project<select value={String(selectedNode.config?.project_id ?? "")} onChange={(event) => updateSelectedConfig({ project_id: Number(event.target.value) })}><option value="">Choose project</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}</select></label>) : null}
 
           {selectedDefinition.type === "intelligence.review_document" ? <div className="visual-flow-locked-field"><span>Knowledge source</span><strong>Document Brain</strong><small>The answer stays grounded in the selected document, collection, or module.</small></div> : null}
 
           {selectedDefinition.type === "intelligence.ask_lifeos" ? <>
-            <label className="field-label">What should LifeOS figure out?<textarea rows={5} maxLength={600} value={String(selectedNode.config?.instruction ?? "")} onChange={(event) => updateSelectedConfig({ instruction: event.target.value })} placeholder="Example: Based on this project, what is most likely to block me this week?" /></label>
-            <div className="visual-flow-locked-field"><span>Speed</span><strong>Common project risk questions use fast verified intelligence</strong><small>LifeOS reuses its project risk/prioritization engine when it can. Truly open-ended questions may call the AI provider and take longer.</small></div>
-            <div className="visual-flow-locked-field"><span>Safety</span><strong>Read-only Ask LifeOS</strong><small>This question uses the selected verified context. It cannot run arbitrary tools or change the workspace.</small></div>
+            <label className="field-label">What should V-SPACE figure out?<textarea rows={5} maxLength={600} value={String(selectedNode.config?.instruction ?? "")} onChange={(event) => updateSelectedConfig({ instruction: event.target.value })} placeholder="Example: Based on this project, what is most likely to block me this week?" /></label>
+            <div className="visual-flow-locked-field"><span>Speed</span><strong>Common project risk questions use fast verified intelligence</strong><small>V-SPACE reuses its project risk/prioritization engine when it can. Truly open-ended questions may call the AI provider and take longer.</small></div>
+            <div className="visual-flow-locked-field"><span>Safety</span><strong>Read-only Ask V-SPACE</strong><small>This question uses the selected verified context. It cannot run arbitrary tools or change the workspace.</small></div>
           </> : null}
 
           {selectedDefinition.type === "condition.attention_needed" ? <>
@@ -813,11 +813,11 @@ export function VisualAutomationFlowBuilder({
           {selectedDefinition.type === "condition.results_found" ? <div className="visual-flow-locked-field"><span>Continue when</span><strong>The previous step found useful results</strong><small>If there are no findings, priorities, activity items, sources, or usable answer, the run ends quietly.</small></div> : null}
 
           {selectedDefinition.category === "output" ? <>
-            <div className="visual-flow-locked-field"><span>Result</span><strong>{selectedDefinition.type === "output.notify_me" ? "Send me a LifeOS notification" : selectedDefinition.type === "output.save_review_result" ? "Keep the result in run history" : "Show me a suggested next action"}</strong><small>This step does not directly change your workspace.</small></div>
+            <div className="visual-flow-locked-field"><span>Result</span><strong>{selectedDefinition.type === "output.notify_me" ? "Send me a V-SPACE notification" : selectedDefinition.type === "output.save_review_result" ? "Keep the result in run history" : "Show me a suggested next action"}</strong><small>This step does not directly change your workspace.</small></div>
             <div className="visual-flow-locked-field"><span>Safety</span><strong>No automatic workspace changes</strong><small>If a change is suggested, you still decide whether it happens.</small></div>
           </> : null}
 
-          {selectedDefinition.category === "proposal" ? <div className="visual-flow-locked-field"><span>Needs your approval</span><strong>LifeOS will ask before changing anything</strong><small>This step prepares a suggestion only. You confirm or reject it.</small></div> : null}
+          {selectedDefinition.category === "proposal" ? <div className="visual-flow-locked-field"><span>Needs your approval</span><strong>V-SPACE will ask before changing anything</strong><small>This step prepares a suggestion only. You confirm or reject it.</small></div> : null}
 
           
 
@@ -826,14 +826,14 @@ export function VisualAutomationFlowBuilder({
         </>}
 
         <div className={`visual-flow-validation ${validationIssues.length ? "has-errors" : "valid"}`}>
-          <div><strong>{validationIssues.length ? "Almost ready" : "Ready to save"}</strong><span>{validationIssues.length ? `${validationIssues.length} thing${validationIssues.length === 1 ? "" : "s"} to fix` : "LifeOS understands the flow"}</span></div>
-          {validationIssues.length ? <ul>{validationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul> : <p>LifeOS will validate the same flow again on the backend before it can run.</p>}
+          <div><strong>{validationIssues.length ? "Almost ready" : "Ready to save"}</strong><span>{validationIssues.length ? `${validationIssues.length} thing${validationIssues.length === 1 ? "" : "s"} to fix` : "V-SPACE understands the flow"}</span></div>
+          {validationIssues.length ? <ul>{validationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul> : <p>V-SPACE will validate the same flow again on the backend before it can run.</p>}
         </div>
       </aside>
     </div>
 
     <div className="visual-flow-contract">
-      <span>✓ Approved LifeOS steps only</span><span>✓ No direct database writes</span><span>✓ Important changes ask first</span><span>✓ Run history keeps evidence</span>
+      <span>✓ Approved V-SPACE steps only</span><span>✓ No direct database writes</span><span>✓ Important changes ask first</span><span>✓ Run history keeps evidence</span>
     </div>
   </section>;
 }

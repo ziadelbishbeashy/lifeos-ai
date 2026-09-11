@@ -14,7 +14,7 @@ export function ProjectForm({initial,submitLabel,busy,onSubmit,onCancel}:Props){
   async function submit(e:FormEvent){e.preventDefault();await onSubmit({...form,deadline:form.no_deadline?"":form.deadline})}
   return <form className="professional-project-form" onSubmit={submit}>
     <div className="project-form-grid">
-      <div className="project-form-field"><label htmlFor="projectTitle">Project title <span>*</span></label><input id="projectTitle" required maxLength={150} value={form.title} placeholder="Example: LifeOS AI" onChange={e=>update("title",e.target.value)}/></div>
+      <div className="project-form-field"><label htmlFor="projectTitle">Project title <span>*</span></label><input id="projectTitle" required maxLength={150} value={form.title} placeholder="Example: V-SPACE AI" onChange={e=>update("title",e.target.value)}/></div>
       <div className="project-form-field"><label htmlFor="projectType">Project type</label><select id="projectType" value={form.project_type??""} onChange={e=>update("project_type",e.target.value)}><option value="">Select project type</option>{projectTypes.map(t=><option key={t}>{t}</option>)}</select></div>
       <div className="project-form-field project-form-full"><label htmlFor="projectDescription">Description</label><textarea id="projectDescription" value={form.description??""} placeholder="Describe the project and its main purpose..." onChange={e=>update("description",e.target.value)}/></div>
       <div className="project-form-field project-form-full"><label htmlFor="projectGoal">Main goal</label><textarea id="projectGoal" value={form.goal??""} placeholder="What should this project achieve?" onChange={e=>update("goal",e.target.value)}/></div>

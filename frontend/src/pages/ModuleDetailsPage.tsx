@@ -71,7 +71,7 @@ export function ModuleDetailsPage() {
 
   function fail(value: unknown) {
     setMessage(null);
-    setError(value instanceof ApiError ? value.message : "LifeOS could not complete that module action.");
+    setError(value instanceof ApiError ? value.message : "V-SPACE could not complete that module action.");
   }
 
   const addLecture = useMutation({
@@ -130,7 +130,7 @@ export function ModuleDetailsPage() {
 
   if (moduleId == null) return <PageState title="Module unavailable" text="The module address is invalid." error />;
   if (query.isPending) return <PageState title="Opening module" text="Loading lectures and study context…" />;
-  if (query.isError || !module || !data) return <PageState title="Module unavailable" text="LifeOS could not load this learning workspace." error retry={() => query.refetch()} />;
+  if (query.isError || !module || !data) return <PageState title="Module unavailable" text="V-SPACE could not load this learning workspace." error retry={() => query.refetch()} />;
 
   function submitLecture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -172,7 +172,7 @@ export function ModuleDetailsPage() {
       </div>
       <div className="module-header-actions">
         <span className="module-status-pill">{module.status}</span>
-        <button type="button" className="brain-text-button is-danger" disabled={removeModule.isPending} onClick={() => { if (window.confirm(`Delete “${module.title}”? Linked documents, notes, tasks and collections will remain in LifeOS.`)) removeModule.mutate(); }}>Delete module</button>
+        <button type="button" className="brain-text-button is-danger" disabled={removeModule.isPending} onClick={() => { if (window.confirm(`Delete “${module.title}”? Linked documents, notes, tasks and collections will remain in V-SPACE.`)) removeModule.mutate(); }}>Delete module</button>
       </div>
     </header>
 

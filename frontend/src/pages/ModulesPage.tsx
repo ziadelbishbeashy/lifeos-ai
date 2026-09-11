@@ -43,7 +43,7 @@ export function ModulesPage() {
   }
 
   if (query.isPending) return <PageState title="Opening Modules" text="Loading your learning workspaces…" />;
-  if (query.isError) return <PageState title="Modules unavailable" text="LifeOS could not load your learning workspaces." error retry={() => query.refetch()} />;
+  if (query.isError) return <PageState title="Modules unavailable" text="V-SPACE could not load your learning workspaces." error retry={() => query.refetch()} />;
 
   return <section className="modules-page">
     <header className="modules-page-header">

@@ -34,16 +34,16 @@ body.app-body,
 }
 
 .app-sidebar {
-    width: 280px;
-    max-width: 280px;
+    width: var(--ux-sidebar-width, 260px);
+    max-width: var(--ux-sidebar-width, 260px);
 }
 
 .app-main {
-    width: calc(100% - 280px) !important;
+    width: calc(100% - var(--ux-sidebar-width, 260px)) !important;
     max-width: none !important;
     min-width: 0 !important;
     min-height: 100vh;
-    margin-left: 280px !important;
+    margin-left: var(--ux-sidebar-width, 260px) !important;
 }
 
 .app-topbar {
@@ -332,3 +332,31 @@ body.app-body,
 .frontend-error-card h2 { margin: 0 0 10px; }
 .frontend-error-card p { margin: 0; max-width: 62ch; opacity: 0.78; }
 .frontend-error-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+
+/* V-SPACE shell: one sidebar width and one matching canvas offset. */
+.vspace-shell.sidebar-collapsed { --ux-sidebar-width:72px; }
+@media (min-width:981px) {
+ .vspace-shell.sidebar-collapsed .app-brand-copy,
+ .vspace-shell.sidebar-collapsed .navigation-label,
+ .vspace-shell.sidebar-collapsed .navigation-link > span,
+ .vspace-shell.sidebar-collapsed .vs-control-note,
+ .vspace-shell.sidebar-collapsed .account-information,
+ .vspace-shell.sidebar-collapsed .sidebar-user-summary > .vs-icon { display:none; }
+ .vspace-shell.sidebar-collapsed .sidebar-header { padding:0 4px; }
+ .vspace-shell.sidebar-collapsed .navigation-link { justify-content:center; padding:10px; }
+ .vspace-shell.sidebar-collapsed .sidebar-user-summary { padding:14px 4px 0; }
+ .vspace-shell.sidebar-collapsed .app-navigation { gap:18px; }
+}
+@media (min-width:981px) and (max-width:1180px) {
+ .vspace-shell { --ux-sidebar-width:72px; }
+ .vspace-shell .app-brand-copy,.vspace-shell .navigation-label,.vspace-shell .navigation-link > span,.vspace-shell .vs-control-note,.vspace-shell .account-information,.vspace-shell .sidebar-user-summary > .vs-icon { display:none; }
+ .vspace-shell .sidebar-header { padding:0 4px; }
+ .vspace-shell .navigation-link { justify-content:center; padding:10px; }
+ .vspace-shell .sidebar-user-summary { padding:14px 4px 0; }
+ .vspace-shell .vs-collapse-button { display:none; }
+}
+@media (max-width:980px) {
+ .vspace-shell,.vspace-shell.sidebar-collapsed { --ux-sidebar-width:min(300px,86vw); }
+ .vspace-shell .app-main { width:100% !important; margin-left:0 !important; }
+ .vspace-shell .app-sidebar { max-width:86vw !important; }
+}

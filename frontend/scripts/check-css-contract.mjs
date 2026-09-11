@@ -14,6 +14,7 @@ function fail(message) {
 }
 
 const expected = [
+  "@fontsource-variable/inter",
   "./react-base.css",
   "./separated.css",
   "./lifeos/public.css",
@@ -29,6 +30,7 @@ const expected = [
   "./document-brain.css",
   "./modules-v1.css",
   "./smart-planner.css",
+  "./vspace.css",
 ];
 
 const source = fs.readFileSync(entry, "utf8");
@@ -47,6 +49,7 @@ if (styleImports.length !== 1 || styleImports[0] !== "app.css") {
 // A second .app-shell grid was the root cause of the site-wide collapse.  Guard
 // against reintroducing that structural contract in any actively imported file.
 for (const relative of imports) {
+  if (!relative.startsWith(".")) continue;
   const full = path.resolve(styles, relative);
   const css = fs.readFileSync(full, "utf8");
   const shellBlocks = [...css.matchAll(/([^{}]*\.app-shell[^{}]*)\{([^}]*)\}/g)];
@@ -63,7 +66,7 @@ for (const required of [
   ".app-shell",
   "display: block !important",
   ".app-main",
-  "margin-left: 280px !important",
+  "margin-left: var(--ux-sidebar-width, 260px) !important",
   ".dashboard-main-grid",
   ".db-document-grid",
 ]) {

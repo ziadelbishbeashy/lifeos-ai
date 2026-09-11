@@ -52,26 +52,26 @@ export function ExperienceOnboardingPage() {
       await session.refetch();
       navigate(safeNext(), true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "LifeOS could not save your experience.");
+      setError(err instanceof ApiError ? err.message : "V-SPACE could not save your experience.");
     } finally {
       setBusy(false);
     }
   }
 
-  if (!user) return <PublicShell><main className="experience-onboarding-shell"><div className="experience-onboarding-card"><span className="hero-label">Opening LifeOS</span><h1>Loading your workspace…</h1></div></main></PublicShell>;
+  if (!user) return <PublicShell><main className="experience-onboarding-shell"><div className="experience-onboarding-card"><span className="hero-label">Opening V-SPACE</span><h1>Loading your workspace…</h1></div></main></PublicShell>;
 
   return <PublicShell><main className="experience-onboarding-shell">
     <section className="experience-onboarding-card">
       <div className="experience-onboarding-heading">
         <span className="hero-label">Welcome, {user.name.split(/\s+/)[0]}</span>
-        <h1>How will you mainly use LifeOS?</h1>
-        <p>This does not create a different app. It only tunes what LifeOS emphasizes first. All of your core workspace tools remain connected.</p>
+        <h1>How will you mainly use V-SPACE?</h1>
+        <p>This does not create a different app. It only tunes what V-SPACE emphasizes first. All of your core workspace tools remain connected.</p>
       </div>
       <ExperienceSelector options={options} selected={selected} onChange={setSelected} />
       {error ? <div className="public-flash error">{error}</div> : null}
       <div className="experience-onboarding-footer">
         <span>You can change this later in Settings and enable additional experiences.</span>
-        <button type="button" className="authentication-submit" disabled={!selected || busy} onClick={() => void save()}>{busy ? "Saving…" : "Continue to LifeOS"}</button>
+        <button type="button" className="authentication-submit" disabled={!selected || busy} onClick={() => void save()}>{busy ? "Saving…" : "Continue to V-SPACE"}</button>
       </div>
     </section>
   </main></PublicShell>;

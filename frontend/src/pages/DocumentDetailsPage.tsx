@@ -133,7 +133,8 @@ export function DocumentDetailsPage() {
   const queryClient = useQueryClient();
   const requestedParams = new URLSearchParams(window.location.search);
   const requestedPage = Number(requestedParams.get("page") || "");
-  const requestedTab = requestedParams.get("tab") === "pdf" ? "pdf" : "overview";
+  const allowedTabs: Tab[] = ["overview", "pdf", "ask", "search", "details", "tables", "actions"];
+  const requestedTab: Tab = allowedTabs.find(value => value === requestedParams.get("tab")) || "overview";
   const [tab, setTab] = useState<Tab>(requestedTab);
   const [error, setError] = useState<string | null>(null);
   const [detection, setDetection] = useState<Detection | null>(null);
@@ -254,7 +255,7 @@ export function DocumentDetailsPage() {
   const ask = useMutation({
     mutationFn: (payload: AskPayload) => apiPost<{ item: Question }>(`/api/v1/documents/${id}/questions`, payload),
     onSuccess: refresh,
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "LifeOS could not answer this question."),
+    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "V-SPACE could not answer this question."),
   });
 
   const suggestionAction = useMutation({
@@ -473,15 +474,15 @@ export function DocumentDetailsPage() {
 
       <nav className="brain-tabs" aria-label="Document workspace">
         {([
-          ["overview", "Overview", "Document summary", "overview"],
+          ["overview", "Overview", "At a glance", "overview"],
+          ["pdf", "Read", "Original PDF", "pdf"],
+          ["ask", "Ask AI", "Answers with evidence", "ask"],
+          ["search", "Search", "Find passages", "search"],
           ["details", "Details", "Structured analysis", "details"],
-          ["pdf", "PDF", "Open the source", "pdf"],
-          ["search", "Search", "Find exact passages", "search"],
-          ["tables", "Tables", "Preserve rows & columns", "tables"],
-          ["actions", "Actions", data.suggestions.length ? `${data.suggestions.length} suggested` : "Suggested next steps", "actions"],
-          ["ask", "Ask AI", "Grounded Q&A", "ask"],
+          ["tables", "Tables", "Rows & columns", "tables"],
+          ["actions", "Actions", data.suggestions.length ? `${data.suggestions.length} suggested` : "Next steps", "actions"],
         ] as const).map(([key, label, hint, icon]) => (
-          <button key={key} type="button" data-db-tab={key} className={`brain-tab brain-tab--${key} ${tab === key ? "active" : ""}`.trim()} onClick={() => setTab(key)} aria-label={label}>
+          <button key={key} type="button" data-db-tab={key} className={`brain-tab brain-tab--${key} ${tab === key ? "active" : ""}`.trim()} onClick={() => setTab(key)} aria-label={label} aria-pressed={tab === key}>
             <span className="brain-tab-icon"><BrainDetailIcon name={icon} /></span>
             <span className="brain-tab-copy">
               <strong>{label}</strong>
@@ -499,7 +500,7 @@ export function DocumentDetailsPage() {
                 <div className="brain-focus-copy">
                   <span className="brain-eyebrow">{experience.status_label || "Analysis saved"}</span>
                   <h2>{experience.overview_title || `${docType} at a glance`}</h2>
-                  <p>{data.analysis.summary || analysis.summary || "LifeOS has analysed this document."}</p>
+                  <p>{data.analysis.summary || analysis.summary || "V-SPACE has analysed this document."}</p>
                 </div>
                 <div className="brain-focus-now">
                   <span>Focus now</span>
@@ -574,7 +575,7 @@ export function DocumentDetailsPage() {
               <div>
                 <span className="brain-eyebrow">Start here</span>
                 <h2>Understand this document</h2>
-                <p>Detect the PDF type, confirm it, then LifeOS can organise risks, requirements, actions and grounded evidence.</p>
+                <p>Detect the PDF type, confirm it, then V-SPACE can organise risks, requirements, actions and grounded evidence.</p>
                 <button className="workspace-primary-button" onClick={() => detect.mutate()} disabled={detect.isPending}>
                   {detect.isPending ? "Detecting…" : "Analyse document"}
                 </button>
@@ -618,7 +619,7 @@ export function DocumentDetailsPage() {
             <div><span className="brain-eyebrow">Original evidence</span><h2>Full PDF workspace</h2></div>
             {pdfPage ? <span className="brain-count-badge">Page {pdfPage}</span> : null}
           </div>
-          <p className="brain-muted-copy">The original LifeOS navigator is restored here: thumbnails, semantic search, page navigation, zoom, rotation and selectable text.</p>
+          <p className="brain-muted-copy">Read the original document, search its text, or select a passage to ask about it.</p>
           <button
             type="button"
             className="workspace-primary-button"
@@ -669,9 +670,9 @@ export function DocumentDetailsPage() {
           </div>
 
           {tablesQuery.isPending ? (
-            <DetailEmpty title="Reading tables…" text="LifeOS is loading the structured rows and columns already extracted from this PDF." />
+            <DetailEmpty title="Reading tables…" text="V-SPACE is loading the structured rows and columns already extracted from this PDF." />
           ) : tablesQuery.isError ? (
-            <DetailEmpty title="Tables unavailable" text="LifeOS could not load the structured table data." />
+            <DetailEmpty title="Tables unavailable" text="V-SPACE could not load the structured table data." />
           ) : tablesQuery.data?.items.length ? (
             <div className="brain-table-list">
               {tablesQuery.data.items.map((table) => (
@@ -764,7 +765,7 @@ export function DocumentDetailsPage() {
                   </div>
                 </div>
                 <blockquote data-db-selected-context-preview>{selectedPdfContext.text}</blockquote>
-                <p>LifeOS will treat this passage as preferred context and can still retrieve related evidence elsewhere in the PDF.</p>
+                <p>V-SPACE will treat this passage as preferred context and can still retrieve related evidence elsewhere in the PDF.</p>
               </div>
             ) : null}
 

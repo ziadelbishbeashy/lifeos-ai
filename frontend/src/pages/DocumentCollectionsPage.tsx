@@ -130,7 +130,7 @@ export function DocumentCollectionsPage() {
       setMessage(null);
       await refreshCollections(selectedId);
     },
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "LifeOS could not answer this collection question."),
+    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "V-SPACE could not answer this collection question."),
   });
 
   const deleteCollection = useMutation({
@@ -182,7 +182,7 @@ export function DocumentCollectionsPage() {
   }
 
   if (collectionsQuery.isError || documentsQuery.isError) {
-    return <PageState title="Collections unavailable" text="LifeOS could not load Document Collections." error retry={() => { collectionsQuery.refetch(); documentsQuery.refetch(); }} />;
+    return <PageState title="Collections unavailable" text="V-SPACE could not load Document Collections." error retry={() => { collectionsQuery.refetch(); documentsQuery.refetch(); }} />;
   }
 
   const collections = collectionsQuery.data?.items || [];
@@ -240,7 +240,7 @@ export function DocumentCollectionsPage() {
           ) : detailQuery.isPending ? (
             <article className="brain-card"><div className="brain-detail-empty"><strong>Opening collection…</strong><p>Loading documents and grounded question history.</p></div></article>
           ) : detailQuery.isError || !current ? (
-            <article className="brain-card"><div className="brain-detail-empty"><strong>Collection unavailable</strong><p>LifeOS could not load this collection.</p></div></article>
+            <article className="brain-card"><div className="brain-detail-empty"><strong>Collection unavailable</strong><p>V-SPACE could not load this collection.</p></div></article>
           ) : (
             <>
               <article className="brain-card">

@@ -11,7 +11,7 @@ export class FrontendErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("LifeOS frontend screen crashed", error, info);
+    console.error("V-SPACE frontend screen crashed", error, info);
   }
 
   render() {
@@ -19,7 +19,7 @@ export class FrontendErrorBoundary extends Component<Props, State> {
 
     return (
       <section className="frontend-error-card" role="alert">
-        <span className="frontend-error-kicker">LifeOS recovered the page</span>
+        <span className="frontend-error-kicker">V-SPACE recovered the page</span>
         <h2>This screen hit a frontend error.</h2>
         <p>Reload the screen. If it happens again, the browser console will contain the exact error instead of leaving a blank page.</p>
         <div className="frontend-error-actions">

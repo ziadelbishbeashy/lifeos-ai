@@ -62,12 +62,12 @@ export function ProjectDetailsPage() {
   const projectAsk = useMutation({
     mutationFn: (question: string) => apiPost<{ item: ProjectQuestion }>(`/api/v1/projects/${projectId}/questions`, { question }),
     onSuccess: async () => { setError(null); await refresh(); },
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "LifeOS could not answer from this project's documents."),
+    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "V-SPACE could not answer from this project's documents."),
   });
   const bulkSuggestions = useMutation({
     mutationFn: (ids: number[]) => apiPost<{ created_count: number; duplicate_count: number; skipped_count: number }>(`/api/v1/projects/${projectId}/document-suggestions/bulk-create`, { suggestion_ids: ids }),
     onSuccess: async () => { setSelectedSuggestions(new Set()); setError(null); await refresh(); },
-    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "LifeOS could not create the selected document tasks."),
+    onError: (failure) => setError(failure instanceof ApiError ? failure.message : "V-SPACE could not create the selected document tasks."),
   });
 
   function submitProjectQuestion(event: FormEvent<HTMLFormElement>) {

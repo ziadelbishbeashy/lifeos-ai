@@ -454,6 +454,7 @@ export function SmartPlannerPage() {
           <article className={shownPlan?.overload_minutes ? "warning" : ""}><span><PlanningIcon type="balance" />Workload</span><strong>{shownPlan ? (shownPlan.overload_minutes ? `${minutesLabel(shownPlan.overload_minutes)} over` : shownPlan.energy_mode === "light" ? "Light" : "Fits") : "—"}</strong><small>{shownPlan?.overload_minutes ? "Work stays unscheduled instead of overfilling the day." : shownPlan?.energy_mode === "light" ? `${minutesLabel(shownPlan.energy_reserve_minutes || 0)} intentionally reserved` : "Capacity stays realistic."}</small></article>
         </section>
 
+        {shownPlan ? <section className="vs-workload" aria-label="Plan workload"><div><span>Available <strong>{minutesLabel(shownPlan.available_minutes)}</strong></span><span>Scheduled <strong>{minutesLabel(shownPlan.scheduled_minutes)}</strong></span><span>Unscheduled <strong>{minutesLabel(shownPlan.unscheduled_minutes ?? shownPlan.overload_minutes)}</strong></span></div><meter min={0} max={Math.max(1, shownPlan.available_minutes)} value={Math.min(shownPlan.available_minutes, shownPlan.scheduled_minutes)} aria-label="Scheduled share of available time"/><p>{shownPlan.overload_minutes ? "Some work needs another time slot." : "Room to make progress, with your commitments accounted for."}</p></section> : null}
         <section className="planner-plan-panel">
           <header className="planner-panel-heading">
             <div><span>{accepted ? "Accepted plan" : preview?.rebalanced_from_plan_id ? "Rebalanced preview" : preview ? "Proposed plan" : "Timeline"}</span><h2>{shownPlan?.title || "Build your first smart plan"}</h2></div>
@@ -474,7 +475,7 @@ export function SmartPlannerPage() {
 
       <aside className="planner-sidebar">
         <section className="planner-settings-card">
-          <div className="planner-card-heading"><span>Planning controls</span><h2>Shape the plan</h2><p>Exact time math is deterministic. Fixed commitments and locked blocks are treated as unavailable time.</p></div>
+          <div className="planner-card-heading"><span>Planning controls</span><h2>Shape the plan</h2><p>Set your available hours. Fixed commitments and locked blocks keep their place.</p></div>
           <label><span>Start date</span><input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setCommitmentDate(event.target.value); setPreview(null); setProposal(null); }} /></label>
           <label><span>Project</span><select value={projectId} onChange={(event) => { setProjectId(event.target.value); setPreview(null); setProposal(null); }}><option value="">All open work</option>{planner.projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
           {mode === "goal" ? <label><span>Goal horizon</span><select value={horizonDays} onChange={(event) => setHorizonDays(Number(event.target.value))}>{[3, 5, 7, 10, 14].map((days) => <option key={days} value={days}>{days} days</option>)}</select></label> : null}
@@ -503,7 +504,7 @@ export function SmartPlannerPage() {
         </section>
 
         {editingBlock ? <section className="planner-settings-card planner-edit-card">
-          <div className="planner-card-heading"><span>Manual adjustment</span><h2>{editingBlock.title}</h2><p>Explicit edits are deterministic. Lock the block if V-SPACE should preserve it during rebalancing.</p></div>
+          <div className="planner-card-heading"><span>Manual adjustment</span><h2>{editingBlock.title}</h2><p>Adjust the time, then lock this block if you want it to stay in place when the plan changes.</p></div>
           <label><span>Date</span><input type="date" value={editingBlock.date} onChange={(event) => setEditingBlock({ ...editingBlock, date: event.target.value })} /></label>
           <div className="planner-time-grid"><label><span>Start</span><input type="time" value={editingBlock.start_time} onChange={(event) => setEditingBlock({ ...editingBlock, start_time: event.target.value })} /></label><label><span>Finish</span><input type="time" value={editingBlock.end_time} onChange={(event) => setEditingBlock({ ...editingBlock, end_time: event.target.value })} /></label></div>
           <label className="planner-lock-toggle"><input type="checkbox" checked={editingBlock.locked} onChange={(event) => setEditingBlock({ ...editingBlock, locked: event.target.checked })} /><span><PlanningIcon type="lock" /> Keep this block locked during rebalancing</span></label>

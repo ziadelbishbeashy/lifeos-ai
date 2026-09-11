@@ -110,7 +110,7 @@ export function DocumentsPage() {
           <h1>Document Brain</h1>
           <p>Search, analyse and question PDFs across your projects and learning modules.</p>
         </div>
-        <div className="brain-header-actions">
+        <div className="brain-header-actions"><a className="workspace-secondary-button" href="/ask?contextPicker=1"><BrainIcon name="spark"/>Ask documents</a>
           <a className="workspace-secondary-button" href="/documents/collections">
             <BrainIcon name="collection" />
             Collections
@@ -239,7 +239,7 @@ export function DocumentsPage() {
                 </div>
               </div>
               <p className="brain-upload-intro">
-                Connect a PDF to a project. LifeOS will extract its text and prepare it for search and analysis.
+                Connect a PDF to a project. V-SPACE will extract its text and prepare it for search and analysis.
               </p>
 
               <form className="brain-upload-form" onSubmit={submit}>

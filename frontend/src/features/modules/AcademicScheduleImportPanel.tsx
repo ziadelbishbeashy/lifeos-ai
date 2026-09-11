@@ -34,9 +34,9 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
       // Needs-review rows stay visible and may still be explicitly selected by the user.
       setSelected(new Set(data.proposals.filter(isAutoSelectable).map((proposal) => proposal.id)));
       setError(null);
-      setMessage(`LifeOS found ${data.proposals.length} proposed assessment${data.proposals.length === 1 ? "" : "s"}. Review them before confirming.`);
+      setMessage(`V-SPACE found ${data.proposals.length} proposed assessment${data.proposals.length === 1 ? "" : "s"}. Review them before confirming.`);
     },
-    onError: (value) => setError(value instanceof ApiError ? value.message : "LifeOS could not read that academic schedule."),
+    onError: (value) => setError(value instanceof ApiError ? value.message : "V-SPACE could not read that academic schedule."),
   });
 
   const patch = useMutation({
@@ -51,7 +51,7 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
       });
       setError(null);
     },
-    onError: (value) => setError(value instanceof ApiError ? value.message : "LifeOS could not update that proposal."),
+    onError: (value) => setError(value instanceof ApiError ? value.message : "V-SPACE could not update that proposal."),
   });
 
   const dismiss = useMutation({
@@ -60,7 +60,7 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
       setProposals((rows) => rows.filter((row) => row.id !== proposal.id));
       setSelected((old) => { const next = new Set(old); next.delete(proposal.id); return next; });
     },
-    onError: (value) => setError(value instanceof ApiError ? value.message : "LifeOS could not dismiss that proposal."),
+    onError: (value) => setError(value instanceof ApiError ? value.message : "V-SPACE could not dismiss that proposal."),
   });
 
   const confirm = useMutation({
@@ -73,7 +73,7 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
       setMessage(data.confirmed.length ? `${data.confirmed.length} assessment${data.confirmed.length === 1 ? "" : "s"} added to the matched modules.` : null);
       await qc.invalidateQueries({ queryKey: moduleKeys.all });
     },
-    onError: (value) => setError(value instanceof ApiError ? value.message : "LifeOS could not confirm the selected assessments."),
+    onError: (value) => setError(value instanceof ApiError ? value.message : "V-SPACE could not confirm the selected assessments."),
   });
 
   function field(id: number, name: string, value: unknown) {
@@ -89,7 +89,7 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
       <div>
         <span className="workspace-eyebrow">I21.2 Intelligent Academic Schedule</span>
         <h2>Import an exam timetable</h2>
-        <p>Upload one photo, screenshot, or PDF. LifeOS reads the schedule, matches rows to your existing modules, and creates nothing until you confirm.</p>
+        <p>Upload one photo, screenshot, or PDF. V-SPACE reads the schedule, matches rows to your existing modules, and creates nothing until you confirm.</p>
       </div>
       <button className="brain-text-button" type="button" onClick={onClose}>Close</button>
     </div>
@@ -136,9 +136,9 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
             <button className="brain-text-button is-danger" type="button" onClick={() => dismiss.mutate(proposal.id)}>Dismiss</button>
           </div>
 
-          {payload.review_state === "needs_module" ? <div className="brain-alert is-warning">LifeOS could not safely decide which module this belongs to. Choose the correct module before confirming.</div> : null}
+          {payload.review_state === "needs_module" ? <div className="brain-alert is-warning">V-SPACE could not safely decide which module this belongs to. Choose the correct module before confirming.</div> : null}
           {payload.review_state === "needs_review" ? <div className="brain-alert is-warning">Some information is uncertain or missing. Check the source evidence and edit anything needed before selecting this row.</div> : null}
-          {payload.review_state === "possible_duplicate" ? <div className="brain-alert is-warning">Possible duplicate of assessment #{payload.duplicate_assessment_id}. LifeOS will not create it unless the proposal is changed so it is no longer a duplicate.</div> : null}
+          {payload.review_state === "possible_duplicate" ? <div className="brain-alert is-warning">Possible duplicate of assessment #{payload.duplicate_assessment_id}. V-SPACE will not create it unless the proposal is changed so it is no longer a duplicate.</div> : null}
 
           <div className="academic-edit-grid">
             <label><span>Module</span><select value={payload.module_id ?? ""} onChange={(event) => field(proposal.id, "module_id", event.target.value)}><option value="">Needs review</option>{modules.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
@@ -158,7 +158,7 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
             <summary>Source evidence · {payload.extraction_confidence} extraction confidence</summary>
             {proposal.evidence.map((evidence, index) => <div key={`${proposal.id}-e-${index}`}>
               <strong>{evidence.original_upload_name || evidence.source_filename}{evidence.page ? ` · Page ${evidence.page}` : ""}</strong>
-              <blockquote>{evidence.excerpt || "Evidence retained by LifeOS."}</blockquote>
+              <blockquote>{evidence.excerpt || "Evidence retained by V-SPACE."}</blockquote>
               {evidence.document_id ? <a href={`/documents/${evidence.document_id}?tab=pdf${evidence.page ? `&page=${String(evidence.page).split("-")[0]}` : ""}`} className="workspace-secondary-button compact">Open source</a> : null}
             </div>)}
           </details>

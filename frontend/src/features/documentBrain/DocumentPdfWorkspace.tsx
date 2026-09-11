@@ -113,7 +113,7 @@ export function DocumentPdfWorkspace({ documentId, filename, pdfUrl }: Props) {
               </form>
 
               <p className="db-pdf-find-status" data-db-pdf-find-status>
-                LifeOS will highlight related passages in the PDF.
+                V-SPACE will highlight related passages in the PDF.
               </p>
 
               <div className="db-pdf-match-navigation" data-db-pdf-match-navigation hidden>
@@ -134,7 +134,7 @@ export function DocumentPdfWorkspace({ documentId, filename, pdfUrl }: Props) {
             </div>
 
             <div className="db-pdf-error" data-db-pdf-error hidden>
-              <strong>LifeOS could not open the PDF viewer.</strong>
+              <strong>V-SPACE could not open the PDF viewer.</strong>
               <p data-db-pdf-error-message>Try opening the document in a new browser tab.</p>
               <button type="button" className="workspace-secondary-button" data-db-pdf-error-new-tab>Open in new tab</button>
             </div>

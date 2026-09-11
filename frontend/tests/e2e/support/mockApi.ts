@@ -184,6 +184,15 @@ export async function installLifeosApiMock(page: Page): Promise<MockApiState> {
     if (path === "/api/v1/csrf") return json(route, { csrf_token: "playwright-csrf" });
     if (path === "/api/v1/auth/logout") return json(route, { authenticated: false, user: null });
 
+    if (path === "/api/v1/intelligence/home") {
+      const section = { summary: "Your workspace is up to date.", items: [], counts: {}, context_limited: false, verified_from_state: true, read_only: true };
+      return json(route, { home: { today: "2026-08-25", briefing: { headline: "Make progress on your next priority", summary: "Review the launch checklist.", attention_level: "medium", signals: [{ key: "projects", label: "Projects", count: 2, tone: "info" }] }, focus: { today: "2026-08-25", attention_level: "medium", summary: "Start with your launch readiness checks.", priorities: [{ project_id: 2, project_title: "DSD Outlet", category: "deadline", severity: "high", title: "Verify clean production database", reason: "Your deployment milestone is approaching.", recommended_action: "Run the clean-database checklist before deployment.", actions: [], evidence: [] }], counts: { total_owned_projects: 2, reviewed_projects: 2, ranked_priorities: 1, high: 1, medium: 0, low: 0 }, context_limited: false, verified_from_state: true, read_only: true }, deadlines: { ...section, kind: "deadlines" }, documents: { ...section, kind: "documents" }, study: { ...section, kind: "study" }, activity: { ...section, window: { start_at: "2026-08-25", end_at: "2026-08-26", label: "Today" }, scope: { type: "workspace", id: null, label: "Workspace" }, total_items: 0 }, context_limited: false, verified_from_state: true, read_only: true } });
+    }
+    if (path === "/api/v1/planner") {
+      const date = url.searchParams.get("date") || new Date().toISOString().slice(0,10);
+      return json(route, { planner: { today: date, open_task_count: 4, projects: [project1, project2], commitments: [], active_plan: { id: 1, title: "Today's plan", days: [{ date, blocks: [{ task_id: 11, title: task1.title, start_time: "09:00", end_time: "10:00", minutes: 60, project_title: "LifeOS" }, { task_id: 12, title: task2.title, start_time: "10:15", end_time: "11:00", minutes: 45, project_title: "DSD Outlet" }] }] } } });
+    }
+
     if (path === "/api/v1/dashboard") {
       return json(route, {
         today: "2026-08-25",
