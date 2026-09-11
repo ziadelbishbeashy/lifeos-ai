@@ -1,0 +1,116 @@
+import type { ReactNode } from "react";
+import { useSession } from "./auth/session";
+import { PageState } from "./components/NativeUi";
+import { navigate } from "./core/navigation";
+import { NativeWorkspaceShell, type NativeSection } from "./native/NativeWorkspaceShell";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { AnalyticsAiUsagePage } from "./pages/AnalyticsAiUsagePage";
+import { AutomationsPage } from "./pages/AutomationsPage";
+import { AskLifeOSPage } from "./pages/AskLifeOSPage";
+import { ExperienceSettingsPage } from "./pages/ExperienceSettingsPage";
+import { ExperienceOnboardingPage } from "./pages/ExperienceOnboardingPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { DocumentComparePage, DocumentComparisonDetailsPage } from "./pages/DocumentComparePage";
+import { DocumentCollectionsPage } from "./pages/DocumentCollectionsPage";
+import { DocumentDetailsPage } from "./pages/DocumentDetailsPage";
+import { DocumentsPage } from "./pages/DocumentsPage";
+import { FocusInsightsPage, FocusPage } from "./pages/FocusPage";
+import { LandingPage } from "./pages/LandingPage";
+import { LoginPage } from "./pages/LoginPage";
+import { MemoryPage } from "./pages/MemoryPage";
+import { ModulesPage } from "./pages/ModulesPage";
+import { ModuleDetailsPage } from "./pages/ModuleDetailsPage";
+import { NoteDetailsPage } from "./pages/NoteDetailsPage";
+import { NotesPage } from "./pages/NotesPage";
+import { NotificationHistoryPage, NotificationSettingsPage } from "./pages/NotificationsPage";
+import { ProjectDetailsPage } from "./pages/ProjectDetailsPage";
+import { ProjectsPage } from "./pages/ProjectsPage";
+import { SmartPlannerPage } from "./pages/SmartPlannerPage";
+import { PrivateTutorPage } from "./pages/PrivateTutorPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { TasksPage } from "./pages/TasksPage";
+
+function normalizePath() {
+  return window.location.pathname.replace(/\/+$/, "") || "/";
+}
+
+function PrivateArea({ active, children }: { active: NativeSection; children: ReactNode }) {
+  const session = useSession();
+
+  if (session.isPending) {
+    return <PageState title="Opening V-SPACE" text="Restoring your private workspace…" />;
+  }
+
+  if (session.isError) {
+    return <PageState title="Workspace unavailable" text="V-SPACE could not verify your session." error retry={() => session.refetch()} />;
+  }
+
+  if (!session.data?.authenticated || !session.data.user) {
+    const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    navigate(`/login?next=${encodeURIComponent(next)}`, true);
+    return null;
+  }
+
+  return <NativeWorkspaceShell user={session.data.user} active={active}>{children}</NativeWorkspaceShell>;
+}
+
+function NotFoundPage() {
+  return (
+    <section className="workspace-page">
+      <PageState title="Page not found" text="This V-SPACE screen does not exist." />
+      <div className="center-actions"><a className="primary-button" href="/dashboard">Return to dashboard</a></div>
+    </section>
+  );
+}
+
+export function App() {
+  const path = normalizePath();
+
+  if (path === "/") return <LandingPage />;
+  if (path === "/login") return <LoginPage />;
+  if (path === "/register") return <RegisterPage />;
+  if (path === "/onboarding") return <ExperienceOnboardingPage />;
+  if (path === "/settings") return <PrivateArea active="settings"><ExperienceSettingsPage /></PrivateArea>;
+  if (path === "/tutor") return <PrivateArea active="tutor"><PrivateTutorPage /></PrivateArea>;
+
+  if (path === "/dashboard") return <PrivateArea active="dashboard"><DashboardPage /></PrivateArea>;
+  if (path === "/ask" || path === "/intelligence") return <PrivateArea active="intelligence"><AskLifeOSPage /></PrivateArea>;
+  if (path === "/memory") return <PrivateArea active="memory"><MemoryPage /></PrivateArea>;
+  if (path === "/automations") return <PrivateArea active="automations"><AutomationsPage /></PrivateArea>;
+  if (path === "/projects") return <PrivateArea active="projects"><ProjectsPage /></PrivateArea>;
+  if (/^\/projects\/\d+$/.test(path)) return <PrivateArea active="projects"><ProjectDetailsPage /></PrivateArea>;
+  if (path === "/modules") return <PrivateArea active="modules"><ModulesPage /></PrivateArea>;
+  if (/^\/modules\/\d+$/.test(path)) return <PrivateArea active="modules"><ModuleDetailsPage /></PrivateArea>;
+  if (/^\/projects\/\d+\/edit$/.test(path)) {
+    navigate(path.replace(/\/edit$/, ""), true);
+    return null;
+  }
+
+  if (path === "/tasks") return <PrivateArea active="tasks"><TasksPage /></PrivateArea>;
+  if (path === "/planner") return <PrivateArea active="planner"><SmartPlannerPage /></PrivateArea>;
+  if (/^\/tasks\/\d+\/edit$/.test(path)) {
+    navigate("/tasks", true);
+    return null;
+  }
+
+  if (path === "/notes") return <PrivateArea active="notes"><NotesPage /></PrivateArea>;
+  if (/^\/notes\/\d+$/.test(path)) return <PrivateArea active="notes"><NoteDetailsPage /></PrivateArea>;
+
+  if (path === "/focus") return <PrivateArea active="focus"><FocusPage /></PrivateArea>;
+  if (path === "/focus/insights") return <PrivateArea active="focus"><FocusInsightsPage /></PrivateArea>;
+  if (path === "/analytics") return <PrivateArea active="analytics"><AnalyticsPage /></PrivateArea>;
+  if (path === "/analytics/ai-usage") return <PrivateArea active="analytics"><AnalyticsAiUsagePage /></PrivateArea>;
+
+  if (path === "/notifications" || path === "/notifications/settings") {
+    return <PrivateArea active="notifications"><NotificationSettingsPage /></PrivateArea>;
+  }
+  if (path === "/notifications/history") return <PrivateArea active="notifications"><NotificationHistoryPage /></PrivateArea>;
+
+  if (path === "/documents" || path === "/documents/dashboard") return <PrivateArea active="documents"><DocumentsPage /></PrivateArea>;
+  if (path === "/documents/collections") return <PrivateArea active="documents"><DocumentCollectionsPage /></PrivateArea>;
+  if (path === "/documents/compare") return <PrivateArea active="documents"><DocumentComparePage /></PrivateArea>;
+  if (/^\/documents\/comparisons\/\d+$/.test(path)) return <PrivateArea active="documents"><DocumentComparisonDetailsPage /></PrivateArea>;
+  if (/^\/documents\/\d+$/.test(path)) return <PrivateArea active="documents"><DocumentDetailsPage /></PrivateArea>;
+
+  return <PrivateArea active="dashboard"><NotFoundPage /></PrivateArea>;
+}

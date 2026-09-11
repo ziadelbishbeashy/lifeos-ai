@@ -1,0 +1,232 @@
+{
+  "mode": "verify",
+  "started_at_utc": "2026-09-06T22:25:32.164316Z",
+  "finished_at_utc": "2026-09-06T22:25:51.933336Z",
+  "expected_alembic_head": "20260906_0001",
+  "source_database_family": "mssql",
+  "target_database_family": "postgresql",
+  "skipped_tables": [
+    "ai_operation_locks",
+    "alembic_version"
+  ],
+  "table_order": [
+    "users",
+    "ai_usage_events",
+    "document_collections",
+    "learning_modules",
+    "lifeos_action_proposals",
+    "lifeos_activity_events",
+    "lifeos_agent_runs",
+    "lifeos_automations",
+    "lifeos_context_links",
+    "lifeos_intelligence_events",
+    "lifeos_memories",
+    "notification_preferences",
+    "projects",
+    "user_experience_profiles",
+    "document_collection_questions",
+    "lectures",
+    "module_assessments",
+    "module_collection_links",
+    "lifeos_automation_runs",
+    "lifeos_proactive_notifications",
+    "document_version_families",
+    "notes",
+    "project_questions",
+    "tasks",
+    "module_questions",
+    "documents",
+    "module_note_links",
+    "note_ai_analyses",
+    "email_notification_logs",
+    "focus_sessions",
+    "module_task_links",
+    "document_ai_analyses",
+    "document_collection_items",
+    "document_comparisons",
+    "document_questions",
+    "document_tables",
+    "module_document_links",
+    "ai_task_suggestions",
+    "note_ai_questions",
+    "focus_distractions",
+    "document_task_suggestions",
+    "document_chunks"
+  ],
+  "tables": [],
+  "warnings": [],
+  "inserted_rows": {},
+  "row_count_verification": {
+    "users": {
+      "source": 6,
+      "target": 6
+    },
+    "ai_usage_events": {
+      "source": 34,
+      "target": 34
+    },
+    "document_collections": {
+      "source": 1,
+      "target": 1
+    },
+    "learning_modules": {
+      "source": 1,
+      "target": 1
+    },
+    "lifeos_action_proposals": {
+      "source": 4,
+      "target": 4
+    },
+    "lifeos_activity_events": {
+      "source": 25,
+      "target": 25
+    },
+    "lifeos_agent_runs": {
+      "source": 6,
+      "target": 6
+    },
+    "lifeos_automations": {
+      "source": 2,
+      "target": 2
+    },
+    "lifeos_context_links": {
+      "source": 0,
+      "target": 0
+    },
+    "lifeos_intelligence_events": {
+      "source": 69,
+      "target": 69
+    },
+    "lifeos_memories": {
+      "source": 4,
+      "target": 4
+    },
+    "notification_preferences": {
+      "source": 6,
+      "target": 6
+    },
+    "projects": {
+      "source": 10,
+      "target": 10
+    },
+    "user_experience_profiles": {
+      "source": 1,
+      "target": 1
+    },
+    "document_collection_questions": {
+      "source": 0,
+      "target": 0
+    },
+    "lectures": {
+      "source": 0,
+      "target": 0
+    },
+    "module_assessments": {
+      "source": 0,
+      "target": 0
+    },
+    "module_collection_links": {
+      "source": 0,
+      "target": 0
+    },
+    "lifeos_automation_runs": {
+      "source": 2,
+      "target": 2
+    },
+    "lifeos_proactive_notifications": {
+      "source": 23,
+      "target": 23
+    },
+    "document_version_families": {
+      "source": 1,
+      "target": 1
+    },
+    "notes": {
+      "source": 6,
+      "target": 6
+    },
+    "project_questions": {
+      "source": 1,
+      "target": 1
+    },
+    "tasks": {
+      "source": 61,
+      "target": 61
+    },
+    "module_questions": {
+      "source": 0,
+      "target": 0
+    },
+    "documents": {
+      "source": 24,
+      "target": 24
+    },
+    "module_note_links": {
+      "source": 0,
+      "target": 0
+    },
+    "note_ai_analyses": {
+      "source": 10,
+      "target": 10
+    },
+    "email_notification_logs": {
+      "source": 277,
+      "target": 277
+    },
+    "focus_sessions": {
+      "source": 13,
+      "target": 13
+    },
+    "module_task_links": {
+      "source": 0,
+      "target": 0
+    },
+    "document_ai_analyses": {
+      "source": 36,
+      "target": 36
+    },
+    "document_collection_items": {
+      "source": 5,
+      "target": 5
+    },
+    "document_comparisons": {
+      "source": 4,
+      "target": 4
+    },
+    "document_questions": {
+      "source": 29,
+      "target": 29
+    },
+    "document_tables": {
+      "source": 35,
+      "target": 35
+    },
+    "module_document_links": {
+      "source": 0,
+      "target": 0
+    },
+    "ai_task_suggestions": {
+      "source": 29,
+      "target": 29
+    },
+    "note_ai_questions": {
+      "source": 8,
+      "target": 8
+    },
+    "focus_distractions": {
+      "source": 4,
+      "target": 4
+    },
+    "document_task_suggestions": {
+      "source": 121,
+      "target": 121
+    },
+    "document_chunks": {
+      "source": 419,
+      "target": 419
+    }
+  },
+  "foreign_key_violations": [],
+  "sequences_reset": [],
+  "success": true
+}

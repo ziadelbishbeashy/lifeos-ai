@@ -1,0 +1,88 @@
+LifeOS AI Efficiency & Duplicate-Work Guard Patch
+=================================================
+
+Baseline expected
+-----------------
+Apply this AFTER:
+- I21.2 Intelligent Academic Schedule patch
+- AI Cost & Observability updated patch
+- frontend contract / visual automation type hotfixes
+
+What this patch changes
+-----------------------
+1. Prevent duplicate Document Brain analysis while one is already running.
+   - Frontend immediate click guard.
+   - Backend cross-worker DB lock.
+   - Same document analysis requests return HTTP 409 operation_in_progress.
+   - Document Details exposes/polls running state so a second tab is also blocked.
+
+2. Prevent duplicate document-type detection.
+   - Same cross-worker lock protection.
+   - Unchanged documents reuse a cached detection proposal instead of paying Gemini again.
+   - Cache fingerprint changes automatically when filename/text/detector contract changes.
+   - Detection remains non-authoritative and must still be confirmed by the user.
+
+3. Exact Gemini embedding metering fallback.
+   - Uses embed response usage metadata when available.
+   - Otherwise calls Gemini count_tokens on the exact embedding contents.
+   - If exact counting is unavailable, cost remains unknown rather than guessed.
+
+4. Cost per user operation.
+   - AI usage summary groups provider calls by request_id.
+   - Adds operation count, average fully-metered operation cost, and recent operations.
+   - Feature breakdown adds average thinking tokens per call.
+
+5. Existing safety is preserved.
+   - No AI direct workspace writes.
+   - I9 confirmation unchanged.
+   - Document Brain/RAG unchanged.
+   - LangSmith integration unchanged.
+   - OCR already had queued/processing duplicate protection and remains unchanged.
+
+Migration
+---------
+New Alembic head:
+20260906_0001
+
+Adds:
+- documents.type_detection_cache_json
+- documents.type_detection_fingerprint
+- documents.type_detection_updated_at
+- ai_operation_locks table
+
+The lock table contains only transient execution metadata; no prompts or model output.
+
+Apply
+-----
+From project root, overlay this patch. frontend/public is intentionally absent.
+
+Backend:
+cd C:\Users\zelbi\OneDrive\Desktop\lifeos-ai\backend
+py -3.11 -m alembic -c migrations/alembic.ini upgrade head
+py -3.11 -m alembic -c migrations/alembic.ini current
+
+Expected:
+20260906_0001 (head)
+
+Focused tests:
+py -3.11 -m pytest tests\test_document_type_detection_workflow_service.py -q
+py -3.11 -m pytest tests\test_document_ai_workflow_service.py -q
+py -3.11 -m pytest tests\test_document_embedding_service.py -q
+py -3.11 -m pytest tests\test_ai_usage_observability.py -q
+
+Full backend:
+py -3.11 -m pytest -q
+
+Frontend:
+cd ..\frontend
+npm run build
+npm run css:check
+
+Manual verification
+-------------------
+A. Open one PDF and rapidly click Analyse twice. Only one provider analysis should run.
+B. While analysis is running, the Analyze/Detect action should stay disabled and show progress.
+C. Open the same document in a second tab while analysis runs. It should report/observe the existing operation, not start another one.
+D. Detect the same unchanged document type twice. The second result should return immediately from cache and create no new document_type_detection provider usage event.
+E. Analyze a document that needs new embeddings. Analytics > AI Usage should begin showing embedding tokens/cost instead of 0/unknown when Gemini count_tokens supports the configured embedding model.
+F. Analytics > AI Usage should show Recent user operations and average thinking tokens per feature.

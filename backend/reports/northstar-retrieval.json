@@ -1,0 +1,1621 @@
+{
+  "step": 18,
+  "dataset_version": 1,
+  "dataset_name": "Northstar Step 18 Gold Set",
+  "dataset_path": "evaluations\\northstar_step18.json",
+  "mode": "retrieval",
+  "user_id": 1,
+  "top_k": 10,
+  "started_at": "2026-08-28T20:33:46Z",
+  "completed_at": "2026-08-28T20:33:50Z",
+  "summary": {
+    "total_cases": 6,
+    "passed_cases": 5,
+    "failed_cases": 0,
+    "error_cases": 0,
+    "skipped_cases": 1,
+    "retrieval_cases": 5,
+    "retrieval_recall_mean": 1.0,
+    "retrieval_all_sources_rate": 1.0,
+    "retrieval_mrr": 0.6333333333333333,
+    "full_answer_cases": 0,
+    "answerability_accuracy": null,
+    "answer_text_accuracy": null,
+    "citation_recall_mean": null,
+    "citation_all_sources_rate": null
+  },
+  "threshold_results": [
+    {
+      "metric": "retrieval_recall",
+      "minimum": 0.9,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "retrieval_all_sources_rate",
+      "minimum": 0.8,
+      "actual": 1.0,
+      "passed": true
+    },
+    {
+      "metric": "retrieval_mrr",
+      "minimum": 0.5,
+      "actual": 0.6333333333333333,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "cases": [
+    {
+      "id": "retail_laptop_q4_units",
+      "description": "Step 16 table cell retrieval preserves the Laptop row and Q4 column.",
+      "tags": [
+        "document",
+        "table",
+        "step16"
+      ],
+      "scope": {
+        "type": "document",
+        "filename": "01_Northstar_Retail_Performance_2026.pdf"
+      },
+      "question": "What were Laptop Q4 unit sales?",
+      "status": "passed",
+      "passed": true,
+      "error": null,
+      "retrieval": {
+        "source_count": 10,
+        "sources": [
+          {
+            "rank": 1,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 3 3. Product Sales The following table reports unit sales by product category. Product Q1 Units Q2 Units Q3 Units Q4 Units Annual Units Smartphones 4,800 5,250 5,900 6,700 22,650 Laptops 2,300 2,650 2,900 3,250 11,100 Tablets 1,750 1,980 2,220 2,700 8,650 Headphones 3,600 4,050 4,500 5,200 17,350 Smartwatches 1,900 2,250 2,600 3,100 9,850 Accessories 6,800 7,300 7,950 8,600 3...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1343,
+            "chunk_index": 2,
+            "score": 0.0162612374,
+            "keyword_score": 5.052724,
+            "semantic_score": 0.83781733,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 2,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "The following table reports unit sales by product category.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The following table reports unit sales by product category. | Product | Q1 Units | Q2 Units | Q3 Units | Q4 Units | Annual Units | | --- | --- | --- | --- | --- | --- | | Smartphones | 4,800 | 5,250 | 5,900 | 6,700 | 22,650 | | Laptops | 2,300 | 2,650 | 2,900 | 3,250 | 11,100 | | Tablets | 1,750 | 1,980 | 2,220 | 2,700 | 8,650 | | Headphones | 3,600 | 4,050 | 4,500 | 5,200 | 17,350 | |...",
+            "content_type": "table",
+            "table_id": 2,
+            "chunk_id": 1350,
+            "chunk_index": 9,
+            "score": 0.0162612374,
+            "keyword_score": 6.021671,
+            "semantic_score": 0.8359684,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 3,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 4,
+            "section": "Revenue is also segmented by the primary sales channel used by customers.",
+            "evidence": "[STRUCTURED TABLE 1] Table: Revenue is also segmented by the primary sales channel used by customers. | Channel | Revenue (EGP m) | Share | Conversion Rate | Avg. Order Value (EGP) | | --- | --- | --- | --- | --- | | Website | 48.7 | 39.1% | 3.9% | 2,740 | | Mobile App | 32.4 | 26.0% | 4.6% | 2,980 | | Physical Stores | 36.1 | 29.0% | 31.0% | 3,210 | | Marketplace | 7.4 | 5.9% | 2.8% | 2,290 |",
+            "content_type": "table",
+            "table_id": 3,
+            "chunk_id": 1351,
+            "chunk_index": 10,
+            "score": 0.0152751866,
+            "keyword_score": 2.386514,
+            "semantic_score": 0.73092437,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 4,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 2,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 2 2. Regional Revenue Table 2.1 shows quarterly revenue by region in EGP millions. Region Q1 Q2 Q3 Q4 Annual Total Cairo 8.4 9.2 10.1 11.0 38.7 Alexandria 5.3 5.8 6.2 6.9 24.2 Giza 4.7 5.1 5.6 6.0 21.4 Mansoura 3.0 3.6 4.2 5.1 15.9 Tanta 2.8 3.0 3.2 3.6 12.6 Other regions 2.5 2.8 3.0 3.5 11.8 TOTAL 26.7 29.5 32.3 36.1 124.6 Mansoura increased from EGP 3.0 million in Q1 to EGP...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1342,
+            "chunk_index": 1,
+            "score": 0.0151515152,
+            "keyword_score": 1.276418,
+            "semantic_score": 0.73248904,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 5,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 1,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 1 Northstar Retail Performance 2026 Fictional Step 16 table-understanding benchmark for LifeOS Document Brain 1. Executive Summary Northstar Retail is a fictional Egypt-based consumer electronics retailer used only for LifeOS testing. This report summarizes commercial performance for 2026 and intentionally includes several native PDF tables for structured extraction. Control...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1341,
+            "chunk_index": 0,
+            "score": 0.0149787615,
+            "keyword_score": 3.73443,
+            "semantic_score": 0.70993633,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 6,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 4,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 4 4. Sales Channel Performance Revenue is also segmented by the primary sales channel used by customers. Channel Revenue (EGP m) Share Conversion Rate Avg. Order Value (EGP) Website 48.7 39.1% 3.9% 2,740 Mobile App 32.4 26.0% 4.6% 2,980 Physical Stores 36.1 29.0% 31.0% 3,210 Marketplace 7.4 5.9% 2.8% 2,290 The mobile app had the highest digital conversion rate at 4.6%. Physic...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1344,
+            "chunk_index": 3,
+            "score": 0.0148351648,
+            "keyword_score": 1.456234,
+            "semantic_score": 0.71257631,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 7,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 2,
+            "section": "Table 2.1 shows quarterly revenue by region in EGP millions.",
+            "evidence": "[STRUCTURED TABLE 1] Table: Table 2.1 shows quarterly revenue by region in EGP millions. | Region | Q1 | Q2 | Q3 | Q4 | Annual Total | | --- | --- | --- | --- | --- | --- | | Cairo | 8.4 | 9.2 | 10.1 | 11.0 | 38.7 | | Alexandria | 5.3 | 5.8 | 6.2 | 6.9 | 24.2 | | Giza | 4.7 | 5.1 | 5.6 | 6.0 | 21.4 | | Mansoura | 3.0 | 3.6 | 4.2 | 5.1 | 15.9 | | Tanta | 2.8 | 3.0 | 3.2 | 3.6 | 12.6 | | Other regions | 2.5 | 2.8 |...",
+            "content_type": "table",
+            "table_id": 1,
+            "chunk_id": 1349,
+            "chunk_index": 8,
+            "score": 0.0147090634,
+            "keyword_score": 1.003302,
+            "semantic_score": 0.72639235,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 8,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 6,
+            "section": "Inventory figures represent the closing position on 31 December 2026.",
+            "evidence": "[STRUCTURED TABLE 1] Table: Inventory figures represent the closing position on 31 December 2026. | Category | Units in Stock | Reorder Point | Days of Cover | Stock Status | | --- | --- | --- | --- | --- | | Smartphones | 1,420 | 1,100 | 19 | Healthy | | Laptops | 620 | 700 | 14 | Reorder | | Tablets | 780 | 650 | 21 | Healthy | | Headphones | 1,050 | 900 | 17 | Healthy | | Smartwatches | 510 | 550 | 13 | Reorder...",
+            "content_type": "table",
+            "table_id": 5,
+            "chunk_id": 1353,
+            "chunk_index": 12,
+            "score": 0.0079365079,
+            "keyword_score": null,
+            "semantic_score": 0.74052593,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 9,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 5,
+            "section": "The next table combines return rate and post-purchase satisfaction by product.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The next table combines return rate and post-purchase satisfaction by product. | Product | Return Rate | Satisfaction / 5 | Top Return Reason | | --- | --- | --- | --- | | Smartphones | 4.1% | 4.5 | Color or storage preference | | Laptops | 5.8% | 4.3 | Performance expectation | | Tablets | 3.9% | 4.4 | Screen-size preference | | Headphones | 6.4% | 4.1 | Fit or comfort | | Smartwatches...",
+            "content_type": "table",
+            "table_id": 4,
+            "chunk_id": 1352,
+            "chunk_index": 11,
+            "score": 0.0078125,
+            "keyword_score": null,
+            "semantic_score": 0.73463861,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 10,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 6,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 6 6. Inventory Position Inventory figures represent the closing position on 31 December 2026. Category Units in Stock Reorder Point Days of Cover Stock Status Smartphones 1,420 1,100 19 Healthy Laptops 620 700 14 Reorder Tablets 780 650 21 Healthy Headphones 1,050 900 17 Healthy Smartwatches 510 550 13 Reorder Accessories 2,900 2,000 28 Healthy Laptops and Smartwatches are th...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1346,
+            "chunk_index": 5,
+            "score": 0.0076923077,
+            "keyword_score": null,
+            "semantic_score": 0.73321781,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          }
+        ],
+        "applicable": true,
+        "expected_count": 1,
+        "hit_count": 1,
+        "recall": 1.0,
+        "all_expected_found": true,
+        "reciprocal_rank": 1.0,
+        "matches": [
+          {
+            "expected_index": 1,
+            "expected": {
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3
+            },
+            "found": true,
+            "rank": 1,
+            "actual": {
+              "rank": 1,
+              "document_id": 1012,
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3,
+              "section": "Northstar Retail Performance 2026",
+              "evidence": "Northstar Retail Performance 2026 Page 3 3. Product Sales The following table reports unit sales by product category. Product Q1 Units Q2 Units Q3 Units Q4 Units Annual Units Smartphones 4,800 5,250 5,900 6,700 22,650 Laptops 2,300 2,650 2,900 3,250 11,100 Tablets 1,750 1,980 2,220 2,700 8,650 Headphones 3,600 4,050 4,500 5,200 17,350 Smartwatches 1,900 2,250 2,600 3,100 9,850 Accessories 6,800 7,300 7,950 8,600 3...",
+              "content_type": "text",
+              "table_id": null,
+              "chunk_id": 1343,
+              "chunk_index": 2,
+              "score": 0.0162612374,
+              "keyword_score": 5.052724,
+              "semantic_score": 0.83781733,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          }
+        ]
+      },
+      "answer": null,
+      "resolved_scope": {
+        "type": "document",
+        "id": 1012,
+        "label": "01_Northstar_Retail_Performance_2026.pdf",
+        "lecture_id": null
+      }
+    },
+    {
+      "id": "retail_highest_return_rate",
+      "description": "Step 16 table reasoning keeps the product/return-rate relationship intact.",
+      "tags": [
+        "document",
+        "table",
+        "step16"
+      ],
+      "scope": {
+        "type": "document",
+        "filename": "01_Northstar_Retail_Performance_2026.pdf"
+      },
+      "question": "What product had the highest return rate?",
+      "status": "passed",
+      "passed": true,
+      "error": null,
+      "retrieval": {
+        "source_count": 10,
+        "sources": [
+          {
+            "rank": 1,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 5,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 5 5. Returns and Customer Satisfaction The next table combines return rate and post-purchase satisfaction by product. Product Return Rate Satisfaction / 5 Top Return Reason Smartphones 4.1% 4.5 Color or storage preference Laptops 5.8% 4.3 Performance expectation Tablets 3.9% 4.4 Screen-size preference Headphones 6.4% 4.1 Fit or comfort Smartwatches 5.0% 4.2 Compatibility Head...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1345,
+            "chunk_index": 4,
+            "score": 0.0163934426,
+            "keyword_score": 9.61324,
+            "semantic_score": 0.8328134,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 2,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 5,
+            "section": "The next table combines return rate and post-purchase satisfaction by product.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The next table combines return rate and post-purchase satisfaction by product. | Product | Return Rate | Satisfaction / 5 | Top Return Reason | | --- | --- | --- | --- | | Smartphones | 4.1% | 4.5 | Color or storage preference | | Laptops | 5.8% | 4.3 | Performance expectation | | Tablets | 3.9% | 4.4 | Screen-size preference | | Headphones | 6.4% | 4.1 | Fit or comfort | | Smartwatches...",
+            "content_type": "table",
+            "table_id": 4,
+            "chunk_id": 1352,
+            "chunk_index": 11,
+            "score": 0.0161290323,
+            "keyword_score": 9.607277,
+            "semantic_score": 0.8235972,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 3,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 3 3. Product Sales The following table reports unit sales by product category. Product Q1 Units Q2 Units Q3 Units Q4 Units Annual Units Smartphones 4,800 5,250 5,900 6,700 22,650 Laptops 2,300 2,650 2,900 3,250 11,100 Tablets 1,750 1,980 2,220 2,700 8,650 Headphones 3,600 4,050 4,500 5,200 17,350 Smartwatches 1,900 2,250 2,600 3,100 9,850 Accessories 6,800 7,300 7,950 8,600 3...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1343,
+            "chunk_index": 2,
+            "score": 0.0157490079,
+            "keyword_score": 3.504138,
+            "semantic_score": 0.72192236,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 4,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 4,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 4 4. Sales Channel Performance Revenue is also segmented by the primary sales channel used by customers. Channel Revenue (EGP m) Share Conversion Rate Avg. Order Value (EGP) Website 48.7 39.1% 3.9% 2,740 Mobile App 32.4 26.0% 4.6% 2,980 Physical Stores 36.1 29.0% 31.0% 3,210 Marketplace 7.4 5.9% 2.8% 2,290 The mobile app had the highest digital conversion rate at 4.6%. Physic...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1344,
+            "chunk_index": 3,
+            "score": 0.0152894491,
+            "keyword_score": 4.782261,
+            "semantic_score": 0.71032579,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 5,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "The following table reports unit sales by product category.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The following table reports unit sales by product category. | Product | Q1 Units | Q2 Units | Q3 Units | Q4 Units | Annual Units | | --- | --- | --- | --- | --- | --- | | Smartphones | 4,800 | 5,250 | 5,900 | 6,700 | 22,650 | | Laptops | 2,300 | 2,650 | 2,900 | 3,250 | 11,100 | | Tablets | 1,750 | 1,980 | 2,220 | 2,700 | 8,650 | | Headphones | 3,600 | 4,050 | 4,500 | 5,200 | 17,350 | |...",
+            "content_type": "table",
+            "table_id": 2,
+            "chunk_id": 1350,
+            "chunk_index": 9,
+            "score": 0.0152680653,
+            "keyword_score": 2.433511,
+            "semantic_score": 0.71214815,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 6,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 7,
+            "section": "rows.",
+            "evidence": "[STRUCTURED TABLE 1] Table: rows. | Month | Revenue (EGP m) | Orders | Avg Order Value (EGP) | Refund Rate | | --- | --- | --- | --- | --- | | Jan | 8.2 | 2,940 | 2,789 | 2.9% | | Feb | 8.7 | 3,060 | 2,843 | 3.0% | | Mar | 9.8 | 3,330 | 2,943 | 3.1% | | Apr | 9.4 | 3,210 | 2,928 | 3.0% | | May | 9.7 | 3,290 | 2,948 | 2.8% | | Jun | 10.4 | 3,480 | 2,989 | 2.9% | | Jul | 10.2 | 3,400 | 3,000 | 3.0% | | Aug | 10.7 |...",
+            "content_type": "table",
+            "table_id": 6,
+            "chunk_id": 1354,
+            "chunk_index": 13,
+            "score": 0.0150588768,
+            "keyword_score": 0.756182,
+            "semantic_score": 0.72080581,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 7,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 4,
+            "section": "Revenue is also segmented by the primary sales channel used by customers.",
+            "evidence": "[STRUCTURED TABLE 1] Table: Revenue is also segmented by the primary sales channel used by customers. | Channel | Revenue (EGP m) | Share | Conversion Rate | Avg. Order Value (EGP) | | --- | --- | --- | --- | --- | | Website | 48.7 | 39.1% | 3.9% | 2,740 | | Mobile App | 32.4 | 26.0% | 4.6% | 2,980 | | Physical Stores | 36.1 | 29.0% | 31.0% | 3,210 | | Marketplace | 7.4 | 5.9% | 2.8% | 2,290 |",
+            "content_type": "table",
+            "table_id": 3,
+            "chunk_id": 1351,
+            "chunk_index": 10,
+            "score": 0.0146055437,
+            "keyword_score": 0.988954,
+            "semantic_score": 0.70170752,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 8,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 8,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 8 8. Conclusions The commercial picture is positive: revenue accelerated through the year, digital conversion improved, and customer satisfaction remained above 4.1 across all major product groups. For LifeOS testing, this document should support questions that require exact table cell lookup, row comparison, column comparison, ranking, aggregation and page-aware evidence. Fi...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1348,
+            "chunk_index": 7,
+            "score": 0.014520202,
+            "keyword_score": 2.109434,
+            "semantic_score": 0.69114315,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 9,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 7,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 7 7. Monthly Revenue Trend This detailed monthly table makes the PDF large enough to test table extraction on repeated numeric rows. Month Revenue (EGP m) Orders Avg Order Value (EGP) Refund Rate Jan 8.2 2,940 2,789 2.9% Feb 8.7 3,060 2,843 3.0% Mar 9.8 3,330 2,943 3.1% Apr 9.4 3,210 2,928 3.0% May 9.7 3,290 2,948 2.8% Jun 10.4 3,480 2,989 2.9% Jul 10.2 3,400 3,000 3.0% Aug 1...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1347,
+            "chunk_index": 6,
+            "score": 0.0145049401,
+            "keyword_score": 0.645458,
+            "semantic_score": 0.71051212,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 10,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 1,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 1 Northstar Retail Performance 2026 Fictional Step 16 table-understanding benchmark for LifeOS Document Brain 1. Executive Summary Northstar Retail is a fictional Egypt-based consumer electronics retailer used only for LifeOS testing. This report summarizes commercial performance for 2026 and intentionally includes several native PDF tables for structured extraction. Control...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1341,
+            "chunk_index": 0,
+            "score": 0.014389234,
+            "keyword_score": 0.753177,
+            "semantic_score": 0.703582,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          }
+        ],
+        "applicable": true,
+        "expected_count": 1,
+        "hit_count": 1,
+        "recall": 1.0,
+        "all_expected_found": true,
+        "reciprocal_rank": 0.3333333333333333,
+        "matches": [
+          {
+            "expected_index": 1,
+            "expected": {
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3
+            },
+            "found": true,
+            "rank": 3,
+            "actual": {
+              "rank": 3,
+              "document_id": 1012,
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3,
+              "section": "Northstar Retail Performance 2026",
+              "evidence": "Northstar Retail Performance 2026 Page 3 3. Product Sales The following table reports unit sales by product category. Product Q1 Units Q2 Units Q3 Units Q4 Units Annual Units Smartphones 4,800 5,250 5,900 6,700 22,650 Laptops 2,300 2,650 2,900 3,250 11,100 Tablets 1,750 1,980 2,220 2,700 8,650 Headphones 3,600 4,050 4,500 5,200 17,350 Smartwatches 1,900 2,250 2,600 3,100 9,850 Accessories 6,800 7,300 7,950 8,600 3...",
+              "content_type": "text",
+              "table_id": null,
+              "chunk_id": 1343,
+              "chunk_index": 2,
+              "score": 0.0157490079,
+              "keyword_score": 3.504138,
+              "semantic_score": 0.72192236,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          }
+        ]
+      },
+      "answer": null,
+      "resolved_scope": {
+        "type": "document",
+        "id": 1012,
+        "label": "01_Northstar_Retail_Performance_2026.pdf",
+        "lecture_id": null
+      }
+    },
+    {
+      "id": "retail_below_reorder_point",
+      "description": "Step 16 retrieves both rows that satisfy a table condition.",
+      "tags": [
+        "document",
+        "table",
+        "step16"
+      ],
+      "scope": {
+        "type": "document",
+        "filename": "01_Northstar_Retail_Performance_2026.pdf"
+      },
+      "question": "Which two categories are below their reorder points?",
+      "status": "passed",
+      "passed": true,
+      "error": null,
+      "retrieval": {
+        "source_count": 10,
+        "sources": [
+          {
+            "rank": 1,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 6,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 6 6. Inventory Position Inventory figures represent the closing position on 31 December 2026. Category Units in Stock Reorder Point Days of Cover Stock Status Smartphones 1,420 1,100 19 Healthy Laptops 620 700 14 Reorder Tablets 780 650 21 Healthy Headphones 1,050 900 17 Healthy Smartwatches 510 550 13 Reorder Accessories 2,900 2,000 28 Healthy Laptops and Smartwatches are th...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1346,
+            "chunk_index": 5,
+            "score": 0.0163934426,
+            "keyword_score": 15.140553,
+            "semantic_score": 0.78731144,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 2,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 6,
+            "section": "Inventory figures represent the closing position on 31 December 2026.",
+            "evidence": "[STRUCTURED TABLE 1] Table: Inventory figures represent the closing position on 31 December 2026. | Category | Units in Stock | Reorder Point | Days of Cover | Stock Status | | --- | --- | --- | --- | --- | | Smartphones | 1,420 | 1,100 | 19 | Healthy | | Laptops | 620 | 700 | 14 | Reorder | | Tablets | 780 | 650 | 21 | Healthy | | Headphones | 1,050 | 900 | 17 | Healthy | | Smartwatches | 510 | 550 | 13 | Reorder...",
+            "content_type": "table",
+            "table_id": 5,
+            "chunk_id": 1353,
+            "chunk_index": 12,
+            "score": 0.0161290323,
+            "keyword_score": 3.31086,
+            "semantic_score": 0.76002849,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 3,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 3 3. Product Sales The following table reports unit sales by product category. Product Q1 Units Q2 Units Q3 Units Q4 Units Annual Units Smartphones 4,800 5,250 5,900 6,700 22,650 Laptops 2,300 2,650 2,900 3,250 11,100 Tablets 1,750 1,980 2,220 2,700 8,650 Headphones 3,600 4,050 4,500 5,200 17,350 Smartwatches 1,900 2,250 2,600 3,100 9,850 Accessories 6,800 7,300 7,950 8,600 3...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1343,
+            "chunk_index": 2,
+            "score": 0.0157490079,
+            "keyword_score": 1.601047,
+            "semantic_score": 0.63904431,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 4,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 5,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 5 5. Returns and Customer Satisfaction The next table combines return rate and post-purchase satisfaction by product. Product Return Rate Satisfaction / 5 Top Return Reason Smartphones 4.1% 4.5 Color or storage preference Laptops 5.8% 4.3 Performance expectation Tablets 3.9% 4.4 Screen-size preference Headphones 6.4% 4.1 Fit or comfort Smartwatches 5.0% 4.2 Compatibility Head...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1345,
+            "chunk_index": 4,
+            "score": 0.0079365079,
+            "keyword_score": null,
+            "semantic_score": 0.65736153,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 5,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 5,
+            "section": "The next table combines return rate and post-purchase satisfaction by product.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The next table combines return rate and post-purchase satisfaction by product. | Product | Return Rate | Satisfaction / 5 | Top Return Reason | | --- | --- | --- | --- | | Smartphones | 4.1% | 4.5 | Color or storage preference | | Laptops | 5.8% | 4.3 | Performance expectation | | Tablets | 3.9% | 4.4 | Screen-size preference | | Headphones | 6.4% | 4.1 | Fit or comfort | | Smartwatches...",
+            "content_type": "table",
+            "table_id": 4,
+            "chunk_id": 1352,
+            "chunk_index": 11,
+            "score": 0.0076923077,
+            "keyword_score": null,
+            "semantic_score": 0.63272079,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 6,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "The following table reports unit sales by product category.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The following table reports unit sales by product category. | Product | Q1 Units | Q2 Units | Q3 Units | Q4 Units | Annual Units | | --- | --- | --- | --- | --- | --- | | Smartphones | 4,800 | 5,250 | 5,900 | 6,700 | 22,650 | | Laptops | 2,300 | 2,650 | 2,900 | 3,250 | 11,100 | | Tablets | 1,750 | 1,980 | 2,220 | 2,700 | 8,650 | | Headphones | 3,600 | 4,050 | 4,500 | 5,200 | 17,350 | |...",
+            "content_type": "table",
+            "table_id": 2,
+            "chunk_id": 1350,
+            "chunk_index": 9,
+            "score": 0.0075757576,
+            "keyword_score": null,
+            "semantic_score": 0.63268679,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 7,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 7,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 7 7. Monthly Revenue Trend This detailed monthly table makes the PDF large enough to test table extraction on repeated numeric rows. Month Revenue (EGP m) Orders Avg Order Value (EGP) Refund Rate Jan 8.2 2,940 2,789 2.9% Feb 8.7 3,060 2,843 3.0% Mar 9.8 3,330 2,943 3.1% Apr 9.4 3,210 2,928 3.0% May 9.7 3,290 2,948 2.8% Jun 10.4 3,480 2,989 2.9% Jul 10.2 3,400 3,000 3.0% Aug 1...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1347,
+            "chunk_index": 6,
+            "score": 0.0074626866,
+            "keyword_score": null,
+            "semantic_score": 0.63246603,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 8,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 4,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 4 4. Sales Channel Performance Revenue is also segmented by the primary sales channel used by customers. Channel Revenue (EGP m) Share Conversion Rate Avg. Order Value (EGP) Website 48.7 39.1% 3.9% 2,740 Mobile App 32.4 26.0% 4.6% 2,980 Physical Stores 36.1 29.0% 31.0% 3,210 Marketplace 7.4 5.9% 2.8% 2,290 The mobile app had the highest digital conversion rate at 4.6%. Physic...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1344,
+            "chunk_index": 3,
+            "score": 0.0073529412,
+            "keyword_score": null,
+            "semantic_score": 0.63140451,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 9,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 2,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 2 2. Regional Revenue Table 2.1 shows quarterly revenue by region in EGP millions. Region Q1 Q2 Q3 Q4 Annual Total Cairo 8.4 9.2 10.1 11.0 38.7 Alexandria 5.3 5.8 6.2 6.9 24.2 Giza 4.7 5.1 5.6 6.0 21.4 Mansoura 3.0 3.6 4.2 5.1 15.9 Tanta 2.8 3.0 3.2 3.6 12.6 Other regions 2.5 2.8 3.0 3.5 11.8 TOTAL 26.7 29.5 32.3 36.1 124.6 Mansoura increased from EGP 3.0 million in Q1 to EGP...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1342,
+            "chunk_index": 1,
+            "score": 0.0072463768,
+            "keyword_score": null,
+            "semantic_score": 0.62388662,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 10,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 1,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 1 Northstar Retail Performance 2026 Fictional Step 16 table-understanding benchmark for LifeOS Document Brain 1. Executive Summary Northstar Retail is a fictional Egypt-based consumer electronics retailer used only for LifeOS testing. This report summarizes commercial performance for 2026 and intentionally includes several native PDF tables for structured extraction. Control...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1341,
+            "chunk_index": 0,
+            "score": 0.0071428571,
+            "keyword_score": null,
+            "semantic_score": 0.62145667,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          }
+        ],
+        "applicable": true,
+        "expected_count": 1,
+        "hit_count": 1,
+        "recall": 1.0,
+        "all_expected_found": true,
+        "reciprocal_rank": 0.3333333333333333,
+        "matches": [
+          {
+            "expected_index": 1,
+            "expected": {
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3
+            },
+            "found": true,
+            "rank": 3,
+            "actual": {
+              "rank": 3,
+              "document_id": 1012,
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3,
+              "section": "Northstar Retail Performance 2026",
+              "evidence": "Northstar Retail Performance 2026 Page 3 3. Product Sales The following table reports unit sales by product category. Product Q1 Units Q2 Units Q3 Units Q4 Units Annual Units Smartphones 4,800 5,250 5,900 6,700 22,650 Laptops 2,300 2,650 2,900 3,250 11,100 Tablets 1,750 1,980 2,220 2,700 8,650 Headphones 3,600 4,050 4,500 5,200 17,350 Smartwatches 1,900 2,250 2,600 3,100 9,850 Accessories 6,800 7,300 7,950 8,600 3...",
+              "content_type": "text",
+              "table_id": null,
+              "chunk_id": 1343,
+              "chunk_index": 2,
+              "score": 0.0157490079,
+              "keyword_score": 1.601047,
+              "semantic_score": 0.63904431,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          }
+        ]
+      },
+      "answer": null,
+      "resolved_scope": {
+        "type": "document",
+        "id": 1012,
+        "label": "01_Northstar_Retail_Performance_2026.pdf",
+        "lecture_id": null
+      }
+    },
+    {
+      "id": "collection_codename_manager_budget",
+      "description": "Step 17 combines Operations and Finance evidence in one grounded answer.",
+      "tags": [
+        "collection",
+        "multi-document",
+        "step17"
+      ],
+      "scope": {
+        "type": "collection",
+        "document_filenames": [
+          "01_Northstar_Retail_Performance_2026.pdf",
+          "02_Northstar_Operations_Strategy_2026.pdf",
+          "03_Northstar_Finance_Customer_Insights_2026.pdf"
+        ]
+      },
+      "question": "What is the project codename, who manages it, and what is its approved budget?",
+      "status": "passed",
+      "passed": true,
+      "error": null,
+      "retrieval": {
+        "source_count": 10,
+        "sources": [
+          {
+            "rank": 1,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 8,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 8 8. Closing Summary Financially, the program remains within budget. Customer demand indicators are favorable, although customer-support satisfaction requires attention before launch. For LifeOS collection testing, the most important fact in this report is the approved budget of EGP 8.4 million, which should be combined with the project codename and manager from the...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1375,
+            "chunk_index": 7,
+            "score": 0.0163934426,
+            "keyword_score": 11.177361,
+            "semantic_score": 0.8027132,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 2,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 1,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 1 Northstar Finance & Customer Insights 2026 Fictional Step 17 multi-document collection benchmark 1. Financial Overview This document contains the financial and customer-side facts for the fictional Northstar 2026 program. Collection control fact: The approved 2026 budget for project AURORA-26 is EGP 8.4 million. The budget covers facility preparation, software inte...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1368,
+            "chunk_index": 0,
+            "score": 0.0161290323,
+            "keyword_score": 8.582906,
+            "semantic_score": 0.77035073,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 3,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 2,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 2 2. Budget Allocation Budget Area Approved (EGP m) Forecast (EGP m) Variance (EGP m) Status Facility preparation 2.10 2.05 -0.05 On track Technology integration 1.85 1.93 +0.08 Watch Courier onboarding 1.40 1.36 -0.04 On track Customer communication 0.95 0.92 -0.03 On track Training 0.60 0.58 -0.02 On track Contingency 1.50 1.50 0.00 Reserved TOTAL 8.40 8.34 -0.06 O...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1369,
+            "chunk_index": 1,
+            "score": 0.0157490079,
+            "keyword_score": 7.83942,
+            "semantic_score": 0.74352029,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 4,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 2,
+            "section": "2. Budget Allocation",
+            "evidence": "[STRUCTURED TABLE 1] Table: 2. Budget Allocation | Budget Area | Approved (EGP m) | Forecast (EGP m) | Variance (EGP m) | Status | | --- | --- | --- | --- | --- | | Facility preparation | 2.10 | 2.05 | -0.05 | On track | | Technology integration | 1.85 | 1.93 | +0.08 | Watch | | Courier onboarding | 1.40 | 1.36 | -0.04 | On track | | Customer communication | 0.95 | 0.92 | -0.03 | On track | | Training | 0.60 | 0.5...",
+            "content_type": "table",
+            "table_id": 12,
+            "chunk_id": 1376,
+            "chunk_index": 8,
+            "score": 0.0157490079,
+            "keyword_score": 6.059873,
+            "semantic_score": 0.76560154,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 5,
+            "document_id": 1013,
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+            "page": 1,
+            "section": "Northstar Operations & Strategy 2026",
+            "evidence": "Northstar Operations & Strategy 2026 Page 1 Northstar Operations & Strategy 2026 Fictional Step 17 multi-document collection benchmark 1. Program Overview This document describes the fictional Northstar Next-Day program. It is intended to be placed in the same LifeOS collection as the retail and finance reports. Collection control facts: Project codename: AURORA-26. Program manager: Nadia Fawzy. Target public laun...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1355,
+            "chunk_index": 0,
+            "score": 0.0152680653,
+            "keyword_score": 4.582786,
+            "semantic_score": 0.72974309,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 6,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 7,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 7 7. Finance Controls Any unplanned expense above EGP 250,000 requires approval from both the finance review owner and the program manager. Contingency funds may not be used for routine operating expenses. All contingency requests must state the triggering risk, requested amount and expected benefit. The current overall forecast is EGP 8.34 million, which is EGP 0.06...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1374,
+            "chunk_index": 6,
+            "score": 0.0152680653,
+            "keyword_score": 4.197957,
+            "semantic_score": 0.73745579,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 7,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 4,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 4 4. Customer Research Customer control facts: Net Promoter Score (NPS) is 71. The loyalty program is called Orbit Rewards. Measure Result Target Interpretation Net Promoter Score 71 65 Above target Checkout satisfaction 4.6 / 5 4.4 / 5 Above target Delivery tracking clarity 4.3 / 5 4.2 / 5 Above target Support satisfaction 4.1 / 5 4.3 / 5 Below target Repeat purchas...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1371,
+            "chunk_index": 3,
+            "score": 0.0074626866,
+            "keyword_score": 2.755404,
+            "semantic_score": null,
+            "retrieval_methods": [
+              "keyword"
+            ]
+          },
+          {
+            "rank": 8,
+            "document_id": 1013,
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+            "page": 2,
+            "section": "2. Milestones",
+            "evidence": "[STRUCTURED TABLE 1] Table: 2. Milestones | Milestone | Owner | Planned Date | Status | Acceptance Criterion | | --- | --- | --- | --- | --- | | Hub layout approval | Facilities | 15 Jul 2026 | Complete | Signed floor plan | | Warehouse system integra | tiTonechnology | 20 Aug 2026 | Complete | 99.5% scan accuracy | | Courier pilot | Operations | 18 Sep 2026 | In progress | 500 successful deliveries | | Customer b...",
+            "content_type": "table",
+            "table_id": 7,
+            "chunk_id": 1363,
+            "chunk_index": 8,
+            "score": 0.0074626866,
+            "keyword_score": null,
+            "semantic_score": 0.72276043,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 9,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 3,
+            "section": "3. Monthly Program Spend",
+            "evidence": "[STRUCTURED TABLE 1] Table: 3. Monthly Program Spend | Month | Actual Spend (EGP 000) | Cumulative Spend (EGP 000) | Comment | | --- | --- | --- | --- | | Jan | 260 | 260 | Planning | | Feb | 310 | 570 | Facility design | | Mar | 430 | 1,000 | Supplier deposits | | Apr | 520 | 1,520 | Infrastructure | | May | 610 | 2,130 | Integration | | Jun | 690 | 2,820 | Integration | | Jul | 720 | 3,540 | Facility work | | Au...",
+            "content_type": "table",
+            "table_id": 13,
+            "chunk_id": 1377,
+            "chunk_index": 9,
+            "score": 0.0073529412,
+            "keyword_score": null,
+            "semantic_score": 0.71719051,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 10,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 3,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 3 3. Monthly Program Spend Month Actual Spend (EGP 000) Cumulative Spend (EGP 000) Comment Jan 260 260 Planning Feb 310 570 Facility design Mar 430 1,000 Supplier deposits Apr 520 1,520 Infrastructure May 610 2,130 Integration Jun 690 2,820 Integration Jul 720 3,540 Facility work Aug 810 4,350 Equipment Sep 920 5,270 Courier pilot Oct 1,020 6,290 Customer beta By the...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1370,
+            "chunk_index": 2,
+            "score": 0.0072463768,
+            "keyword_score": null,
+            "semantic_score": 0.71672638,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          }
+        ],
+        "applicable": true,
+        "expected_count": 2,
+        "hit_count": 2,
+        "recall": 1.0,
+        "all_expected_found": true,
+        "reciprocal_rank": 1.0,
+        "matches": [
+          {
+            "expected_index": 1,
+            "expected": {
+              "filename": "02_Northstar_Operations_Strategy_2026.pdf"
+            },
+            "found": true,
+            "rank": 5,
+            "actual": {
+              "rank": 5,
+              "document_id": 1013,
+              "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+              "page": 1,
+              "section": "Northstar Operations & Strategy 2026",
+              "evidence": "Northstar Operations & Strategy 2026 Page 1 Northstar Operations & Strategy 2026 Fictional Step 17 multi-document collection benchmark 1. Program Overview This document describes the fictional Northstar Next-Day program. It is intended to be placed in the same LifeOS collection as the retail and finance reports. Collection control facts: Project codename: AURORA-26. Program manager: Nadia Fawzy. Target public laun...",
+              "content_type": "text",
+              "table_id": null,
+              "chunk_id": 1355,
+              "chunk_index": 0,
+              "score": 0.0152680653,
+              "keyword_score": 4.582786,
+              "semantic_score": 0.72974309,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          },
+          {
+            "expected_index": 2,
+            "expected": {
+              "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf"
+            },
+            "found": true,
+            "rank": 1,
+            "actual": {
+              "rank": 1,
+              "document_id": 1014,
+              "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+              "page": 8,
+              "section": "Northstar Finance & Customer Insights 2026",
+              "evidence": "Northstar Finance & Customer Insights 2026 Page 8 8. Closing Summary Financially, the program remains within budget. Customer demand indicators are favorable, although customer-support satisfaction requires attention before launch. For LifeOS collection testing, the most important fact in this report is the approved budget of EGP 8.4 million, which should be combined with the project codename and manager from the...",
+              "content_type": "text",
+              "table_id": null,
+              "chunk_id": 1375,
+              "chunk_index": 7,
+              "score": 0.0163934426,
+              "keyword_score": 11.177361,
+              "semantic_score": 0.8027132,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          }
+        ]
+      },
+      "answer": null,
+      "resolved_scope": {
+        "type": "collection",
+        "id": 1,
+        "label": "retail",
+        "lecture_id": null
+      }
+    },
+    {
+      "id": "collection_three_document_answer",
+      "description": "Step 17 spans Operations, Finance, and the Retail table. The broad product wording includes Accessories.",
+      "tags": [
+        "collection",
+        "multi-document",
+        "table",
+        "step16",
+        "step17"
+      ],
+      "scope": {
+        "type": "collection",
+        "document_filenames": [
+          "01_Northstar_Retail_Performance_2026.pdf",
+          "02_Northstar_Operations_Strategy_2026.pdf",
+          "03_Northstar_Finance_Customer_Insights_2026.pdf"
+        ]
+      },
+      "question": "Give me the program launch date, approved budget, and the product with the highest Q4 unit sales.",
+      "status": "passed",
+      "passed": true,
+      "error": null,
+      "retrieval": {
+        "source_count": 10,
+        "sources": [
+          {
+            "rank": 1,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 3 3. Product Sales The following table reports unit sales by product category. Product Q1 Units Q2 Units Q3 Units Q4 Units Annual Units Smartphones 4,800 5,250 5,900 6,700 22,650 Laptops 2,300 2,650 2,900 3,250 11,100 Tablets 1,750 1,980 2,220 2,700 8,650 Headphones 3,600 4,050 4,500 5,200 17,350 Smartwatches 1,900 2,250 2,600 3,100 9,850 Accessories 6,800 7,300 7,950 8,600 3...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1343,
+            "chunk_index": 2,
+            "score": 0.0160092213,
+            "keyword_score": 12.337595,
+            "semantic_score": 0.74009233,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 2,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 8,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 8 8. Closing Summary Financially, the program remains within budget. Customer demand indicators are favorable, although customer-support satisfaction requires attention before launch. For LifeOS collection testing, the most important fact in this report is the approved budget of EGP 8.4 million, which should be combined with the project codename and manager from the...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1375,
+            "chunk_index": 7,
+            "score": 0.0160092213,
+            "keyword_score": 8.110957,
+            "semantic_score": 0.77607117,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 3,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "The following table reports unit sales by product category.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The following table reports unit sales by product category. | Product | Q1 Units | Q2 Units | Q3 Units | Q4 Units | Annual Units | | --- | --- | --- | --- | --- | --- | | Smartphones | 4,800 | 5,250 | 5,900 | 6,700 | 22,650 | | Laptops | 2,300 | 2,650 | 2,900 | 3,250 | 11,100 | | Tablets | 1,750 | 1,980 | 2,220 | 2,700 | 8,650 | | Headphones | 3,600 | 4,050 | 4,500 | 5,200 | 17,350 | |...",
+            "content_type": "table",
+            "table_id": 2,
+            "chunk_id": 1350,
+            "chunk_index": 9,
+            "score": 0.0157568238,
+            "keyword_score": 11.74802,
+            "semantic_score": 0.73667065,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 4,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 1,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 1 Northstar Finance & Customer Insights 2026 Fictional Step 17 multi-document collection benchmark 1. Financial Overview This document contains the financial and customer-side facts for the fictional Northstar 2026 program. Collection control fact: The approved 2026 budget for project AURORA-26 is EGP 8.4 million. The budget covers facility preparation, software inte...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1368,
+            "chunk_index": 0,
+            "score": 0.0155272027,
+            "keyword_score": 7.1828,
+            "semantic_score": 0.74753934,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 5,
+            "document_id": 1013,
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+            "page": 2,
+            "section": "Northstar Operations & Strategy 2026",
+            "evidence": "Northstar Operations & Strategy 2026 Page 2 2. Milestones Milestone Owner Planned Date Status Acceptance Criterion Hub layout approval Facilities 15 Jul 2026 Complete Signed floor plan Warehouse system integration Technology 20 Aug 2026 Complete 99.5% scan accuracy Courier pilot Operations 18 Sep 2026 In progress 500 successful deliveries Customer beta Product 20 Oct 2026 Planned 2,000 invited customers Public lau...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1356,
+            "chunk_index": 1,
+            "score": 0.0150793651,
+            "keyword_score": 8.316383,
+            "semantic_score": 0.73015452,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 6,
+            "document_id": 1013,
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+            "page": 2,
+            "section": "2. Milestones",
+            "evidence": "[STRUCTURED TABLE 1] Table: 2. Milestones | Milestone | Owner | Planned Date | Status | Acceptance Criterion | | --- | --- | --- | --- | --- | | Hub layout approval | Facilities | 15 Jul 2026 | Complete | Signed floor plan | | Warehouse system integra | tiTonechnology | 20 Aug 2026 | Complete | 99.5% scan accuracy | | Courier pilot | Operations | 18 Sep 2026 | In progress | 500 successful deliveries | | Customer b...",
+            "content_type": "table",
+            "table_id": 7,
+            "chunk_id": 1363,
+            "chunk_index": 8,
+            "score": 0.0148221344,
+            "keyword_score": 7.198706,
+            "semantic_score": 0.73122305,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 7,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 2,
+            "section": "2. Budget Allocation",
+            "evidence": "[STRUCTURED TABLE 1] Table: 2. Budget Allocation | Budget Area | Approved (EGP m) | Forecast (EGP m) | Variance (EGP m) | Status | | --- | --- | --- | --- | --- | | Facility preparation | 2.10 | 2.05 | -0.05 | On track | | Technology integration | 1.85 | 1.93 | +0.08 | Watch | | Courier onboarding | 1.40 | 1.36 | -0.04 | On track | | Customer communication | 0.95 | 0.92 | -0.03 | On track | | Training | 0.60 | 0.5...",
+            "content_type": "table",
+            "table_id": 12,
+            "chunk_id": 1376,
+            "chunk_index": 8,
+            "score": 0.0143951947,
+            "keyword_score": 6.059873,
+            "semantic_score": 0.72758806,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 8,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 7,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 7 7. Finance Controls Any unplanned expense above EGP 250,000 requires approval from both the finance review owner and the program manager. Contingency funds may not be used for routine operating expenses. All contingency requests must state the triggering risk, requested amount and expected benefit. The current overall forecast is EGP 8.34 million, which is EGP 0.06...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1374,
+            "chunk_index": 6,
+            "score": 0.0140873016,
+            "keyword_score": 5.284029,
+            "semantic_score": 0.72251451,
+            "retrieval_methods": [
+              "keyword",
+              "semantic"
+            ]
+          },
+          {
+            "rank": 9,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 3,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 3 3. Monthly Program Spend Month Actual Spend (EGP 000) Cumulative Spend (EGP 000) Comment Jan 260 260 Planning Feb 310 570 Facility design Mar 430 1,000 Supplier deposits Apr 520 1,520 Infrastructure May 610 2,130 Integration Jun 690 2,820 Integration Jul 720 3,540 Facility work Aug 810 4,350 Equipment Sep 920 5,270 Courier pilot Oct 1,020 6,290 Customer beta By the...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1370,
+            "chunk_index": 2,
+            "score": 0.0079365079,
+            "keyword_score": null,
+            "semantic_score": 0.74702297,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 10,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 1,
+            "section": "Northstar Retail Performance 2026",
+            "evidence": "Northstar Retail Performance 2026 Page 1 Northstar Retail Performance 2026 Fictional Step 16 table-understanding benchmark for LifeOS Document Brain 1. Executive Summary Northstar Retail is a fictional Egypt-based consumer electronics retailer used only for LifeOS testing. This report summarizes commercial performance for 2026 and intentionally includes several native PDF tables for structured extraction. Control...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1341,
+            "chunk_index": 0,
+            "score": 0.0076923077,
+            "keyword_score": 7.440255,
+            "semantic_score": null,
+            "retrieval_methods": [
+              "keyword"
+            ]
+          }
+        ],
+        "applicable": true,
+        "expected_count": 3,
+        "hit_count": 3,
+        "recall": 1.0,
+        "all_expected_found": true,
+        "reciprocal_rank": 0.5,
+        "matches": [
+          {
+            "expected_index": 1,
+            "expected": {
+              "filename": "02_Northstar_Operations_Strategy_2026.pdf"
+            },
+            "found": true,
+            "rank": 5,
+            "actual": {
+              "rank": 5,
+              "document_id": 1013,
+              "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+              "page": 2,
+              "section": "Northstar Operations & Strategy 2026",
+              "evidence": "Northstar Operations & Strategy 2026 Page 2 2. Milestones Milestone Owner Planned Date Status Acceptance Criterion Hub layout approval Facilities 15 Jul 2026 Complete Signed floor plan Warehouse system integration Technology 20 Aug 2026 Complete 99.5% scan accuracy Courier pilot Operations 18 Sep 2026 In progress 500 successful deliveries Customer beta Product 20 Oct 2026 Planned 2,000 invited customers Public lau...",
+              "content_type": "text",
+              "table_id": null,
+              "chunk_id": 1356,
+              "chunk_index": 1,
+              "score": 0.0150793651,
+              "keyword_score": 8.316383,
+              "semantic_score": 0.73015452,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          },
+          {
+            "expected_index": 2,
+            "expected": {
+              "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf"
+            },
+            "found": true,
+            "rank": 2,
+            "actual": {
+              "rank": 2,
+              "document_id": 1014,
+              "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+              "page": 8,
+              "section": "Northstar Finance & Customer Insights 2026",
+              "evidence": "Northstar Finance & Customer Insights 2026 Page 8 8. Closing Summary Financially, the program remains within budget. Customer demand indicators are favorable, although customer-support satisfaction requires attention before launch. For LifeOS collection testing, the most important fact in this report is the approved budget of EGP 8.4 million, which should be combined with the project codename and manager from the...",
+              "content_type": "text",
+              "table_id": null,
+              "chunk_id": 1375,
+              "chunk_index": 7,
+              "score": 0.0160092213,
+              "keyword_score": 8.110957,
+              "semantic_score": 0.77607117,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          },
+          {
+            "expected_index": 3,
+            "expected": {
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3,
+              "content_type": "table"
+            },
+            "found": true,
+            "rank": 3,
+            "actual": {
+              "rank": 3,
+              "document_id": 1012,
+              "filename": "01_Northstar_Retail_Performance_2026.pdf",
+              "page": 3,
+              "section": "The following table reports unit sales by product category.",
+              "evidence": "[STRUCTURED TABLE 1] Table: The following table reports unit sales by product category. | Product | Q1 Units | Q2 Units | Q3 Units | Q4 Units | Annual Units | | --- | --- | --- | --- | --- | --- | | Smartphones | 4,800 | 5,250 | 5,900 | 6,700 | 22,650 | | Laptops | 2,300 | 2,650 | 2,900 | 3,250 | 11,100 | | Tablets | 1,750 | 1,980 | 2,220 | 2,700 | 8,650 | | Headphones | 3,600 | 4,050 | 4,500 | 5,200 | 17,350 | |...",
+              "content_type": "table",
+              "table_id": 2,
+              "chunk_id": 1350,
+              "chunk_index": 9,
+              "score": 0.0157568238,
+              "keyword_score": 11.74802,
+              "semantic_score": 0.73667065,
+              "retrieval_methods": [
+                "keyword",
+                "semantic"
+              ]
+            }
+          }
+        ]
+      },
+      "answer": null,
+      "resolved_scope": {
+        "type": "collection",
+        "id": 1,
+        "label": "retail",
+        "lecture_id": null
+      }
+    },
+    {
+      "id": "collection_unsupported_ceo_salary",
+      "description": "The answerability verifier must fail closed when the collection has no supporting evidence.",
+      "tags": [
+        "collection",
+        "grounding",
+        "no-answer",
+        "step17"
+      ],
+      "scope": {
+        "type": "collection",
+        "document_filenames": [
+          "01_Northstar_Retail_Performance_2026.pdf",
+          "02_Northstar_Operations_Strategy_2026.pdf",
+          "03_Northstar_Finance_Customer_Insights_2026.pdf"
+        ]
+      },
+      "question": "What is the CEO's salary?",
+      "status": "skipped",
+      "passed": true,
+      "error": null,
+      "retrieval": {
+        "source_count": 10,
+        "sources": [
+          {
+            "rank": 1,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 8,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 8 8. Closing Summary Financially, the program remains within budget. Customer demand indicators are favorable, although customer-support satisfaction requires attention before launch. For LifeOS collection testing, the most important fact in this report is the approved budget of EGP 8.4 million, which should be combined with the project codename and manager from the...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1375,
+            "chunk_index": 7,
+            "score": 0.0081967213,
+            "keyword_score": null,
+            "semantic_score": 0.74175904,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 2,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 1,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 1 Northstar Finance & Customer Insights 2026 Fictional Step 17 multi-document collection benchmark 1. Financial Overview This document contains the financial and customer-side facts for the fictional Northstar 2026 program. Collection control fact: The approved 2026 budget for project AURORA-26 is EGP 8.4 million. The budget covers facility preparation, software inte...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1368,
+            "chunk_index": 0,
+            "score": 0.0080645161,
+            "keyword_score": null,
+            "semantic_score": 0.71007719,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 3,
+            "document_id": 1013,
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+            "page": 4,
+            "section": "Northstar Operations & Strategy 2026",
+            "evidence": "Northstar Operations & Strategy 2026 Page 4 4. Staffing Plan Team Current Headcount Launch Headcount Gap Hiring Deadline Warehouse operations 84 112 28 30 Sep 2026 Customer support 46 58 12 15 Oct 2026 Dispatch coordinators 18 26 8 30 Sep 2026 Data / monitoring 9 12 3 15 Oct 2026 Program office 7 7 0 N/A Warehouse operations has the largest hiring gap at 28 positions.",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1358,
+            "chunk_index": 3,
+            "score": 0.0079365079,
+            "keyword_score": null,
+            "semantic_score": 0.70933406,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 4,
+            "document_id": 1013,
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+            "page": 4,
+            "section": "4. Staffing Plan",
+            "evidence": "[STRUCTURED TABLE 1] Table: 4. Staffing Plan | Team | Current Headcount | Launch Headcount | Gap | Hiring Deadline | | --- | --- | --- | --- | --- | | Warehouse operations | 84 | 112 | 28 | 30 Sep 2026 | | Customer support | 46 | 58 | 12 | 15 Oct 2026 | | Dispatch coordinators | 18 | 26 | 8 | 30 Sep 2026 | | Data / monitoring | 9 | 12 | 3 | 15 Oct 2026 | | Program office | 7 | 7 | 0 | N/A |",
+            "content_type": "table",
+            "table_id": 9,
+            "chunk_id": 1365,
+            "chunk_index": 10,
+            "score": 0.0078125,
+            "keyword_score": null,
+            "semantic_score": 0.70388792,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 5,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 3,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 3 3. Monthly Program Spend Month Actual Spend (EGP 000) Cumulative Spend (EGP 000) Comment Jan 260 260 Planning Feb 310 570 Facility design Mar 430 1,000 Supplier deposits Apr 520 1,520 Infrastructure May 610 2,130 Integration Jun 690 2,820 Integration Jul 720 3,540 Facility work Aug 810 4,350 Equipment Sep 920 5,270 Courier pilot Oct 1,020 6,290 Customer beta By the...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1370,
+            "chunk_index": 2,
+            "score": 0.0076923077,
+            "keyword_score": null,
+            "semantic_score": 0.70336212,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 6,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 4,
+            "section": "Revenue is also segmented by the primary sales channel used by customers.",
+            "evidence": "[STRUCTURED TABLE 1] Table: Revenue is also segmented by the primary sales channel used by customers. | Channel | Revenue (EGP m) | Share | Conversion Rate | Avg. Order Value (EGP) | | --- | --- | --- | --- | --- | | Website | 48.7 | 39.1% | 3.9% | 2,740 | | Mobile App | 32.4 | 26.0% | 4.6% | 2,980 | | Physical Stores | 36.1 | 29.0% | 31.0% | 3,210 | | Marketplace | 7.4 | 5.9% | 2.8% | 2,290 |",
+            "content_type": "table",
+            "table_id": 3,
+            "chunk_id": 1351,
+            "chunk_index": 10,
+            "score": 0.0075757576,
+            "keyword_score": null,
+            "semantic_score": 0.70112297,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 7,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 5,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 5 5. Marketing Campaign The public launch campaign will use the message 'Tomorrow Starts Today' across mobile, web, email and selected outdoor placements. Verification keyword: The finance and customer document keyword is SUNBIRD-442. Channel Planned Spend (EGP 000) Primary Goal Expected Reach Mobile ads 280 App conversion 1.8 million Search 190 High-intent acquisiti...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1372,
+            "chunk_index": 4,
+            "score": 0.0074626866,
+            "keyword_score": null,
+            "semantic_score": 0.70024408,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 8,
+            "document_id": 1012,
+            "filename": "01_Northstar_Retail_Performance_2026.pdf",
+            "page": 3,
+            "section": "The following table reports unit sales by product category.",
+            "evidence": "[STRUCTURED TABLE 1] Table: The following table reports unit sales by product category. | Product | Q1 Units | Q2 Units | Q3 Units | Q4 Units | Annual Units | | --- | --- | --- | --- | --- | --- | | Smartphones | 4,800 | 5,250 | 5,900 | 6,700 | 22,650 | | Laptops | 2,300 | 2,650 | 2,900 | 3,250 | 11,100 | | Tablets | 1,750 | 1,980 | 2,220 | 2,700 | 8,650 | | Headphones | 3,600 | 4,050 | 4,500 | 5,200 | 17,350 | |...",
+            "content_type": "table",
+            "table_id": 2,
+            "chunk_id": 1350,
+            "chunk_index": 9,
+            "score": 0.0073529412,
+            "keyword_score": null,
+            "semantic_score": 0.69815506,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 9,
+            "document_id": 1013,
+            "filename": "02_Northstar_Operations_Strategy_2026.pdf",
+            "page": 3,
+            "section": "Northstar Operations & Strategy 2026",
+            "evidence": "Northstar Operations & Strategy 2026 Page 3 3. Distribution Network Location Role Daily Capacity Service Area Backup Location Obour City Hub Primary hub 8,500 orders Greater Cairo 6th of October Hub Borg El Arab Facility Satellite 3,200 orders Alexandria Obour City Hub 6th of October Hub Backup hub 4,600 orders West Cairo / Giza Obour City Hub Collection test fact: The primary hub is Obour City Hub, with a daily c...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1357,
+            "chunk_index": 2,
+            "score": 0.0072463768,
+            "keyword_score": null,
+            "semantic_score": 0.69788829,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          },
+          {
+            "rank": 10,
+            "document_id": 1014,
+            "filename": "03_Northstar_Finance_Customer_Insights_2026.pdf",
+            "page": 4,
+            "section": "Northstar Finance & Customer Insights 2026",
+            "evidence": "Northstar Finance & Customer Insights 2026 Page 4 4. Customer Research Customer control facts: Net Promoter Score (NPS) is 71. The loyalty program is called Orbit Rewards. Measure Result Target Interpretation Net Promoter Score 71 65 Above target Checkout satisfaction 4.6 / 5 4.4 / 5 Above target Delivery tracking clarity 4.3 / 5 4.2 / 5 Above target Support satisfaction 4.1 / 5 4.3 / 5 Below target Repeat purchas...",
+            "content_type": "text",
+            "table_id": null,
+            "chunk_id": 1371,
+            "chunk_index": 3,
+            "score": 0.0071428571,
+            "keyword_score": null,
+            "semantic_score": 0.69780498,
+            "retrieval_methods": [
+              "semantic"
+            ]
+          }
+        ],
+        "applicable": false,
+        "expected_count": 0,
+        "hit_count": 0,
+        "recall": null,
+        "all_expected_found": true,
+        "reciprocal_rank": null,
+        "matches": []
+      },
+      "answer": null,
+      "resolved_scope": {
+        "type": "collection",
+        "id": 1,
+        "label": "retail",
+        "lecture_id": null
+      }
+    }
+  ]
+}

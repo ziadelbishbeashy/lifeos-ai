@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+.venv
+venv
+__pycache__
+.pytest_cache
+node_modules
+instance
+static/uploads
+tests
+*.zip
+*.log

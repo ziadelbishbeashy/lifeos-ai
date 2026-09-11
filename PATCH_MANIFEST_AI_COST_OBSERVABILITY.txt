@@ -1,0 +1,93 @@
+LifeOS AI Cost & Observability Foundation
+=========================================
+
+BASE EXPECTATION
+- Apply after I21.2 Intelligent Academic Schedule if that patch is not already in your local repo.
+- Patch is architecture-preserving and contains no frontend/public files.
+
+PURPOSE
+- Capture exact provider-reported token usage for Gemini generation calls.
+- Capture Gemini Document Brain embedding input-token usage.
+- Calculate deterministic provider costs from configurable pricing.
+- Store append-only usage events without allowing telemetry to commit workspace mutations.
+- Add authenticated user-scoped AI usage summary/recent APIs.
+- Keep normal Analytics focused on product/workspace analytics.
+- Put token/cost monitoring on a separate Analytics development page: /analytics/ai-usage.
+- Add optional privacy-conscious LangSmith LLM tracing.
+- Preserve current AI behavior; no thinking-budget/model-routing behavior is changed yet.
+
+NEW ALEMBIC HEAD
+20260905_0001
+
+NEW/IMPORTANT ENVIRONMENT SETTINGS
+AI_USAGE_LEDGER_ENABLED=true
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+EMBEDDING_DIMENSIONS=768
+
+Optional LangSmith:
+LANGSMITH_TRACING=false
+LANGSMITH_API_KEY=
+LANGSMITH_PROJECT=lifeos-development
+
+Pricing values are environment-overridable. The built-in Gemini pricing snapshot is dated 2026-09-06 and should be rechecked before production deployment.
+
+INSTALL / VERIFY
+Backend:
+  cd C:\Users\zelbi\OneDrive\Desktop\lifeos-ai\backend
+  py -3.11 -m pip install -r requirements.txt
+  py -3.11 -m alembic -c migrations/alembic.ini upgrade head
+  py -3.11 -m alembic -c migrations/alembic.ini current
+  py -3.11 -m pytest tests\test_ai_usage_observability.py -q
+  py -3.11 -m pytest tests\test_document_embedding_service.py -q
+  py -3.11 -m pytest -q
+
+Frontend:
+  cd ..\frontend
+  npm run build
+  npm run css:check
+
+MANUAL CHECK
+1. Use Document Brain Analyze or Ask LifeOS.
+2. Open Analytics.
+3. Click "AI Usage (Development)".
+4. Verify calls, input/output/thinking/cached tokens and provider cost appear.
+5. Click "Back to Analytics" to return to normal workspace analytics.
+6. Optionally enable LangSmith in backend .env and repeat a request.
+
+NOTES
+- The AI Usage page is deliberately separate from normal Analytics and can be removed later without removing backend metering.
+- No new sidebar page/module was added.
+- Historical calls made before this migration cannot be reconstructed exactly.
+- Prompts/model outputs are NOT stored in AIUsageEvent.
+- Custom LangSmith tracing intentionally does not send raw prompt/output content.
+- Unknown future model pricing is reported as unknown unless configured; it is not guessed.
+
+PATCH FILES
+-----------
+backend/.env.example
+backend/models.py
+backend/requirements.txt
+backend/services/ai_pricing_service.py
+backend/services/document_comparison_verifier_service.py
+backend/services/document_embedding_service.py
+backend/services/ai_usage_service.py
+backend/services/document_type_detection_service.py
+backend/services/agent_reasoning_service.py
+backend/services/academic_schedule_ai_service.py
+backend/services/langsmith_observability_service.py
+backend/services/intelligence_claim_verifier_service.py
+backend/services/intelligence_reasoning_service.py
+backend/services/ai_service.py
+backend/services/document_answerability_service.py
+backend/ai/provider_router.py
+backend/tests/test_ai_usage_observability.py
+backend/tests/test_document_embedding_service.py
+backend/migrations/versions/20260905_0001_add_ai_usage_events.py
+backend/ai/providers/gemini.py
+backend/ai/providers/base.py
+backend/ai/providers/openai_provider.py
+backend/lifeos/api/v1/__init__.py
+backend/lifeos/api/v1/ai_usage.py
+frontend/src/App.tsx
+frontend/src/pages/AnalyticsPage.tsx
+frontend/src/pages/AnalyticsAiUsagePage.tsx

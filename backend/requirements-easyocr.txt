@@ -1,0 +1,4 @@
+-r requirements.txt
+# Optional Step 15E fallback. EasyOCR pulls PyTorch/torchvision and is kept
+# separate from the core backend so deployments that do not enable it stay lean.
+easyocr>=1.7.2,<2

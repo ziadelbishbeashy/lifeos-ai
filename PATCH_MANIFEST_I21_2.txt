@@ -1,0 +1,42 @@
+LifeOS AI — I21.2 Intelligent Academic Schedule Import
+
+Apply: copy/merge this patch folder into the LifeOS project root, preserving paths.
+This is a patch only. It intentionally does NOT contain frontend/public.
+No Alembic migration is required; it reuses existing Document, DocumentChunk,
+LifeOSActionProposal, LearningModule, and ModuleAssessment persistence.
+
+What it adds
+- Modules → Import Schedule flow for PDF, PNG, JPG/JPEG and WebP.
+- Images are normalized to PDF and fed through the existing Document Brain/OCR pipeline.
+- Evidence-grounded AI extracts exams/assessments without inventing missing values.
+- Deterministic + constrained-AI module resolution across existing LearningModules.
+- One pending LifeOSActionProposal per proposed assessment.
+- Evidence/provenance retention and confirmation-time revalidation.
+- Duplicate assessment prevention.
+- Review/edit/dismiss/Confirm Selected UI.
+- Existing manual Module Assessment CRUD remains available as fallback.
+- I9 confirmation executes through module_assessment_service; AI never writes ModuleAssessment directly.
+
+New backend test
+  backend/tests/test_module_assessment_import_i21_2.py
+
+Recommended local verification (Windows)
+  cd C:\Users\zelbi\OneDrive\Desktop\lifeos-ai\backend
+  py -3.11 -m alembic -c migrations/alembic.ini current
+  py -3.11 -m pytest tests\test_module_assessment_import_i21_2.py -q
+  py -3.11 -m pytest tests\test_module_assessments_i21.py -q
+  py -3.11 -m pytest -q
+
+  cd ..\frontend
+  npm run build
+  npm run css:check
+
+Manual smoke test
+1. Ensure at least two Modules exist.
+2. Open Modules → Import Schedule.
+3. Upload one timetable photo/screenshot/PDF containing multiple module exams.
+4. Verify ready matches are preselected; uncertain matches are not.
+5. Open evidence and correct any uncertain module/date/time.
+6. Confirm selected.
+7. Open each matched module and verify its accepted assessment appears exactly once.
+8. Re-import the same schedule and verify duplicate protection.

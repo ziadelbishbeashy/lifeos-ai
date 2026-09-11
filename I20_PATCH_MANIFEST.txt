@@ -1,0 +1,27 @@
+I20 — GOALS & MILESTONES (PROJECT-EMBEDDED ADJUSTMENT)
+
+Product decision:
+- Goals are NOT a standalone LifeOS module/page.
+- No Goals sidebar navigation item.
+- /goals and /goals/:id redirect to /projects for compatibility.
+- Goal + milestone management lives inside Project Details.
+
+Included I20 foundation:
+- Goal and GoalMilestone models
+- Alembic revision 20260831_0002 (parent: 20260831_0001)
+- deterministic milestone-based progress
+- ownership-safe services and API
+- Goal <-> Project links reuse I13 context links
+- project-embedded Goal & milestones UI
+- create/link/edit/delete goals from a Project
+- create/status-update/delete milestones from a Project
+- I13 Goal context URLs point to the linked Project #goals section
+- activity events remain enabled
+
+Not included yet (next I20 stage):
+- Goal as explicit Ask LifeOS context
+- goal-aware I19 planning/review
+- Goal nodes/context in I18 Automations
+
+Apply this ZIP directly to the current post-I19 project.
+You do NOT need to apply the earlier I20 standalone-Goals ZIP first.

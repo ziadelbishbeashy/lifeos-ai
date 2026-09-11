@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Review Suggested Task | LifeOS{% endblock %}
+
+{% block content %}
+<section class="workspace-page document-suggestion-edit-page">
+    <header class="workspace-page-header">
+        <div>
+            <span class="workspace-eyebrow">Document Brain · Review before creation</span>
+            <h1>Review suggested task</h1>
+            <p>
+                Edit the task fields you want. The document source stays trusted
+                and cannot be changed here.
+            </p>
+        </div>
+
+        <a
+            class="workspace-secondary-button"
+            href="{{ url_for('document_bp.document_details', document_id=document.id) }}#db-actions-panel"
+        >
+            Back to document
+        </a>
+    </header>
+
+    <div class="document-suggestion-edit-grid">
+        <form
+            method="POST"
+            class="workspace-card document-suggestion-edit-form"
+            data-loading-title="Creating task"
+            data-loading-message="Saving the reviewed document action as a project task..."
+        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="task-form-grid">
+                <div class="task-form-field task-form-full">
+                    <label for="suggestionTaskTitle">Title</label>
+                    <input
+                        id="suggestionTaskTitle"
+                        name="title"
+                        type="text"
+                        maxlength="200"
+                        required
+                        value="{{ task_input.title }}"
+                    >
+                </div>
+
+                <div class="task-form-field task-form-full">
+                    <label for="suggestionTaskDescription">Description</label>
+                    <textarea
+                        id="suggestionTaskDescription"
+                        name="description"
+                        rows="5"
+                    >{{ task_input.description or '' }}</textarea>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="suggestionTaskPriority">Priority</label>
+                    <select id="suggestionTaskPriority" name="priority">
+                        {% for priority in ["Low", "Medium", "High", "Critical"] %}
+                            <option
+                                value="{{ priority }}"
+                                {% if task_input.priority == priority %}selected{% endif %}
+                            >
+                                {{ priority }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="suggestionTaskStatus">Status</label>
+                    <select id="suggestionTaskStatus" name="status">
+                        {% for value, label in [
+                            ("Pending", "To Do"),
+                            ("In Progress", "In Progress"),
+                            ("Blocked", "Blocked"),
+                            ("Completed", "Completed")
+                        ] %}
+                            <option
+                                value="{{ value }}"
+                                {% if task_input.status == value %}selected{% endif %}
+                            >
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="task-form-field">
+                    <label for="suggestionTaskDeadline">Due date</label>
+                    <input
+                        id="suggestionTaskDeadline"
+                        name="deadline"
+                        type="date"
+                        value="{% if task_input.deadline %}{{ task_input.deadline.strftime('%Y-%m-%d') }}{% endif %}"
+                    >
+                </div>
+
+                <div class="task-form-field">
+                    <label for="suggestionTaskProject">Project</label>
+                    <select id="suggestionTaskProject" name="project_id" required>
+                        {% for project in projects %}
+                            <option
+                                value="{{ project.id }}"
+                                {% if task_input.project_id == project.id %}selected{% endif %}
+                            >
+                                {{ project.title }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="task-form-field task-form-full">
+                    <label for="suggestionTaskTags">Tags</label>
+                    <input
+                        id="suggestionTaskTags"
+                        name="tags"
+                        type="text"
+                        maxlength="500"
+                        value="{{ task_input.tags or '' }}"
+                        placeholder="Example: backend, security, testing"
+                    >
+                    <small>Separate tags with commas.</small>
+                </div>
+            </div>
+
+            {% if possible_duplicate %}
+                <div class="document-suggestion-duplicate-review">
+                    <span class="workspace-eyebrow">Possible existing task</span>
+                    <strong>{{ possible_duplicate.title }}</strong>
+                    <p>
+                        LifeOS found similar work in the selected project. You can
+                        review it or deliberately create a separate task.
+                    </p>
+                    <div class="document-suggestion-inline-actions">
+                        <a
+                            class="workspace-secondary-button"
+                            href="{{ url_for('task_bp.edit_task', task_id=possible_duplicate.id) }}"
+                        >
+                            View existing
+                        </a>
+
+                        <button
+                            type="submit"
+                            name="allow_possible_duplicate"
+                            value="1"
+                            class="workspace-primary-button"
+                        >
+                            Create anyway
+                        </button>
+                    </div>
+                </div>
+            {% else %}
+                <div class="task-modal-actions">
+                    <a
+                        class="workspace-secondary-button"
+                        href="{{ url_for('document_bp.document_details', document_id=document.id) }}#db-actions-panel"
+                    >
+                        Cancel
+                    </a>
+                    <button type="submit" class="workspace-primary-button">
+                        Create task
+                    </button>
+                </div>
+            {% endif %}
+        </form>
+
+        <aside class="workspace-card document-suggestion-source-card">
+            <span class="workspace-eyebrow">Trusted source</span>
+            <h2>{{ document.filename }}</h2>
+
+            {% set source = suggestion.source %}
+            <div class="document-suggestion-source-meta">
+                {% if source.get('page') %}
+                    <span>Page {{ source.get('page') }}</span>
+                {% endif %}
+                {% if source.get('section') %}
+                    <span>{{ source.get('section') }}</span>
+                {% endif %}
+            </div>
+
+            {% if source.get('evidence') %}
+                <blockquote>{{ source.get('evidence') }}</blockquote>
+            {% endif %}
+
+            <p>
+                This provenance comes from the document analysis and is not
+                editable. It stays attached to the suggestion after the task is
+                created.
+            </p>
+        </aside>
+    </div>
+</section>
+{% endblock %}

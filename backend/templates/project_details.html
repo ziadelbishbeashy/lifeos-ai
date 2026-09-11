@@ -1,0 +1,1180 @@
+{% extends "base.html" %}
+{% from "_document_task_suggestions.html" import render_document_task_suggestions %}
+
+{% block title %}
+    {{ project.title }} | LifeOS AI
+{% endblock %}
+
+{% block content %}
+
+<div class="project-workspace-page project-studio-workspace">
+
+    <a
+        href="{{ url_for('project_bp.projects') }}"
+        class="workspace-back-link"
+        data-page-loading
+        data-loading-title="Opening projects"
+        data-loading-message="Loading your project workspaces..."
+    >
+        ← Back to Projects
+    </a>
+
+
+    <header class="project-studio-workspace-header">
+        <div class="project-studio-workspace-identity">
+            <span class="project-studio-avatar project-studio-avatar-large">
+                {{ project.title[0]|upper }}
+            </span>
+
+            <div>
+                <span class="workspace-eyebrow">
+                    {{ project.project_type or "Project workspace" }}
+                </span>
+                <h1>{{ project.title }}</h1>
+                <p>
+                    {{
+                        project.description
+                        or project.goal
+                        or "Add a clear description so the workspace has more context."
+                    }}
+                </p>
+            </div>
+        </div>
+
+        <div class="workspace-header-actions project-studio-workspace-actions">
+            <button
+                type="button"
+                class="workspace-primary-button"
+                data-open-task-modal
+            >
+                + Add Task
+            </button>
+
+            <a
+                href="{{ url_for('note_bp.notes', project=project.id, new=1) }}#new-note"
+                class="workspace-secondary-button"
+            >
+                + Add Note
+            </a>
+
+            <a
+                href="{{ url_for('project_bp.edit_project', project_id=project.id) }}"
+                class="workspace-secondary-button"
+                data-page-loading
+                data-loading-title="Opening project editor"
+                data-loading-message="Preparing the project form..."
+            >
+                Edit Project
+            </a>
+        </div>
+    </header>
+
+
+    <section class="project-studio-status-strip" aria-label="Project status">
+        <div>
+            <span>Current signal</span>
+            <strong class="project-health-text project-health-{{ project_health.tone }}">
+                {{ project_health.label }}
+            </strong>
+            <small>{{ project_health.message }}</small>
+        </div>
+
+        <div>
+            <span>Execution progress</span>
+            <strong>{{ task_progress }}%</strong>
+            <small>{{ completed_tasks }} of {{ total_tasks }} tasks completed</small>
+        </div>
+
+        <div>
+            <span>Current phase</span>
+            <strong>{{ project.current_phase or "Not specified" }}</strong>
+            <small>{{ project.status }} · {{ project.priority }} priority</small>
+        </div>
+
+        <div>
+            <span>Project deadline</span>
+            <strong>
+                {% if project.deadline %}
+                    {{ project.deadline.strftime("%d %b %Y") }}
+                {% else %}
+                    No deadline
+                {% endif %}
+            </strong>
+            <small>
+                {% if days_to_deadline is none %}
+                    Flexible timeline
+                {% elif days_to_deadline < 0 %}
+                    {{ days_to_deadline|abs }} days past deadline
+                {% elif days_to_deadline == 0 %}
+                    Due today
+                {% elif days_to_deadline == 1 %}
+                    Due tomorrow
+                {% else %}
+                    {{ days_to_deadline }} days remaining
+                {% endif %}
+            </small>
+        </div>
+    </section>
+
+
+    <div class="project-studio-progress-line" aria-hidden="true">
+        <span data-progress="{{ task_progress }}"></span>
+    </div>
+
+
+    <nav class="project-studio-tabs" aria-label="Project workspace sections">
+        <button
+            type="button"
+            class="project-studio-tab active"
+            data-project-studio-tab="overview"
+            aria-selected="true"
+        >
+            Overview
+        </button>
+
+        <button
+            type="button"
+            class="project-studio-tab"
+            data-project-studio-tab="tasks"
+            aria-selected="false"
+        >
+            Tasks <span>{{ total_tasks }}</span>
+        </button>
+
+        <button
+            type="button"
+            class="project-studio-tab"
+            data-project-studio-tab="notes"
+            aria-selected="false"
+        >
+            Notes <span>{{ notes_count }}</span>
+        </button>
+
+        <button
+            type="button"
+            class="project-studio-tab"
+            data-project-studio-tab="ask-project"
+            aria-selected="false"
+        >
+            Ask Documents <span>{{ project_document_count }}</span>
+        </button>
+    </nav>
+
+
+    <!-- OVERVIEW -->
+    <section
+        class="project-studio-panel active"
+        data-project-studio-panel="overview"
+    >
+        <div class="project-studio-overview-grid">
+
+            <div class="project-studio-overview-main">
+
+                <section class="project-studio-next-panel">
+                    <span class="workspace-eyebrow">Best next action</span>
+
+                    {% if next_task %}
+                        <h2>{{ next_task.title }}</h2>
+                        <p>
+                            {% if next_task.status == "In Progress" %}
+                                Continue this task because work has already started.
+                            {% elif next_task.deadline and next_task.deadline < today %}
+                                This task is overdue and still unfinished.
+                            {% elif next_task.deadline %}
+                                This is the nearest actionable deadline in the project.
+                            {% else %}
+                                This is the strongest open task based on status and priority.
+                            {% endif %}
+                        </p>
+
+                        <div class="project-studio-next-meta">
+                            <span>{{ next_task.status }}</span>
+                            <span>{{ next_task.importance or "Medium" }} priority</span>
+                            {% if next_task.deadline %}
+                                <span>Due {{ next_task.deadline.strftime("%d %b %Y") }}</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="workspace-header-actions">
+                            <a
+                                href="{{ url_for('task_bp.edit_task', task_id=next_task.id) }}"
+                                class="workspace-primary-button"
+                            >
+                                Open Task
+                            </a>
+                            <a
+                                href="{{ url_for('focus_bp.focus_mode', task_id=next_task.id) }}"
+                                class="workspace-secondary-button"
+                            >
+                                Start Focus
+                            </a>
+                        </div>
+                    {% elif project.status == "Completed" %}
+                        <h2>Project marked complete</h2>
+                        <p>No unfinished project task needs attention right now.</p>
+                    {% else %}
+                        <h2>Define the first clear action</h2>
+                        <p>
+                            Add one small task that moves the project goal forward.
+                        </p>
+                        <button
+                            type="button"
+                            class="workspace-primary-button"
+                            data-open-task-modal
+                        >
+                            + Add First Task
+                        </button>
+                    {% endif %}
+                </section>
+
+
+                <section class="project-studio-section">
+                    <div class="project-studio-section-heading">
+                        <div>
+                            <span class="workspace-eyebrow">Needs attention</span>
+                            <h2>Work to review</h2>
+                        </div>
+                        <button
+                            type="button"
+                            class="workspace-text-button"
+                            data-open-project-tab="tasks"
+                        >
+                            View all tasks
+                        </button>
+                    </div>
+
+                    {% if attention_tasks %}
+                        <div class="project-studio-attention-list">
+                            {% for task in attention_tasks %}
+                                <article>
+                                    <span class="project-studio-attention-marker
+                                        {% if task.deadline and task.deadline < today %}danger
+                                        {% elif task.status == 'Blocked' %}warning
+                                        {% else %}info{% endif %}">
+                                    </span>
+
+                                    <div>
+                                        <h3>{{ task.title }}</h3>
+                                        <p>
+                                            {% if task.deadline and task.deadline < today %}
+                                                Overdue since {{ task.deadline.strftime("%d %b %Y") }}
+                                            {% elif task.status == "Blocked" %}
+                                                Blocked and waiting for attention
+                                            {% elif task.deadline %}
+                                                Due {{ task.deadline.strftime("%d %b %Y") }}
+                                            {% endif %}
+                                            · {{ task.importance or "Medium" }} priority
+                                        </p>
+                                    </div>
+
+                                    <a href="{{ url_for('task_bp.edit_task', task_id=task.id) }}">
+                                        Open
+                                    </a>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="project-studio-inline-empty">
+                            <strong>No urgent task signals</strong>
+                            <p>No overdue, blocked, or seven-day deadlines were detected.</p>
+                        </div>
+                    {% endif %}
+                </section>
+
+
+                <section class="project-studio-section">
+                    <div class="project-studio-section-heading">
+                        <div>
+                            <span class="workspace-eyebrow">Recent thinking</span>
+                            <h2>Project notes</h2>
+                        </div>
+                        <button
+                            type="button"
+                            class="workspace-text-button"
+                            data-open-project-tab="notes"
+                        >
+                            View all notes
+                        </button>
+                    </div>
+
+                    {% if recent_notes %}
+                        <div class="project-studio-note-list">
+                            {% for note in recent_notes[:3] %}
+                                <a
+                                    href="{{ url_for('note_bp.note_details', note_id=note.id) }}"
+                                    class="project-studio-note-row"
+                                >
+                                    <div>
+                                        <span>{{ note.note_type }}</span>
+                                        <strong>{{ note.title }}</strong>
+                                        <small>
+                                            Updated {{ note.updated_at.strftime("%d %b %Y") }}
+                                            · {{ note.analyses|length }} analyses
+                                        </small>
+                                    </div>
+                                    <span aria-hidden="true">→</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="project-studio-inline-empty">
+                            <strong>No project notes yet</strong>
+                            <p>Capture decisions, progress updates, or meeting outcomes.</p>
+                            <a
+                                href="{{ url_for('note_bp.notes', project=project.id, new=1) }}#new-note"
+                                class="workspace-secondary-button"
+                            >
+                                Create Project Note
+                            </a>
+                        </div>
+                    {% endif %}
+                </section>
+
+            </div>
+
+
+            <aside class="project-studio-overview-side">
+                <section class="project-studio-side-section">
+                    <span class="workspace-eyebrow">Project direction</span>
+                    <h2>Main goal</h2>
+                    <p>{{ project.goal or "No project goal has been added yet." }}</p>
+                </section>
+
+                <section class="project-studio-side-section">
+                    <span class="workspace-eyebrow">Task picture</span>
+                    <div class="project-studio-task-breakdown">
+                        <div><span>Pending</span><strong>{{ pending_tasks }}</strong></div>
+                        <div><span>In progress</span><strong>{{ in_progress_tasks }}</strong></div>
+                        <div><span>Blocked</span><strong>{{ blocked_tasks }}</strong></div>
+                        <div><span>Completed</span><strong>{{ completed_tasks }}</strong></div>
+                    </div>
+                </section>
+
+                {% if project.tech_stack %}
+                    <section class="project-studio-side-section">
+                        <span class="workspace-eyebrow">Technology</span>
+                        <div class="project-studio-tech-list">
+                            {% for technology in project.tech_stack.split(',') %}
+                                <span>{{ technology.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                    </section>
+                {% endif %}
+
+                {% if project.github_link or project.demo_link or project.project_folder %}
+                    <section class="project-studio-side-section">
+                        <span class="workspace-eyebrow">Resources</span>
+                        <div class="project-studio-resource-list">
+                            {% if project.github_link %}
+                                <a href="{{ project.github_link }}" target="_blank" rel="noopener noreferrer">
+                                    GitHub repository <span>↗</span>
+                                </a>
+                            {% endif %}
+                            {% if project.demo_link %}
+                                <a href="{{ project.demo_link }}" target="_blank" rel="noopener noreferrer">
+                                    Live demo <span>↗</span>
+                                </a>
+                            {% endif %}
+                            {% if project.project_folder %}
+                                <span title="{{ project.project_folder }}">
+                                    Folder: {{ project.project_folder|truncate(42) }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </section>
+                {% endif %}
+            </aside>
+
+        </div>
+    </section>
+
+
+    <!-- TASKS -->
+    <section
+        class="project-studio-panel"
+        data-project-studio-panel="tasks"
+        hidden
+    >
+        <div class="project-studio-panel-heading">
+            <div>
+                <span class="workspace-eyebrow">Execution</span>
+                <h2>Project Tasks</h2>
+                <p>Review, complete, and continue the work connected to this project.</p>
+            </div>
+
+            <button
+                type="button"
+                class="workspace-primary-button"
+                data-open-task-modal
+            >
+                + Add Task
+            </button>
+        </div>
+
+        {% if document_suggestions %}
+            <section class="project-document-suggestions-block">
+                <div class="project-document-suggestions-heading">
+                    <div>
+                        <span class="workspace-eyebrow">From linked documents</span>
+                        <h3>Document task suggestions</h3>
+                        <p>
+                            Review work detected from PDFs connected to this project.
+                            Nothing is created until you approve it.
+                        </p>
+                    </div>
+                    <span class="project-document-suggestion-count">
+                        {{ pending_document_suggestion_count }} awaiting review
+                    </span>
+                </div>
+
+                {{ render_document_task_suggestions(
+                    document_suggestions,
+                    url_for(
+                        'project_bp.bulk_create_document_suggestions_route',
+                        project_id=project.id
+                    ),
+                    'projectSuggestionBulkForm',
+                    true
+                ) }}
+            </section>
+        {% endif %}
+
+        {% if tasks %}
+            <section class="project-filter-panel project-studio-task-filter">
+                <div class="project-search-wrapper">
+                    <span class="project-search-icon">⌕</span>
+                    <input
+                        type="search"
+                        id="taskSearchInput"
+                        placeholder="Search project tasks..."
+                    >
+                </div>
+
+                <select id="taskStatusFilter" aria-label="Filter tasks by status">
+                    <option value="all">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="in progress">In Progress</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="completed">Completed</option>
+                    <option value="recurring">Recurring</option>
+                </select>
+
+                <select id="taskImportanceFilter" aria-label="Filter tasks by priority">
+                    <option value="all">All priorities</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                </select>
+
+                <button
+                    type="button"
+                    class="clear-project-filters"
+                    id="clearTaskFilters"
+                >
+                    Clear
+                </button>
+            </section>
+
+            <section class="project-studio-task-list" id="professionalTaskList">
+                {% for task in tasks %}
+                    <article
+                        class="project-studio-task-row"
+                        data-task-card
+                        data-title="{{ task.title|lower }}"
+                        data-description="{{ (task.description or '')|lower }}"
+                        data-module="{{ (task.module or '')|lower }}"
+                        data-tags="{{ (task.tags or '')|lower }}"
+                        data-status="{{ (task.status or 'pending')|lower }}"
+                        data-importance="{{ (task.importance or 'medium')|lower }}"
+                        data-scope="project"
+                        data-project="{{ project.id }}"
+                        data-recurring="{{ 'true' if task.is_recurring else 'false' }}"
+                    >
+                        <form
+                            method="POST"
+                            action="{{ url_for('task_bp.toggle_task', task_id=task.id) }}"
+                            class="project-studio-task-toggle"
+                            data-loading-title="Updating task"
+                            data-loading-message="Saving the task status..."
+                        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="next" value="project">
+                            <button
+                                type="submit"
+                                aria-label="{{ 'Reopen' if task.status == 'Completed' else 'Complete' }} {{ task.title }}"
+                                class="project-studio-check {% if task.status == 'Completed' %}completed{% endif %}"
+                            >
+                                {% if task.status == "Completed" %}✓{% endif %}
+                            </button>
+                        </form>
+
+                        <div class="project-studio-task-copy">
+                            <div class="project-studio-task-title-line">
+                                <h3>{{ task.title }}</h3>
+                                {% if task.is_recurring %}
+                                    <span class="task-tag">Recurring</span>
+                                {% endif %}
+                            </div>
+
+                            {% if task.description %}
+                                <p>{{ task.description|truncate(180) }}</p>
+                            {% endif %}
+
+                            <div class="project-studio-task-meta">
+                                <span>{{ task.module or "General" }}</span>
+                                {% if task.tags_list %}
+                                    <span>{{ task.tags_list | join(', ') }}</span>
+                                {% endif %}
+                                <span>{{ task.status }}</span>
+                                <span>{{ task.importance or "Medium" }} priority</span>
+                                {% if task.deadline %}
+                                    <span
+                                        {% if task.deadline < today and task.status != 'Completed' %}
+                                            class="danger-text"
+                                        {% endif %}
+                                    >
+                                        Due {{ task.deadline.strftime("%d %b %Y") }}
+                                    </span>
+                                {% else %}
+                                    <span>No deadline</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="project-studio-task-actions">
+                            <a href="{{ url_for('task_bp.edit_task', task_id=task.id) }}">
+                                Edit
+                            </a>
+
+                            <form
+                                method="POST"
+                                action="{{ url_for('task_bp.delete_task', task_id=task.id) }}"
+                                data-confirm
+                                data-confirm-title="Delete this task?"
+                                data-confirm-message="This task will be permanently removed from the project."
+                                data-confirm-text="Delete task"
+                                data-confirm-cancel="Keep task"
+                                data-confirm-variant="danger"
+                                data-confirm-icon="!"
+                            >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="next" value="project">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </article>
+                {% endfor %}
+            </section>
+
+            <section class="task-no-results" id="taskNoResults" hidden>
+                <div>⌕</div>
+                <h3>No matching tasks</h3>
+                <p>Change the search or filters to find a task.</p>
+                <button
+                    type="button"
+                    class="workspace-secondary-button"
+                    id="clearTaskFiltersEmpty"
+                >
+                    Clear Filters
+                </button>
+            </section>
+        {% else %}
+            <section class="professional-task-empty-state">
+                <div class="empty-task-symbol">✓</div>
+                <span>Start execution</span>
+                <h2>Add the first project task</h2>
+                <p>Turn the main goal into one specific next action.</p>
+                <button
+                    type="button"
+                    class="workspace-primary-button"
+                    data-open-task-modal
+                >
+                    + Add First Task
+                </button>
+            </section>
+        {% endif %}
+    </section>
+
+
+    <!-- NOTES -->
+    <section
+        class="project-studio-panel"
+        data-project-studio-panel="notes"
+        hidden
+    >
+        <div class="project-studio-panel-heading">
+            <div>
+                <span class="workspace-eyebrow">Project knowledge</span>
+                <h2>Notes</h2>
+                <p>Keep decisions, progress, meetings, and ideas connected to this project.</p>
+            </div>
+
+            <a
+                href="{{ url_for('note_bp.notes', project=project.id, new=1) }}#new-note"
+                class="workspace-primary-button"
+            >
+                + New Project Note
+            </a>
+        </div>
+
+        {% if recent_notes %}
+            <section class="project-studio-all-notes">
+                {% for note in recent_notes %}
+                    <a
+                        href="{{ url_for('note_bp.note_details', note_id=note.id) }}"
+                        class="project-studio-note-card"
+                    >
+                        <div class="project-studio-note-card-top">
+                            <span>{{ note.note_type }}</span>
+                            {% if note.is_pinned %}<span>Pinned</span>{% endif %}
+                        </div>
+
+                        <h3>{{ note.title }}</h3>
+                        <p>{{ note.content|truncate(190) }}</p>
+
+                        <div class="project-studio-note-card-meta">
+                            <span>Updated {{ note.updated_at.strftime("%d %b %Y") }}</span>
+                            <span>{{ note.analyses|length }} AI analyses</span>
+                        </div>
+                    </a>
+                {% endfor %}
+            </section>
+
+            {% if notes_count > recent_notes|length %}
+                <div class="project-studio-view-all-notes">
+                    <a
+                        href="{{ url_for('note_bp.notes', project=project.id) }}"
+                        class="workspace-secondary-button"
+                    >
+                        View all {{ notes_count }} project notes
+                    </a>
+                </div>
+            {% endif %}
+        {% else %}
+            <section class="professional-task-empty-state">
+                <div class="empty-task-symbol">N</div>
+                <span>Build project memory</span>
+                <h2>Create the first project note</h2>
+                <p>
+                    Capture a decision, meeting outcome, progress update, or idea.
+                </p>
+                <a
+                    href="{{ url_for('note_bp.notes', project=project.id, new=1) }}#new-note"
+                    class="workspace-primary-button"
+                >
+                    + Create Project Note
+                </a>
+            </section>
+        {% endif %}
+    </section>
+
+
+    <!-- PROJECT-WIDE MULTI-DOCUMENT RAG -->
+    <section
+        class="project-studio-panel project-rag-panel"
+        data-project-studio-panel="ask-project"
+        id="ask-project"
+        hidden
+    >
+        <div class="project-studio-panel-heading project-rag-heading">
+            <div>
+                <span class="workspace-eyebrow">Project-wide document intelligence</span>
+                <h2>Ask across linked PDFs</h2>
+                <p>
+                    LifeOS searches every readable PDF linked to this project,
+                    verifies the evidence, and keeps each answer tied to its
+                    source document and page.
+                </p>
+            </div>
+
+            <a
+                href="{{ url_for('document_bp.documents') }}"
+                class="workspace-secondary-button"
+            >
+                Manage Documents
+            </a>
+        </div>
+
+        <section class="project-rag-status" aria-label="Project document search coverage">
+            <div>
+                <span>Linked PDFs</span>
+                <strong>{{ project_document_count }}</strong>
+            </div>
+            <div>
+                <span>Searchable now</span>
+                <strong>{{ searchable_project_document_count }}</strong>
+            </div>
+            <div>
+                <span>Saved questions</span>
+                <strong>{{ project_question_count }}</strong>
+            </div>
+        </section>
+
+        {% if searchable_project_document_count %}
+            <form
+                method="POST"
+                action="{{ url_for('project_bp.ask_project_documents_route', project_id=project.id) }}"
+                class="project-rag-question-form"
+                data-page-loading
+                data-loading-title="Searching project documents"
+                data-loading-message="Finding and verifying evidence across linked PDFs..."
+            >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <label for="projectDocumentQuestion">
+                    Ask a question about the project PDFs
+                </label>
+
+                <div class="project-rag-question-row">
+                    <textarea
+                        id="projectDocumentQuestion"
+                        name="question"
+                        maxlength="2000"
+                        rows="3"
+                        required
+                        placeholder="Example: What risks and deadlines are mentioned across the project documents?"
+                    ></textarea>
+
+                    <button type="submit" class="workspace-primary-button">
+                        Ask Project Documents
+                    </button>
+                </div>
+
+                <p class="project-rag-helper">
+                    Answers use retrieved PDF evidence only. LifeOS will say when
+                    the linked documents do not directly support an answer.
+                </p>
+            </form>
+        {% else %}
+            <section class="project-rag-empty">
+                <strong>No searchable project PDFs yet</strong>
+                <p>
+                    Upload a readable PDF linked to this project before asking a
+                    project-wide document question.
+                </p>
+                <a
+                    href="{{ url_for('document_bp.documents') }}"
+                    class="workspace-primary-button"
+                >
+                    Open Document Brain
+                </a>
+            </section>
+        {% endif %}
+
+        {% if project_question_history %}
+            <section class="project-rag-history">
+                <div class="project-rag-history-heading">
+                    <div>
+                        <span class="workspace-eyebrow">Grounded history</span>
+                        <h3>Project document answers</h3>
+                    </div>
+                    <span>{{ project_question_count }} saved</span>
+                </div>
+
+                <div class="project-rag-question-list">
+                    {% for saved_question in project_question_history %}
+                        <details class="project-rag-question-card" {% if loop.first %}open{% endif %}>
+                            <summary>
+                                <div>
+                                    <strong>{{ saved_question.question }}</strong>
+                                    <span>
+                                        {{ saved_question.created_at.strftime("%d %b %Y · %H:%M") if saved_question.created_at else "Saved answer" }}
+                                        · {{ saved_question.status }}
+                                    </span>
+                                </div>
+                                <span class="project-rag-chevron">+</span>
+                            </summary>
+
+                            <div class="project-rag-answer-body">
+                                {% if saved_question.status in ["Completed", "Outdated"] %}
+                                    {% if saved_question.status == "Outdated" %}
+                                        <div class="project-rag-alert project-rag-alert-warning">
+                                            <strong>Outdated answer</strong>
+                                            <p>
+                                                A linked document has a newer version. This answer is preserved for history and is not reused as current project knowledge.
+                                            </p>
+                                        </div>
+                                    {% endif %}
+
+                                    <div class="project-rag-answer">
+                                        <span>{{ "Historical grounded answer" if saved_question.status == "Outdated" else "Grounded answer" }}</span>
+                                        <p>{{ saved_question.answer }}</p>
+                                    </div>
+
+                                    {% if saved_question.sources %}
+                                        <div class="project-rag-sources">
+                                            <div class="project-rag-sources-heading">
+                                                <strong>Supporting sources</strong>
+                                                <span>{{ saved_question.sources | length }}</span>
+                                            </div>
+
+                                            <div class="project-rag-source-list">
+                                                {% for source in saved_question.sources %}
+                                                    <article class="project-rag-source-card">
+                                                        <div class="project-rag-source-heading">
+                                                            <div>
+                                                                <span>Source {{ source.get('source_id') }}</span>
+                                                                <strong>{{ source.get('filename') or 'Project document' }}</strong>
+                                                                <small>
+                                                                    {% if source.get('page') %}Page {{ source.get('page') }}{% endif %}
+                                                                    {% if source.get('page') and source.get('section') %} · {% endif %}
+                                                                    {{ source.get('section') or '' }}
+                                                                </small>
+                                                            </div>
+
+                                                            {% if source.get('document_id') %}
+                                                                <a
+                                                                    href="{{ url_for('document_bp.document_details', document_id=source.get('document_id'), pdf_page=source.get('page')) if source.get('page') else url_for('document_bp.document_details', document_id=source.get('document_id')) }}#ask-document"
+                                                                    class="workspace-secondary-button compact"
+                                                                >
+                                                                    View source
+                                                                </a>
+                                                            {% endif %}
+                                                        </div>
+
+                                                        {% if source.get('evidence') %}
+                                                            <blockquote>{{ source.get('evidence') }}</blockquote>
+                                                        {% endif %}
+                                                    </article>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <div class="project-rag-no-answer">
+                                            No directly supporting passage was found across the linked PDFs.
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="project-rag-no-answer">
+                                        This attempt could not be completed. Ask again after checking the linked PDFs or AI configuration.
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </details>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+    </section>
+
+</div>
+
+
+
+<!-- =====================================================
+     ADD TASK MODAL
+     ===================================================== -->
+
+<div
+    class="task-modal-overlay"
+    id="taskModalOverlay"
+    aria-hidden="true"
+>
+
+    <section
+        class="task-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="addTaskModalTitle"
+    >
+
+        <div class="task-modal-header">
+
+            <div>
+                <span class="workspace-eyebrow">
+                    New Project Action
+                </span>
+
+                <h2 id="addTaskModalTitle">
+                    Add Task
+                </h2>
+
+                <p>
+                    Create a clear action connected to
+                    {{ project.title }}.
+                </p>
+            </div>
+
+            <button
+                type="button"
+                class="task-modal-close"
+                data-close-task-modal
+                aria-label="Close task form"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <form
+            method="POST"
+            action="{{ url_for(
+                'task_bp.add_task',
+                project_id=project.id
+            ) }}"
+            class="professional-task-form"
+            data-loading-title="Creating task"
+            data-loading-message="Adding the task to your project workspace..."
+                        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <input type="hidden" name="task_scope" value="project">
+            <input type="hidden" name="project_id" value="{{ project.id }}">
+
+            <div class="task-form-grid">
+
+                <div class="task-form-field task-form-full">
+
+                    <label for="newTaskTitle">
+                        Task Title
+                        <span>*</span>
+                    </label>
+
+                    <input
+                        type="text"
+                        id="newTaskTitle"
+                        name="title"
+                        placeholder="Example: Build the authentication routes"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="task-form-field">
+
+                    <label for="newTaskModule">
+                        Module
+                    </label>
+
+                    <input
+                        type="text"
+                        id="newTaskModule"
+                        name="module"
+                        list="projectModuleOptions"
+                        placeholder="Example: Backend"
+                    >
+
+                    <datalist id="projectModuleOptions">
+                        <option value="Database">
+                        <option value="Backend">
+                        <option value="Frontend">
+                        <option value="Authentication">
+                        <option value="Dashboard">
+                        <option value="AI">
+                        <option value="Document Brain">
+                        <option value="Testing">
+                        <option value="Deployment">
+                        <option value="Documentation">
+                    </datalist>
+
+                </div>
+
+
+                <div class="task-form-field">
+
+                    <label for="newTaskTags">
+                        Tags
+                    </label>
+
+                    <input
+                        type="text"
+                        id="newTaskTags"
+                        name="tags"
+                        placeholder="Example: backend, testing"
+                    >
+
+                </div>
+
+
+                <div class="task-form-field">
+
+                    <label for="newTaskStatus">
+                        Status
+                    </label>
+
+                    <select
+                        id="newTaskStatus"
+                        name="status"
+                    >
+                        <option value="Pending" selected>
+                            Pending
+                        </option>
+
+                        <option value="In Progress">
+                            In Progress
+                        </option>
+
+                        <option value="Blocked">
+                            Blocked
+                        </option>
+
+                        <option value="Completed">
+                            Completed
+                        </option>
+                    </select>
+
+                </div>
+
+
+                <div class="task-form-field task-form-full">
+
+                    <label for="newTaskDescription">
+                        Description
+                    </label>
+
+                    <textarea
+                        id="newTaskDescription"
+                        name="description"
+                        placeholder="Describe what must be completed..."
+                    ></textarea>
+
+                </div>
+
+
+                <div class="task-form-field">
+
+                    <label for="newTaskImportance">
+                        Importance
+                    </label>
+
+                    <select
+                        id="newTaskImportance"
+                        name="importance"
+                    >
+                        <option value="Low">Low</option>
+
+                        <option value="Medium" selected>
+                            Medium
+                        </option>
+
+                        <option value="High">High</option>
+
+                        <option value="Critical">
+                            Critical
+                        </option>
+                    </select>
+
+                </div>
+
+
+                <div class="task-form-field">
+
+                    <label for="newTaskDifficulty">
+                        Difficulty
+                    </label>
+
+                    <select
+                        id="newTaskDifficulty"
+                        name="difficulty"
+                    >
+                        <option value="Easy">Easy</option>
+
+                        <option value="Medium" selected>
+                            Medium
+                        </option>
+
+                        <option value="Hard">Hard</option>
+                    </select>
+
+                </div>
+
+
+                <div class="task-form-field task-form-full">
+
+                    <label for="newTaskDeadline">
+                        Deadline
+                    </label>
+
+                    <input
+                        type="date"
+                        id="newTaskDeadline"
+                        name="deadline"
+                    >
+
+                    <label class="professional-checkbox">
+                        <input
+                            type="checkbox"
+                            data-no-deadline
+                            data-deadline-target="newTaskDeadline"
+                        >
+
+                        <span>No deadline</span>
+                    </label>
+
+                </div>
+
+            </div>
+
+
+            <div class="task-form-section-heading compact-section-heading">
+                <span>03</span>
+                <div>
+                    <h2>Repeat</h2>
+                    <p>Automatically create the next task after this one is completed.</p>
+                </div>
+            </div>
+            <div class="task-form-grid recurrence-form-grid">
+                <div class="task-form-field task-form-full">
+                    <label class="professional-checkbox">
+                        <input type="checkbox" name="is_recurring">
+                        <span>Repeat this task</span>
+                    </label>
+                </div>
+                <div class="task-form-field">
+                    <label for="projectRecurrenceType">Repeat pattern</label>
+                    <select id="projectRecurrenceType" name="recurrence_type">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="custom_days">Custom number of days</option>
+                    </select>
+                </div>
+                <div class="task-form-field">
+                    <label for="projectRecurrenceInterval">Repeat every</label>
+                    <input type="number" id="projectRecurrenceInterval" name="recurrence_interval" min="1" max="365" value="1">
+                </div>
+                <div class="task-form-field">
+                    <label for="projectRecurrenceEnd">End date (optional)</label>
+                    <input type="date" id="projectRecurrenceEnd" name="recurrence_end_date">
+                </div>
+            </div>
+
+            <div class="task-modal-actions">
+
+                <button
+                    type="button"
+                    class="workspace-secondary-button"
+                    data-close-task-modal
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    class="workspace-primary-button"
+                >
+                    Add Task
+                </button>
+
+            </div>
+
+        </form>
+
+    </section>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script
+        src="{{ url_for(
+            'static',
+            filename='js/document-task-suggestions.js'
+        ) }}?v=step9-task-conversion"
+    ></script>
+{% endblock %}
+

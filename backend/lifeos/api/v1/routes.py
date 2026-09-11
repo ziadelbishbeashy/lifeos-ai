@@ -1,0 +1,225 @@
+"""Core versioned JSON API boundary used by the React frontend.
+
+Feature-specific endpoints live in sibling modules (projects.py, tasks.py,
+documents.py). This file intentionally keeps session/auth/dashboard concerns
+small so feature routes do not become another monolith.
+"""
+
+from __future__ import annotations
+
+from flask import Blueprint, current_app, jsonify, session
+from flask_login import current_user, login_user, logout_user
+from flask_wtf.csrf import generate_csrf
+from sqlalchemy.exc import SQLAlchemyError
+
+from services.experience_profile_service import (
+    ExperienceProfilePersistenceError,
+    ExperienceProfileValidationError,
+    create_registration_profile,
+    user_experience_payload,
+    validate_experience_key,
+)
+
+from lifeos.api.v1.common import api_auth_required, json_body
+from lifeos.domains.auth.facade import (
+    AccountCreationError,
+    DuplicateEmailError,
+    authenticate_user,
+    build_registration_input,
+    claim_legacy_projects,
+    create_user,
+    normalize_email,
+    validate_registration,
+)
+from lifeos.domains.dashboard.facade import (
+    build_dashboard_context,
+    serialize_dashboard_context,
+)
+
+
+api_v1_bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
+
+
+def _user_payload(user) -> dict:
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "experience": user_experience_payload(user),
+    }
+
+
+@api_v1_bp.get("/health")
+def health():
+    return jsonify({"status": "ok", "service": "lifeos", "api": "v1"})
+
+
+@api_v1_bp.get("/meta")
+def meta():
+    return jsonify(
+        {
+            "name": "LifeOS",
+            "architecture": "foundation-v2",
+            "api_version": "v1",
+            "preferred_database": "postgresql",
+            "legacy_web_enabled": True,
+            "legacy_web_role": "compatibility-only-not-used-by-react",
+            "frontend_migration": "react-ui-parity-complete",
+            "frontend_architecture": "react-native-full-separation",
+            "native_frontend_slices": [
+                "auth", "dashboard", "projects", "tasks", "notes", "focus",
+                "analytics", "notifications", "documents", "document-analysis",
+                "document-qa", "project-rag", "comparisons", "versions",
+                "agentic-ask-lifeos"
+            ],
+        }
+    )
+
+
+@api_v1_bp.get("/csrf")
+def csrf_token():
+    """Issue the CSRF token React must send with unsafe API requests."""
+
+    return jsonify({"csrf_token": generate_csrf()})
+
+
+@api_v1_bp.get("/session")
+def session_state():
+    if not current_user.is_authenticated:
+        return jsonify({"authenticated": False, "user": None})
+
+    return jsonify(
+        {
+            "authenticated": True,
+            "user": _user_payload(current_user),
+        }
+    )
+
+
+@api_v1_bp.post("/auth/login")
+def login():
+    if current_user.is_authenticated:
+        return jsonify(
+            {
+                "authenticated": True,
+                "user": _user_payload(current_user),
+            }
+        )
+
+    payload = json_body()
+    email = normalize_email(payload.get("email"))
+    password = str(payload.get("password") or "")
+    remember = payload.get("remember") is True
+
+    user = authenticate_user(email, password)
+    if user is None:
+        return jsonify(
+            {
+                "error": "invalid_credentials",
+                "message": "Incorrect email or password.",
+            }
+        ), 401
+
+    try:
+        claim_legacy_projects(user)
+    except SQLAlchemyError:
+        current_app.logger.exception(
+            "LifeOS could not claim legacy projects during API login."
+        )
+
+    session.clear()
+    login_user(user, remember=remember)
+
+    return jsonify(
+        {
+            "authenticated": True,
+            "user": _user_payload(user),
+        }
+    )
+
+
+@api_v1_bp.post("/auth/register")
+def register():
+    if current_user.is_authenticated:
+        return jsonify(
+            {
+                "authenticated": True,
+                "user": _user_payload(current_user),
+            }
+        )
+
+    payload = json_body()
+    registration = build_registration_input(
+        name=payload.get("name"),
+        email=payload.get("email"),
+        password=payload.get("password"),
+        confirm_password=payload.get("confirm_password"),
+    )
+
+    validation_message = validate_registration(registration)
+    if validation_message:
+        return jsonify(
+            {
+                "error": "validation_error",
+                "message": validation_message,
+            }
+        ), 400
+
+    primary_experience = payload.get("primary_experience")
+    if primary_experience:
+        try:
+            primary_experience = validate_experience_key(primary_experience)
+        except ExperienceProfileValidationError as error:
+            return jsonify({"error": "validation_error", "message": str(error)}), 400
+
+    try:
+        user = create_user(registration)
+    except DuplicateEmailError:
+        return jsonify(
+            {
+                "error": "duplicate_email",
+                "message": "An account with this email already exists.",
+            }
+        ), 409
+    except AccountCreationError:
+        current_app.logger.exception(
+            "LifeOS could not create a user account through API v1."
+        )
+        return jsonify(
+            {
+                "error": "account_creation_failed",
+                "message": "The account could not be created.",
+            }
+        ), 500
+
+    if primary_experience:
+        try:
+            create_registration_profile(user=user, primary_experience=primary_experience)
+        except ExperienceProfilePersistenceError:
+            # The account remains usable; onboarding will retry this preference.
+            current_app.logger.exception("LifeOS could not save the registration experience profile.")
+
+    session.clear()
+    login_user(user)
+
+    return jsonify(
+        {
+            "authenticated": True,
+            "user": _user_payload(user),
+        }
+    ), 201
+
+
+@api_v1_bp.post("/auth/logout")
+@api_auth_required
+def logout():
+    logout_user()
+    session.clear()
+    return jsonify({"authenticated": False, "user": None})
+
+
+@api_v1_bp.get("/dashboard")
+@api_auth_required
+def dashboard():
+    context = build_dashboard_context(current_user.id)
+    return jsonify(serialize_dashboard_context(context))
