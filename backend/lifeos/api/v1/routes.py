@@ -8,9 +8,19 @@ small so feature routes do not become another monolith.
 from __future__ import annotations
 
 from flask import Blueprint, current_app, jsonify, session
-from flask_login import current_user, login_user, logout_user
+from flask_login import current_user
 from flask_wtf.csrf import generate_csrf
 from sqlalchemy.exc import SQLAlchemyError
+
+from services.personalization_profile_service import personalization_summary_for_user
+from services.auth_email_service import send_email_verification
+from services.auth_security_service import (
+    auth_rate_limit_is_blocked,
+    clear_auth_failures,
+    establish_authenticated_session,
+    record_auth_failure,
+    revoke_current_authenticated_session,
+)
 
 from services.experience_profile_service import (
     ExperienceProfilePersistenceError,
@@ -45,7 +55,9 @@ def _user_payload(user) -> dict:
         "id": user.id,
         "name": user.name,
         "email": user.email,
+        "email_verified": bool(user.email_verified_at),
         "experience": user_experience_payload(user),
+        "personalization": personalization_summary_for_user(user),
     }
 
 
@@ -111,8 +123,15 @@ def login():
     password = str(payload.get("password") or "")
     remember = payload.get("remember") is True
 
+    if auth_rate_limit_is_blocked(purpose="login", identity=email):
+        return jsonify({
+            "error": "rate_limited",
+            "message": "Too many sign-in attempts. Try again later.",
+        }), 429
+
     user = authenticate_user(email, password)
     if user is None:
+        record_auth_failure(purpose="login", identity=email)
         return jsonify(
             {
                 "error": "invalid_credentials",
@@ -127,8 +146,8 @@ def login():
             "LifeOS could not claim legacy projects during API login."
         )
 
-    session.clear()
-    login_user(user, remember=remember)
+    clear_auth_failures(purpose="login", identity=email)
+    establish_authenticated_session(user=user, remember=remember, auth_method="password")
 
     return jsonify(
         {
@@ -149,6 +168,13 @@ def register():
         )
 
     payload = json_body()
+    attempted_email = normalize_email(payload.get("email"))
+    if auth_rate_limit_is_blocked(purpose="register", identity=attempted_email):
+        return jsonify({
+            "error": "rate_limited",
+            "message": "Too many account-creation attempts. Try again later.",
+        }), 429
+    record_auth_failure(purpose="register", identity=attempted_email)
     registration = build_registration_input(
         name=payload.get("name"),
         email=payload.get("email"),
@@ -199,8 +225,13 @@ def register():
             # The account remains usable; onboarding will retry this preference.
             current_app.logger.exception("LifeOS could not save the registration experience profile.")
 
-    session.clear()
-    login_user(user)
+    try:
+        send_email_verification(user)
+    except Exception:
+        # Registration remains usable if the configured mail provider is temporarily unavailable; the user can resend verification later.
+        current_app.logger.exception("V-SPACE could not send the registration verification email.")
+
+    establish_authenticated_session(user=user, remember=False, auth_method="password")
 
     return jsonify(
         {
@@ -213,8 +244,7 @@ def register():
 @api_v1_bp.post("/auth/logout")
 @api_auth_required
 def logout():
-    logout_user()
-    session.clear()
+    revoke_current_authenticated_session()
     return jsonify({"authenticated": False, "user": None})
 
 

@@ -6,243 +6,154 @@ import { BrandMark, Icon, PageSkeleton } from "../components/VSpaceUi";
 
 
 type TutorMode = "explain" | "summarize" | "quiz" | "practice" | "flashcards";
-type TutorDifficulty = "beginner" | "intermediate" | "advanced";
-type TutorSource = {
-  source_id: number;
-  document_id: number;
-  filename: string;
-  page?: number | string | null;
-  section?: string | null;
-  content_type?: string | null;
-  evidence?: string | null;
-};
-type TutorQuestion = {
-  id: string;
-  prompt: string;
-  options?: string[];
-  hint?: string;
-  solution?: string;
-  topic?: string;
-  source_ids: number[];
-};
-type TutorContent = {
-  title: string;
-  body_markdown?: string;
-  key_points?: Array<{ text: string; source_ids: number[] }>;
-  check_questions?: string[];
-  source_ids?: number[];
-  instructions?: string;
-  questions?: TutorQuestion[];
-  study_tip?: string;
-  cards?: Array<{ id: string; front: string; back: string; source_ids: number[] }>;
-};
+type TutorDifficulty = "adaptive" | "beginner" | "intermediate" | "advanced";
+type TutorSource = { source_id:number; document_id:number; filename:string; page?:number|string|null; section?:string|null; content_type?:string|null; evidence?:string|null };
+type TutorQuestion = { id:string; prompt:string; options?:string[]; hint?:string; solution?:string; topic?:string; source_ids:number[] };
+type TutorContent = { title:string; body_markdown?:string; key_points?:Array<{text:string;source_ids:number[]}>; check_questions?:string[]; source_ids?:number[]; instructions?:string; questions?:TutorQuestion[]; study_tip?:string; cards?:Array<{id:string;front:string;back:string;source_ids:number[]}> };
+type GradeReviewItem = { id:string; prompt:string; selected_index:number|null; correct_index:number; correct:boolean; correct_answer:string|null; explanation:string; topic:string; source_ids:number[] };
+type RevisionPlan = { duration_minutes:number; topics:string[]; prompt:string; planner_url:string } | null;
 type TutorSession = {
-  id: number;
-  module_id: number;
-  module_title: string;
-  lecture_id: number | null;
-  lecture_title: string | null;
-  mode: TutorMode;
-  difficulty: TutorDifficulty;
-  topic: string | null;
-  request_text: string | null;
-  content: TutorContent;
-  sources: TutorSource[];
-  status: string;
-  score: { correct: number | null; total: number | null; percentage: number | null };
-  weak_areas: string[];
-  created_at: string | null;
+  id:number; module_id:number; module_title:string; lecture_id:number|null; lecture_title:string|null; mode:TutorMode; difficulty:TutorDifficulty;
+  conversation_key:string; parent_session_id:number|null; topic:string|null; request_text:string|null; content:TutorContent; sources:TutorSource[]; status:string;
+  score:{correct:number|null;total:number|null;percentage:number|null}; weak_areas:string[]; grade_review:GradeReviewItem[]; revision_plan:RevisionPlan; created_at:string|null;
 };
-type TutorHome = {
-  modules: LearningModuleDetail[];
-  recent_sessions: TutorSession[];
+type TutorGradeResult = { correct:number; total:number; percentage:number; weak_areas:string[]; results:GradeReviewItem[] };
+type TutorHome = { modules:LearningModuleDetail[]; recent_sessions:TutorSession[] };
+type TutorMastery = { id:number; module_id:number; topic:string; topic_key:string; quiz_attempts:number; question_count:number; correct_count:number; mastery_score:number; best_percentage:number; last_percentage:number; last_session_id:number|null; updated_at:string|null };
+type TutorProgress = { mastery:TutorMastery[]; quiz_history:TutorSession[] };
+type TutorConversation = { sessions:TutorSession[] };
+type TutorCourseProfile = {
+  module:{id:number;title:string;subject:string|null;status:string}; expertise:"course_workspace"|"course_expert"|"personalized_course_expert"; expertise_label:string; expert_ready:boolean; personalized:boolean;
+  counts:{lectures:number;documents:number;sessions:number;graded_quizzes:number;mastery_topics:number}; overall_mastery:number|null;
+  weak_topics:Array<{id:number;topic:string;topic_key:string;mastery_score:number;last_percentage:number;best_percentage:number;quiz_attempts:number;question_count:number}>;
+  strong_topics:Array<{id:number;topic:string;topic_key:string;mastery_score:number;last_percentage:number;best_percentage:number;quiz_attempts:number;question_count:number}>;
+  study_streak_days:number; study_days_last_30:number; last_session:{id:number;mode:TutorMode;difficulty:string;topic:string|null;title:string;score_percentage:number|null;created_at:string|null}|null;
+  upcoming_assessment:{id:number;title:string;type:string;target_date:string;days_until:number;topics:string|null}|null;
+  recommendation:{action:"start_session"|"add_material";mode:TutorMode|null;difficulty:TutorDifficulty;topic:string|null;title:string;reason:string;request_text:string|null};
 };
-type TutorGradeResult = {
-  correct: number;
-  total: number;
-  percentage: number;
-  weak_areas: string[];
-  results: Array<{
-    id: string;
-    prompt: string;
-    selected_index: number | null;
-    correct_index: number;
-    correct: boolean;
-    correct_answer: string | null;
-    explanation: string;
-    topic: string;
-    source_ids: number[];
-  }>;
-};
+type TutorStudyCandidate = { id:number; title:string; subject:string|null; status:string; score:number; confidence:number; match_reasons:string[] };
+type TutorStudyResolution = { status:"matched"|"ambiguous"|"no_match"; request_text:string; selected_module_id:number|null; confidence:number; message:string; candidates:TutorStudyCandidate[]; match_reasons?:string[]; profile?:TutorCourseProfile };
+type TutorProfileResponse = { profile:TutorCourseProfile };
 
-const modeMeta: Array<{ value: TutorMode; label: string; description: string }> = [
-  { value: "explain", label: "Explain", description: "Learn a concept step by step" },
-  { value: "summarize", label: "Summarize", description: "Turn material into exam-ready notes" },
-  { value: "quiz", label: "Quiz me", description: "Test yourself and find weak areas" },
-  { value: "practice", label: "Practice", description: "Work through guided questions" },
-  { value: "flashcards", label: "Flashcards", description: "Build fast active-recall revision" },
+const modeMeta:Array<{value:TutorMode;label:string;description:string}> = [
+  { value:"explain", label:"Explain", description:"Learn a concept step by step" },
+  { value:"summarize", label:"Summarize", description:"Turn material into exam-ready notes" },
+  { value:"quiz", label:"Quiz me", description:"Test yourself and track mastery" },
+  { value:"practice", label:"Practice", description:"Work through guided questions" },
+  { value:"flashcards", label:"Flashcards", description:"Build fast active-recall revision" },
 ];
 
-function apiMessage(error: unknown, fallback: string) {
-  return error instanceof ApiError ? error.message : fallback;
+function apiMessage(error:unknown,fallback:string){ return error instanceof ApiError ? error.message : fallback; }
+function formatTime(value:string|null){ if(!value)return""; const parsed=new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(value)?value:`${value}Z`); if(Number.isNaN(parsed.getTime()))return""; return new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}).format(parsed); }
+function modeLabel(mode:string){ return modeMeta.find(item=>item.value===mode)?.label || (mode === "explain" ? "Explain" : mode); }
+
+function TutorMarkdown({value}:{value:string}){
+  const lines=value.replace(/\r/g,"").split("\n"); const nodes:ReactNode[]=[]; let bullets:string[]=[];
+  const flush=()=>{ if(!bullets.length)return; nodes.push(<ul key={`list-${nodes.length}`}>{bullets.map((item,index)=><li key={`${item}-${index}`}>{item}</li>)}</ul>); bullets=[]; };
+  lines.forEach((raw,index)=>{ const line=raw.trim(); if(!line){flush();return;} if(/^[-*]\s+/.test(line)){bullets.push(line.replace(/^[-*]\s+/,""));return;} flush(); if(line.startsWith("### "))nodes.push(<h4 key={index}>{line.slice(4)}</h4>); else if(line.startsWith("## "))nodes.push(<h3 key={index}>{line.slice(3)}</h3>); else if(line.startsWith("# "))nodes.push(<h3 key={index}>{line.slice(2)}</h3>); else nodes.push(<p key={index}>{line}</p>); }); flush(); return <div className="tutor-markdown">{nodes}</div>;
 }
+function SourceChips({ids,sources}:{ids?:number[];sources:TutorSource[]}){ if(!ids?.length)return null; return <div className="tutor-source-chips">{ids.map(id=>{const source=sources.find(item=>item.source_id===id);return <span key={id} title={source?.filename||`Source ${id}`}>S{id}</span>;})}</div>; }
+function ScoreRing({percentage,label="score"}:{percentage:number;label?:string}){ const bounded=Math.max(0,Math.min(100,percentage)); return <div className="tutor-score-ring" style={{"--score":`${bounded*3.6}deg`} as CSSProperties}><div><strong>{bounded}%</strong><span>{label}</span></div></div>; }
+function gradeFromSession(session:TutorSession|null):TutorGradeResult|null{ if(!session || session.status!=="graded" || session.score.percentage===null)return null; return { correct:session.score.correct||0,total:session.score.total||0,percentage:session.score.percentage,weak_areas:session.weak_areas,results:session.grade_review||[] }; }
 
-function formatTime(value: string | null) {
-  if (!value) return "";
-  const parsed = new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(parsed);
-}
+export function PrivateTutorPage(){
+  const [moduleId,setModuleId]=useState(""); const [lectureId,setLectureId]=useState(""); const [mode,setMode]=useState<TutorMode>("explain"); const [difficulty,setDifficulty]=useState<TutorDifficulty>("adaptive");
+  const [topic,setTopic]=useState(""); const [requestText,setRequestText]=useState(""); const [questionCount,setQuestionCount]=useState(5); const [active,setActive]=useState<TutorSession|null>(null);
+  const [answers,setAnswers]=useState<Record<string,number>>({}); const [grade,setGrade]=useState<TutorGradeResult|null>(null); const [revealed,setRevealed]=useState<Record<string,"hint"|"solution"|"back">>({});
+  const [followUp,setFollowUp]=useState(""); const [error,setError]=useState<string|null>(null); const [studyIntent,setStudyIntent]=useState(""); const [resolution,setResolution]=useState<TutorStudyResolution|null>(null);
 
-function TutorMarkdown({ value }: { value: string }) {
-  const lines = value.replace(/\r/g, "").split("\n");
-  const nodes: ReactNode[] = [];
-  let bullets: string[] = [];
-  const flushBullets = () => {
-    if (!bullets.length) return;
-    nodes.push(<ul key={`list-${nodes.length}`}>{bullets.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>);
-    bullets = [];
-  };
-  lines.forEach((raw, index) => {
-    const line = raw.trim();
-    if (!line) { flushBullets(); return; }
-    if (/^[-*]\s+/.test(line)) { bullets.push(line.replace(/^[-*]\s+/, "")); return; }
-    flushBullets();
-    if (line.startsWith("### ")) nodes.push(<h4 key={index}>{line.slice(4)}</h4>);
-    else if (line.startsWith("## ")) nodes.push(<h3 key={index}>{line.slice(3)}</h3>);
-    else if (line.startsWith("# ")) nodes.push(<h3 key={index}>{line.slice(2)}</h3>);
-    else nodes.push(<p key={index}>{line}</p>);
-  });
-  flushBullets();
-  return <div className="tutor-markdown">{nodes}</div>;
-}
+  const homeQuery=useQuery({queryKey:["private-tutor"],queryFn:()=>apiGet<TutorHome>("/api/v1/tutor")});
+  const progressQuery=useQuery({queryKey:["private-tutor-progress",moduleId],queryFn:()=>apiGet<TutorProgress>(`/api/v1/tutor/progress?module_id=${encodeURIComponent(moduleId)}`),enabled:Boolean(moduleId)});
+  const profileQuery=useQuery({queryKey:["private-tutor-profile",moduleId],queryFn:()=>apiGet<TutorProfileResponse>(`/api/v1/tutor/modules/${encodeURIComponent(moduleId)}/profile`),enabled:Boolean(moduleId)});
+  const conversationQuery=useQuery({queryKey:["private-tutor-conversation",active?.conversation_key],queryFn:()=>apiGet<TutorConversation>(`/api/v1/tutor/conversations/${encodeURIComponent(active?.conversation_key||"")}`),enabled:Boolean(active?.conversation_key)});
 
-function SourceChips({ ids, sources }: { ids?: number[]; sources: TutorSource[] }) {
-  if (!ids?.length) return null;
-  return <div className="tutor-source-chips">{ids.map(id => {
-    const source = sources.find(item => item.source_id === id);
-    return <span key={id} title={source?.filename || `Source ${id}`}>S{id}</span>;
-  })}</div>;
-}
+  const selectedModule=useMemo(()=>homeQuery.data?.modules.find(item=>item.id===Number(moduleId))||null,[homeQuery.data?.modules,moduleId]); const lectures=selectedModule?.lectures||[];
+  const activate=(session:TutorSession)=>{ setActive(session); setAnswers({}); setGrade(gradeFromSession(session)); setRevealed({}); setFollowUp(""); setError(null); setModuleId(String(session.module_id)); setLectureId(session.lecture_id?String(session.lecture_id):""); setMode(session.mode); setDifficulty(session.difficulty); setTopic(session.topic||""); setRequestText(session.request_text||""); };
 
-function ScoreRing({ percentage }: { percentage: number }) {
-  const bounded = Math.max(0, Math.min(100, percentage));
-  return <div className="tutor-score-ring" style={{ "--score": `${bounded * 3.6}deg` } as CSSProperties}><div><strong>{bounded}%</strong><span>score</span></div></div>;
-}
+  const createMutation=useMutation({mutationFn:()=>apiPost<{session:TutorSession}>("/api/v1/tutor/sessions",{module_id:Number(moduleId),lecture_id:lectureId?Number(lectureId):null,mode,difficulty,topic:topic.trim()||null,request_text:requestText.trim()||null,question_count:questionCount}),onSuccess:({session})=>{activate(session);void homeQuery.refetch();void profileQuery.refetch();void conversationQuery.refetch();},onError:error=>setError(apiMessage(error,"Private Tutor could not prepare that study session."))});
+  const gradeMutation=useMutation({mutationFn:()=>apiPost<{grade:TutorGradeResult;session:TutorSession}>(`/api/v1/tutor/sessions/${active?.id}/grade`,{answers}),onSuccess:result=>{setGrade(result.grade);setActive(result.session);setError(null);void homeQuery.refetch();void progressQuery.refetch();void profileQuery.refetch();void conversationQuery.refetch();},onError:error=>setError(apiMessage(error,"Private Tutor could not grade this quiz."))});
+  const followMutation=useMutation({mutationFn:()=>apiPost<{session:TutorSession}>(`/api/v1/tutor/sessions/${active?.id}/follow-up`,{request_text:followUp.trim()}),onSuccess:({session})=>{activate(session);void homeQuery.refetch();void profileQuery.refetch();void conversationQuery.refetch();},onError:error=>setError(apiMessage(error,"Private Tutor could not answer that follow-up."))});
+  const reviewMutation=useMutation({mutationFn:()=>apiPost<{session:TutorSession}>(`/api/v1/tutor/sessions/${active?.id}/review-mistakes`,{}),onSuccess:({session})=>{activate(session);void homeQuery.refetch();void profileQuery.refetch();void conversationQuery.refetch();},onError:error=>setError(apiMessage(error,"Private Tutor could not build a mistake review."))});
+  const retryMutation=useMutation({mutationFn:()=>apiPost<{session:TutorSession}>(`/api/v1/tutor/sessions/${active?.id}/retry-quiz`,{}),onSuccess:({session})=>{activate(session);setMode("quiz");void homeQuery.refetch();void profileQuery.refetch();void conversationQuery.refetch();},onError:error=>setError(apiMessage(error,"Private Tutor could not prepare a fresh quiz."))});
+  const resolveMutation=useMutation({mutationFn:()=>apiPost<{resolution:TutorStudyResolution}>("/api/v1/tutor/resolve-study",{request_text:studyIntent.trim()}),onSuccess:({resolution:next})=>{setResolution(next);setError(null);if(next.status==="matched"&&next.selected_module_id){setModuleId(String(next.selected_module_id));setLectureId("");setDifficulty("adaptive");setRequestText(next.request_text);setActive(null);}},onError:error=>setError(apiMessage(error,"V-SPACE could not match that study request to your courses."))});
+  const continueMutation=useMutation({mutationFn:(sessionId:number)=>apiGet<{session:TutorSession}>(`/api/v1/tutor/sessions/${sessionId}`),onSuccess:({session})=>activate(session),onError:error=>setError(apiMessage(error,"V-SPACE could not reopen that study session."))});
 
-export function PrivateTutorPage() {
-  const [moduleId, setModuleId] = useState("");
-  const [lectureId, setLectureId] = useState("");
-  const [mode, setMode] = useState<TutorMode>("explain");
-  const [difficulty, setDifficulty] = useState<TutorDifficulty>("intermediate");
-  const [topic, setTopic] = useState("");
-  const [requestText, setRequestText] = useState("");
-  const [questionCount, setQuestionCount] = useState(5);
-  const [active, setActive] = useState<TutorSession | null>(null);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [grade, setGrade] = useState<TutorGradeResult | null>(null);
-  const [revealed, setRevealed] = useState<Record<string, "hint" | "solution" | "back">>({});
-  const [error, setError] = useState<string | null>(null);
+  function chooseResolvedModule(candidate:TutorStudyCandidate){ setModuleId(String(candidate.id)); setLectureId(""); setDifficulty("adaptive"); setRequestText(studyIntent.trim()); setResolution(current=>current?{...current,status:"matched",selected_module_id:candidate.id,confidence:candidate.confidence}:current); setActive(null); setError(null); }
+  function applyRecommendation(profile:TutorCourseProfile){ const recommendation=profile.recommendation; if(recommendation.action!=="start_session"||!recommendation.mode)return; setMode(recommendation.mode); setDifficulty(recommendation.difficulty); setTopic(recommendation.topic||""); setRequestText(recommendation.request_text||""); setActive(null); setGrade(null); setError(null); }
+  function submitIntent(event:FormEvent){ event.preventDefault(); if(!studyIntent.trim()){setError("Tell V-SPACE what you want to study.");return;} setError(null);resolveMutation.mutate(); }
+  function submit(event:FormEvent){ event.preventDefault(); if(!moduleId){setError("Choose a module before starting a tutor session.");return;} setError(null);createMutation.mutate(); }
+  function submitFollowUp(event:FormEvent){ event.preventDefault(); if(!followUp.trim()||!active)return; setError(null);followMutation.mutate(); }
 
-  const homeQuery = useQuery({
-    queryKey: ["private-tutor"],
-    queryFn: () => apiGet<TutorHome>("/api/v1/tutor"),
-  });
+  if(homeQuery.isPending)return <PageSkeleton label="Opening Private Tutor…"/>;
+  if(homeQuery.isError)return <section className="workspace-page"><div className="tutor-empty"><h1>Private Tutor unavailable</h1><p>{apiMessage(homeQuery.error,"V-SPACE could not load your study workspace.")}</p><button className="primary-button" onClick={()=>void homeQuery.refetch()}>Retry</button></div></section>;
 
-  const selectedModule = useMemo(() => homeQuery.data?.modules.find(item => item.id === Number(moduleId)) || null, [homeQuery.data?.modules, moduleId]);
-  const lectures = selectedModule?.lectures || [];
-
-  const createMutation = useMutation({
-    mutationFn: () => apiPost<{ session: TutorSession }>("/api/v1/tutor/sessions", {
-      module_id: Number(moduleId),
-      lecture_id: lectureId ? Number(lectureId) : null,
-      mode,
-      difficulty,
-      topic: topic.trim() || null,
-      request_text: requestText.trim() || null,
-      question_count: questionCount,
-    }),
-    onSuccess: ({ session }) => {
-      setActive(session); setAnswers({}); setGrade(null); setRevealed({}); setError(null);
-      void homeQuery.refetch();
-    },
-    onError: error => setError(apiMessage(error, "Private Tutor could not prepare that study session.")),
-  });
-
-  const gradeMutation = useMutation({
-    mutationFn: () => apiPost<{ grade: TutorGradeResult; session: TutorSession }>(`/api/v1/tutor/sessions/${active?.id}/grade`, { answers }),
-    onSuccess: result => { setGrade(result.grade); setActive(result.session); setError(null); void homeQuery.refetch(); },
-    onError: error => setError(apiMessage(error, "Private Tutor could not grade this quiz.")),
-  });
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!moduleId) { setError("Choose a module before starting a tutor session."); return; }
-    setError(null);
-    createMutation.mutate();
-  }
-
-  function loadRecent(session: TutorSession) {
-    setActive(session); setAnswers({}); setGrade(null); setRevealed({}); setError(null);
-    setModuleId(String(session.module_id)); setLectureId(session.lecture_id ? String(session.lecture_id) : "");
-    setMode(session.mode); setDifficulty(session.difficulty); setTopic(session.topic || ""); setRequestText(session.request_text || "");
-  }
-
-  const plannerPrompt = grade?.weak_areas.length
-    ? `Schedule 45 minutes to revise ${grade.weak_areas.join(", ")} for ${active?.module_title || "my module"}.`
-    : "";
-
-  if (homeQuery.isPending) return <PageSkeleton label="Opening Private Tutor…" />;
-  if (homeQuery.isError) return <section className="workspace-page"><div className="tutor-empty"><h1>Private Tutor unavailable</h1><p>{apiMessage(homeQuery.error, "V-SPACE could not load your study workspace.")}</p><button className="primary-button" onClick={() => void homeQuery.refetch()}>Retry</button></div></section>;
-
-  const modules = homeQuery.data?.modules || [];
-  const recent = homeQuery.data?.recent_sessions || [];
-  const busy = createMutation.isPending || gradeMutation.isPending;
+  const modules=homeQuery.data?.modules||[]; const recent=homeQuery.data?.recent_sessions||[]; const mastery=progressQuery.data?.mastery||[]; const quizHistory=progressQuery.data?.quiz_history||[]; const thread=conversationQuery.data?.sessions||[];
+  const profile=profileQuery.data?.profile || (resolution?.selected_module_id===Number(moduleId)?resolution.profile:null) || null;
+  const busy=createMutation.isPending||gradeMutation.isPending||followMutation.isPending||reviewMutation.isPending||retryMutation.isPending||resolveMutation.isPending||continueMutation.isPending;
 
   return <section className="workspace-page private-tutor-page">
-    <header className="workspace-page-header tutor-page-header">
-      <div><span className="workspace-eyebrow"><Icon name="book"/> Learning intelligence</span><h1>Private Tutor</h1><p>Learn from your own V-SPACE material, test yourself, and turn weak areas into a smarter study plan.</p></div>
-      <div className="tutor-trust"><Icon name="shield"/><div><strong>Grounded in your material</strong><span>Answers and questions stay tied to the module documents you select.</span></div></div>
-    </header>
+    <header className="workspace-page-header tutor-page-header"><div><span className="workspace-eyebrow"><Icon name="book"/> Personalized learning intelligence</span><h1>Private Tutor</h1><p>Tell V-SPACE what you want to study. It finds your course, uses your material, remembers your mastery, and adapts what comes next.</p></div><div className="tutor-trust"><Icon name="shield"/><div><strong>Course-aware, not generic</strong><span>When your course workspace exists, Tutor uses it as the factual source and personalizes teaching from your learning history.</span></div></div></header>
+
+    <form className="tutor-intent-card" onSubmit={submitIntent}>
+      <div className="tutor-intent-icon"><Icon name="spark"/></div>
+      <div className="tutor-intent-copy"><span className="workspace-eyebrow">Start naturally</span><strong>What do you want to study?</strong><p>Try “I want to study Calculus” or “Help me prepare for my Signals exam.”</p></div>
+      <div className="tutor-intent-composer"><input value={studyIntent} onChange={event=>setStudyIntent(event.target.value)} maxLength={500} placeholder="I want to study Calculus…" disabled={busy}/><button className="primary-button" type="submit" disabled={busy||!studyIntent.trim()}>{resolveMutation.isPending?"Finding your course…":"Find my course"}<Icon name="arrow"/></button></div>
+    </form>
+
+    {resolution?<div className={`tutor-resolution tutor-resolution-${resolution.status}`}>
+      {resolution.status==="matched"&&profile?<><div><span className="tutor-expert-badge"><Icon name="shield"/>{profile.expertise_label}</span><strong>{profile.module.title} workspace found</strong><p>{profile.counts.documents} study document{profile.counts.documents===1?"":"s"} · {profile.counts.lectures} lecture{profile.counts.lectures===1?"":"s"} · {profile.counts.sessions} previous Tutor session{profile.counts.sessions===1?"":"s"}</p></div><span className="tutor-resolution-confidence">{Math.round(resolution.confidence*100)}% match</span></>:null}
+      {resolution.status==="ambiguous"?<><div><strong>Which course did you mean?</strong><p>{resolution.message}</p><div className="tutor-candidate-list">{resolution.candidates.slice(0,4).map(candidate=><button type="button" key={candidate.id} onClick={()=>chooseResolvedModule(candidate)}><strong>{candidate.title}</strong><small>{candidate.subject||"Course workspace"} · {Math.round(candidate.confidence*100)}% match</small></button>)}</div></div></>:null}
+      {resolution.status==="no_match"?<><div><strong>No course workspace matched confidently</strong><p>I can still help through general V-SPACE AI, but it will not know your lecturer, notes, assignments, or course-specific methods until you create or select a course workspace.</p><div className="tutor-resolution-actions"><a className="secondary-button" href={`/ask?q=${encodeURIComponent(studyIntent)}`}>Use general V-SPACE AI</a><a className="secondary-button" href="/modules">Create course workspace</a></div></div></>:null}
+    </div>:null}
 
     <div className="tutor-layout">
       <aside className="tutor-setup-panel">
         <div className="tutor-panel-heading"><span>Study setup</span><strong>What are we learning?</strong></div>
-        {!modules.length ? <div className="tutor-inline-empty"><Icon name="book"/><strong>No study modules yet</strong><p>Create a module and attach lecture material first.</p><a href="/modules" className="secondary-button">Open Modules</a></div> : <form onSubmit={submit} className="tutor-setup-form">
-          <label><span>Module</span><select value={moduleId} onChange={event => { setModuleId(event.target.value); setLectureId(""); setActive(null); }} disabled={busy}><option value="">Choose a module</option>{modules.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
-          <label><span>Lecture <em>optional</em></span><select value={lectureId} onChange={event => setLectureId(event.target.value)} disabled={!moduleId || busy}><option value="">Entire module</option>{lectures.map(item => <option value={item.id} key={item.id}>{item.lecture_number ? `${item.lecture_number}. ` : ""}{item.title}</option>)}</select></label>
-          <label><span>Level</span><div className="tutor-segmented">{(["beginner","intermediate","advanced"] as TutorDifficulty[]).map(item => <button type="button" key={item} className={difficulty === item ? "active" : ""} onClick={() => setDifficulty(item)} disabled={busy}>{item}</button>)}</div></label>
-          <label><span>Topic <em>optional</em></span><input value={topic} onChange={event => setTopic(event.target.value)} maxLength={500} placeholder="e.g. Fourier Transform" disabled={busy}/></label>
-          <label><span>What do you want help with?</span><textarea value={requestText} onChange={event => setRequestText(event.target.value)} maxLength={1500} rows={4} placeholder="Explain the concept with examples, or tell V-SPACE what you're preparing for." disabled={busy}/></label>
-          {mode === "quiz" ? <label><span>Questions</span><input type="range" min="3" max="10" value={questionCount} onChange={event => setQuestionCount(Number(event.target.value))}/><small>{questionCount} questions</small></label> : null}
-          <button type="submit" className="primary-button tutor-start" disabled={busy || !moduleId}><Icon name="spark"/>{createMutation.isPending ? "Preparing your session…" : "Start learning"}</button>
+        {!modules.length?<div className="tutor-inline-empty"><Icon name="book"/><strong>No study modules yet</strong><p>Create a module and attach lecture material first.</p><a href="/modules" className="secondary-button">Open Modules</a></div>:<form onSubmit={submit} className="tutor-setup-form">
+          <label><span>Module</span><select value={moduleId} onChange={event=>{setModuleId(event.target.value);setLectureId("");setActive(null);setResolution(null);setDifficulty("adaptive");}} disabled={busy}><option value="">Choose a module</option>{modules.map(item=><option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
+          <label><span>Lecture <em>optional</em></span><select value={lectureId} onChange={event=>setLectureId(event.target.value)} disabled={!moduleId||busy}><option value="">Entire module</option>{lectures.map(item=><option value={item.id} key={item.id}>{item.lecture_number?`${item.lecture_number}. `:""}{item.title}</option>)}</select></label>
+          <label><span>Level</span><div className="tutor-segmented tutor-level-segmented">{(["adaptive","beginner","intermediate","advanced"] as TutorDifficulty[]).map(item=><button type="button" key={item} className={difficulty===item?"active":""} onClick={()=>setDifficulty(item)} disabled={busy}>{item==="adaptive"?"adaptive ✦":item}</button>)}</div><small>{difficulty==="adaptive"?"V-SPACE chooses the level from your tracked mastery.":"Manual difficulty override."}</small></label>
+          <label><span>Topic <em>optional</em></span><input value={topic} onChange={event=>setTopic(event.target.value)} maxLength={500} placeholder="e.g. Fourier Transform" disabled={busy}/></label>
+          <label><span>What do you want help with?</span><textarea value={requestText} onChange={event=>setRequestText(event.target.value)} maxLength={1500} rows={4} placeholder="Explain the concept, prepare me for an exam, or tell V-SPACE what you need." disabled={busy}/></label>
+          {mode==="quiz"?<label><span>Questions</span><input type="range" min="3" max="10" value={questionCount} onChange={event=>setQuestionCount(Number(event.target.value))}/><small>{questionCount} questions</small></label>:null}
+          <button type="submit" className="primary-button tutor-start" disabled={busy||!moduleId}><Icon name="spark"/>{createMutation.isPending?"Preparing your session…":"Start learning"}</button>
         </form>}
 
-        {recent.length ? <div className="tutor-recent"><div className="tutor-panel-heading compact"><span>Recent</span><strong>Study history</strong></div>{recent.slice(0,6).map(item => <button type="button" key={item.id} className={active?.id === item.id ? "active" : ""} onClick={() => loadRecent(item)}><span className={`tutor-mode-dot mode-${item.mode}`}/><span><strong>{item.content.title || item.module_title}</strong><small>{item.module_title} · {modeMeta.find(modeItem => modeItem.value === item.mode)?.label}{item.score.percentage !== null ? ` · ${item.score.percentage}%` : ""}</small></span><em>{formatTime(item.created_at)}</em></button>)}</div> : null}
+        {profile?<div className="tutor-course-mini"><div className="tutor-course-mini-head"><span className="tutor-expert-badge"><Icon name="shield"/>{profile.expertise_label}</span>{profile.overall_mastery!==null?<strong>{profile.overall_mastery}% overall</strong>:null}</div><p>{profile.expert_ready?`V-SPACE has ${profile.counts.documents} grounded study source${profile.counts.documents===1?"":"s"} for this course.`:"Add course documents to unlock grounded expert tutoring."}</p><div className="tutor-course-mini-stats"><span><strong>{profile.study_streak_days}</strong> day streak</span><span><strong>{profile.counts.graded_quizzes}</strong> quizzes</span><span><strong>{profile.counts.mastery_topics}</strong> tracked topics</span></div></div>:null}
+
+        {moduleId&&mastery.length?<div className="tutor-mastery-panel"><div className="tutor-panel-heading compact"><span>Progress</span><strong>Topic mastery</strong></div>{mastery.slice(0,5).map(item=><div className="tutor-mastery-row" key={item.id}><div><strong>{item.topic}</strong><small>{item.quiz_attempts} attempt{item.quiz_attempts===1?"":"s"} · best {item.best_percentage}%</small></div><span>{item.mastery_score}%</span><div className="tutor-mastery-track"><i style={{width:`${item.mastery_score}%`}}/></div></div>)}</div>:null}
+
+        {recent.length?<div className="tutor-recent"><div className="tutor-panel-heading compact"><span>Recent</span><strong>Study history</strong></div>{recent.slice(0,6).map(item=><button type="button" key={item.id} className={active?.id===item.id?"active":""} onClick={()=>activate(item)}><span className={`tutor-mode-dot mode-${item.mode}`}/><span><strong>{item.content.title||item.module_title}</strong><small>{item.module_title} · {modeLabel(item.mode)}{item.score.percentage!==null?` · ${item.score.percentage}%`:""}</small></span><em>{formatTime(item.created_at)}</em></button>)}</div>:null}
       </aside>
 
       <main className="tutor-main">
-        <div className="tutor-mode-bar" role="tablist" aria-label="Tutor mode">{modeMeta.map(item => <button type="button" role="tab" aria-selected={mode === item.value} className={mode === item.value ? "active" : ""} key={item.value} onClick={() => { setMode(item.value); setActive(null); setGrade(null); }} disabled={busy}><span>{item.label}</span><small>{item.description}</small></button>)}</div>
+        <div className="tutor-mode-bar" role="tablist" aria-label="Tutor mode">{modeMeta.map(item=><button type="button" role="tab" aria-selected={mode===item.value} className={mode===item.value?"active":""} key={item.value} onClick={()=>{setMode(item.value);setActive(null);setGrade(null);}} disabled={busy}><span>{item.label}</span><small>{item.description}</small></button>)}</div>
+        {error?<div className="tutor-alert"><strong>Couldn’t continue</strong><span>{error}</span></div>:null}
 
-        {error ? <div className="tutor-alert"><strong>Couldn’t continue</strong><span>{error}</span></div> : null}
+        {!active?<div className="tutor-welcome-card"><div className="tutor-orb"><BrandMark/></div><span className="workspace-eyebrow">{profile?.expertise_label||"Private learning space"}</span><h2>{profile?`V-SPACE knows your ${profile.module.title} workspace`:selectedModule?`Ready for ${selectedModule.title}`:"Tell me what you want to study"}</h2><p>{profile?.expert_ready?"Your course documents are the factual source. Your quiz history and mastery only decide how I teach you, what I emphasize, and how difficult the next session should be.":"Private Tutor uses the same trusted Document Brain that powers V-SPACE. Add or select course material to turn it from a general helper into a course-aware tutor."}</p>
+          {profile?<div className="tutor-course-dashboard">
+            <div className="tutor-course-stats"><div><span>Grounded sources</span><strong>{profile.counts.documents}</strong><small>{profile.counts.lectures} lectures</small></div><div><span>Overall mastery</span><strong>{profile.overall_mastery===null?"—":`${profile.overall_mastery}%`}</strong><small>{profile.counts.mastery_topics} tracked topics</small></div><div><span>Study streak</span><strong>{profile.study_streak_days}</strong><small>days · {profile.study_days_last_30} active in 30d</small></div><div><span>Tutor history</span><strong>{profile.counts.sessions}</strong><small>{profile.counts.graded_quizzes} graded quizzes</small></div></div>
+            {profile.weak_topics.length?<div className="tutor-profile-topics"><div><span className="workspace-eyebrow">Needs attention</span><strong>Weakest tracked topics</strong></div><div>{profile.weak_topics.slice(0,4).map(item=><span key={item.id}><strong>{item.topic}</strong><small>{item.mastery_score}% mastery</small></span>)}</div></div>:<div className="tutor-profile-topics empty"><div><span className="workspace-eyebrow">Personalization</span><strong>No weak topics tracked yet</strong><p>Take an adaptive quiz and V-SPACE will start building your course mastery map.</p></div></div>}
+            {profile.upcoming_assessment?<div className="tutor-assessment-callout"><Icon name="calendar"/><div><span>Upcoming {profile.upcoming_assessment.type}</span><strong>{profile.upcoming_assessment.title}</strong><small>{profile.upcoming_assessment.days_until===0?"Today":`In ${profile.upcoming_assessment.days_until} day${profile.upcoming_assessment.days_until===1?"":"s"}`}</small></div></div>:null}
+            <div className="tutor-next-action"><div><span className="workspace-eyebrow">V-SPACE recommends</span><strong>{profile.recommendation.title}</strong><p>{profile.recommendation.reason}</p></div><div className="tutor-next-action-buttons">{profile.recommendation.action==="start_session"?<button type="button" className="primary-button" onClick={()=>applyRecommendation(profile)} disabled={busy}><Icon name="spark"/>Set up this session</button>:<a className="primary-button" href="/modules"><Icon name="documents"/>Add course material</a>}{profile.last_session?<button type="button" className="secondary-button" onClick={()=>continueMutation.mutate(profile.last_session!.id)} disabled={busy}>{continueMutation.isPending?"Opening…":"Continue where I stopped"}</button>:null}</div></div>
+          </div>:null}
+          {quizHistory.length?<div className="tutor-progress-snapshot"><strong>Recent quiz progress</strong><div>{quizHistory.slice(0,6).reverse().map(item=><span key={item.id} title={formatTime(item.created_at)} style={{height:`${Math.max(18,item.score.percentage||0)}%`}}/>)}</div><small>Latest {quizHistory[0]?.score.percentage ?? 0}%</small></div>:null}
+        </div>:<article className="tutor-session-card">
+          <header className="tutor-session-header"><div><span className="workspace-eyebrow">{modeLabel(active.mode)} · {active.difficulty}</span><h2>{active.content.title}</h2><p>{active.module_title}{active.lecture_title?` · ${active.lecture_title}`:""}{active.topic?` · ${active.topic}`:""}</p></div><span className="tutor-grounded-badge"><Icon name="shield"/>{active.sources.length} source{active.sources.length===1?"":"s"}</span></header>
 
-        {!active ? <div className="tutor-welcome-card"><div className="tutor-orb"><BrandMark/></div><span className="workspace-eyebrow">Private learning space</span><h2>{selectedModule ? `Ready for ${selectedModule.title}` : "Choose your material and start learning"}</h2><p>Private Tutor uses the same trusted Document Brain that powers V-SPACE. Pick a learning mode, select your module, and study from evidence you already own.</p><div className="tutor-capability-grid"><div><Icon name="documents"/><strong>Grounded</strong><span>Uses your linked module and lecture documents.</span></div><div><Icon name="spark"/><strong>Adaptive</strong><span>Choose beginner, intermediate, or advanced depth.</span></div><div><Icon name="check"/><strong>Measurable</strong><span>Quiz grading identifies exactly what to revise next.</span></div></div></div> : <article className="tutor-session-card">
-          <header className="tutor-session-header"><div><span className="workspace-eyebrow">{modeMeta.find(item => item.value === active.mode)?.label} · {active.difficulty}</span><h2>{active.content.title}</h2><p>{active.module_title}{active.lecture_title ? ` · ${active.lecture_title}` : ""}{active.topic ? ` · ${active.topic}` : ""}</p></div><span className="tutor-grounded-badge"><Icon name="shield"/>{active.sources.length} source{active.sources.length === 1 ? "" : "s"}</span></header>
+          {thread.length>1?<div className="tutor-thread-strip"><span>Conversation</span>{thread.map((item,index)=><button type="button" className={item.id===active.id?"active":""} onClick={()=>activate(item)} key={item.id}>{index+1}<small>{modeLabel(item.mode)}</small></button>)}</div>:null}
 
-          {active.mode === "explain" || active.mode === "summarize" ? <div className="tutor-learning-content"><TutorMarkdown value={active.content.body_markdown || ""}/>{active.content.key_points?.length ? <section className="tutor-key-points"><h3>Key points</h3>{active.content.key_points.map((point,index) => <div key={index}><span>{index+1}</span><p>{point.text}</p><SourceChips ids={point.source_ids} sources={active.sources}/></div>)}</section> : null}{active.content.check_questions?.length ? <section className="tutor-self-check"><h3>Quick self-check</h3>{active.content.check_questions.map((question,index) => <div key={index}><span>Q{index+1}</span><p>{question}</p></div>)}</section> : null}</div> : null}
+          {(active.mode==="explain"||active.mode==="summarize")?<div className="tutor-learning-content"><TutorMarkdown value={active.content.body_markdown||""}/>{active.content.key_points?.length?<section className="tutor-key-points"><h3>Key points</h3>{active.content.key_points.map((point,index)=><div key={index}><span>{index+1}</span><p>{point.text}</p><SourceChips ids={point.source_ids} sources={active.sources}/></div>)}</section>:null}{active.content.check_questions?.length?<section className="tutor-self-check"><h3>Quick self-check</h3>{active.content.check_questions.map((question,index)=><div key={index}><span>Q{index+1}</span><p>{question}</p></div>)}</section>:null}</div>:null}
 
-          {active.mode === "quiz" ? <div className="tutor-quiz"><p className="tutor-session-intro">{active.content.instructions}</p>{active.content.questions?.map((question,index) => {
-            const result = grade?.results.find(item => item.id === question.id);
-            return <fieldset className={`tutor-question ${result ? result.correct ? "correct" : "incorrect" : ""}`} key={question.id}><legend><span>Question {index+1}</span>{question.topic ? <em>{question.topic}</em> : null}</legend><h3>{question.prompt}</h3><div className="tutor-options">{question.options?.map((option,optionIndex) => <label key={optionIndex} className={result && optionIndex === result.correct_index ? "correct-option" : result && optionIndex === result.selected_index && !result.correct ? "wrong-option" : ""}><input type="radio" name={`question-${question.id}`} disabled={Boolean(grade)} checked={answers[question.id] === optionIndex} onChange={() => setAnswers(current => ({...current,[question.id]:optionIndex}))}/><span>{String.fromCharCode(65+optionIndex)}</span><p>{option}</p></label>)}</div>{result ? <div className="tutor-answer-review"><strong>{result.correct ? "Correct" : `Correct answer: ${result.correct_answer}`}</strong><p>{result.explanation}</p><SourceChips ids={result.source_ids} sources={active.sources}/></div> : null}</fieldset>;
-          })}{!grade ? <button type="button" className="primary-button tutor-grade-button" disabled={busy || Object.keys(answers).length === 0} onClick={() => gradeMutation.mutate()}>{gradeMutation.isPending ? "Checking answers…" : "Check my answers"}</button> : <div className="tutor-grade-summary"><ScoreRing percentage={grade.percentage}/><div><span className="workspace-eyebrow">Your result</span><h3>{grade.correct} of {grade.total} correct</h3><p>{grade.percentage >= 80 ? "Strong work. You understand most of this material." : grade.percentage >= 60 ? "Good foundation. A short targeted review will help." : "This topic needs another pass. Focus on the weak areas below."}</p>{grade.weak_areas.length ? <div className="tutor-weak-areas"><strong>Review next</strong>{grade.weak_areas.map(item => <span key={item}>{item}</span>)}</div> : null}{plannerPrompt ? <a className="secondary-button tutor-plan-revision" href={`/planner?prompt=${encodeURIComponent(plannerPrompt)}`}><Icon name="calendar"/> Plan revision</a> : null}</div></div>}</div> : null}
+          {active.mode==="quiz"?<div className="tutor-quiz"><p className="tutor-session-intro">{active.content.instructions}</p>{active.content.questions?.map((question,index)=>{const result=grade?.results.find(item=>item.id===question.id);return <fieldset className={`tutor-question ${result?result.correct?"correct":"incorrect":""}`} key={question.id}><legend><span>Question {index+1}</span>{question.topic?<em>{question.topic}</em>:null}</legend><h3>{question.prompt}</h3><div className="tutor-options">{question.options?.map((option,optionIndex)=><label key={optionIndex} className={result&&optionIndex===result.correct_index?"correct-option":result&&optionIndex===result.selected_index&&!result.correct?"wrong-option":""}><input type="radio" name={`question-${question.id}`} disabled={Boolean(grade)} checked={answers[question.id]===optionIndex} onChange={()=>setAnswers(current=>({...current,[question.id]:optionIndex}))}/><span>{String.fromCharCode(65+optionIndex)}</span><p>{option}</p></label>)}</div>{result?<div className="tutor-answer-review"><strong>{result.correct?"Correct":`Correct answer: ${result.correct_answer}`}</strong><p>{result.explanation}</p><SourceChips ids={result.source_ids} sources={active.sources}/></div>:null}</fieldset>;})}{!grade?<button type="button" className="primary-button tutor-grade-button" disabled={busy||Object.keys(answers).length===0} onClick={()=>gradeMutation.mutate()}>{gradeMutation.isPending?"Checking answers…":"Check my answers"}</button>:<div className="tutor-grade-summary"><ScoreRing percentage={grade.percentage}/><div><span className="workspace-eyebrow">Your result</span><h3>{grade.correct} of {grade.total} correct</h3><p>{grade.percentage>=80?"Strong work. You understand most of this material.":grade.percentage>=60?"Good foundation. A short targeted review will help.":"This topic needs another pass. Focus on the weak areas below."}</p>{grade.weak_areas.length?<div className="tutor-weak-areas"><strong>Review next</strong>{grade.weak_areas.map(item=><span key={item}>{item}</span>)}</div>:null}<div className="tutor-post-quiz-actions">{grade.weak_areas.length?<button type="button" className="secondary-button" onClick={()=>reviewMutation.mutate()} disabled={busy}><Icon name="book"/>{reviewMutation.isPending?"Building review…":"Review mistakes"}</button>:null}<button type="button" className="secondary-button" onClick={()=>retryMutation.mutate()} disabled={busy}><Icon name="spark"/>{retryMutation.isPending?"Preparing quiz…":"Quiz again"}</button>{active.revision_plan?<a className="secondary-button" href={`/planner?prompt=${encodeURIComponent(active.revision_plan.prompt)}`}><Icon name="calendar"/>Plan {active.revision_plan.duration_minutes}m revision</a>:null}</div></div></div>}</div>:null}
 
-          {active.mode === "practice" ? <div className="tutor-practice">{active.content.questions?.map((question,index) => <article key={question.id} className="tutor-practice-card"><span>Practice {index+1}</span><h3>{question.prompt}</h3><SourceChips ids={question.source_ids} sources={active.sources}/><div className="tutor-reveal-actions"><button type="button" onClick={() => setRevealed(current => ({...current,[question.id]:"hint"}))}>Show hint</button><button type="button" onClick={() => setRevealed(current => ({...current,[question.id]:"solution"}))}>Show solution</button></div>{revealed[question.id] === "hint" ? <div className="tutor-reveal"><strong>Hint</strong><p>{question.hint || "Start from the definitions in your selected material."}</p></div> : null}{revealed[question.id] === "solution" ? <div className="tutor-reveal solution"><strong>Worked solution</strong><p>{question.solution}</p></div> : null}</article>)}</div> : null}
+          {active.mode==="practice"?<div className="tutor-practice">{active.content.questions?.map((question,index)=><article key={question.id} className="tutor-practice-card"><span>Practice {index+1}</span><h3>{question.prompt}</h3><SourceChips ids={question.source_ids} sources={active.sources}/><div className="tutor-reveal-actions"><button type="button" onClick={()=>setRevealed(current=>({...current,[question.id]:"hint"}))}>Show hint</button><button type="button" onClick={()=>setRevealed(current=>({...current,[question.id]:"solution"}))}>Show solution</button></div>{revealed[question.id]==="hint"?<div className="tutor-reveal"><strong>Hint</strong><p>{question.hint||"Start from the definitions in your selected material."}</p></div>:null}{revealed[question.id]==="solution"?<div className="tutor-reveal solution"><strong>Worked solution</strong><p>{question.solution}</p></div>:null}</article>)}</div>:null}
+          {active.mode==="flashcards"?<div className="tutor-flashcards">{active.content.cards?.map((card,index)=>{const flipped=revealed[card.id]==="back";return <button type="button" className={`tutor-flashcard ${flipped?"flipped":""}`} key={card.id} onClick={()=>setRevealed(current=>({...current,[card.id]:flipped?"hint":"back"}))}><span>Card {index+1}</span><strong>{flipped?card.back:card.front}</strong><small>{flipped?"Tap to see question":"Tap to reveal"}</small><SourceChips ids={card.source_ids} sources={active.sources}/></button>;})}</div>:null}
+          {active.mode!=="quiz"&&active.content.source_ids?<SourceChips ids={active.content.source_ids} sources={active.sources}/>:null}
 
-          {active.mode === "flashcards" ? <div className="tutor-flashcards">{active.content.cards?.map((card,index) => { const flipped = revealed[card.id] === "back"; return <button type="button" className={`tutor-flashcard ${flipped ? "flipped" : ""}`} key={card.id} onClick={() => setRevealed(current => ({...current,[card.id]:flipped ? "hint" : "back"}))}><span>Card {index+1}</span><strong>{flipped ? card.back : card.front}</strong><small>{flipped ? "Tap to see question" : "Tap to reveal"}</small><SourceChips ids={card.source_ids} sources={active.sources}/></button>; })}</div> : null}
+          <form className="tutor-follow-up" onSubmit={submitFollowUp}><div><span className="workspace-eyebrow">Continue learning</span><strong>Ask a follow-up</strong><p>Private Tutor keeps this conversation tied to the same module and trusted material.</p></div><div className="tutor-follow-up-composer"><textarea value={followUp} onChange={event=>setFollowUp(event.target.value)} rows={2} maxLength={1500} placeholder="Ask why, request another example, simplify it, compare concepts…" disabled={busy}/><button type="submit" className="primary-button" disabled={busy||!followUp.trim()}>{followMutation.isPending?"Thinking…":"Ask"}<Icon name="arrow"/></button></div></form>
 
-          {active.mode !== "quiz" && active.content.source_ids ? <SourceChips ids={active.content.source_ids} sources={active.sources}/> : null}
-
-          {active.sources.length ? <details className="tutor-sources"><summary><span><Icon name="documents"/><strong>Study sources</strong></span><small>{active.sources.length} grounded reference{active.sources.length === 1 ? "" : "s"}</small></summary><div>{active.sources.map(source => <article key={source.source_id}><span>S{source.source_id}</span><div><strong>{source.filename}</strong><small>{[source.page ? `Page ${source.page}` : null, source.section].filter(Boolean).join(" · ") || "Module material"}</small>{source.evidence ? <p>{source.evidence}</p> : null}</div></article>)}</div></details> : null}
+          {active.sources.length?<details className="tutor-sources"><summary><span><Icon name="documents"/><strong>Study sources</strong></span><small>{active.sources.length} grounded reference{active.sources.length===1?"":"s"}</small></summary><div>{active.sources.map(source=><article key={source.source_id}><span>S{source.source_id}</span><div><strong>{source.filename}</strong><small>{[source.page?`Page ${source.page}`:null,source.section].filter(Boolean).join(" · ")||"Module material"}</small>{source.evidence?<p>{source.evidence}</p>:null}</div></article>)}</div></details>:null}
         </article>}
       </main>
     </div>

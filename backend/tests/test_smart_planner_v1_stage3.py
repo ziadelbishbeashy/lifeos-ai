@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, time
 
 from database import db
 from models import Project, SmartPlannerPlan, Task
@@ -201,3 +201,93 @@ def test_natural_preview_does_not_create_manual_commitments(app, client, user):
     assert response.status_code == 200
     with app.app_context():
         assert SmartPlannerCommitment.query.filter_by(user_id=user).count() == 0
+
+
+def test_language_parser_handles_ambiguous_daytime_and_do_not_overload():
+    anchor = date(2026, 9, 12)
+    parsed = interpret_planner_request(
+        "Tomorrow I have university until 2, gym at 7, I need 3 hours on V-SPACE and calculus, but don't overload me.",
+        anchor_date=anchor,
+    )
+    assert parsed.start_date == date(2026, 9, 13)
+    assert parsed.mode == "day"
+    assert parsed.energy_mode == "light"
+    university = next(item for item in parsed.commitments if item.title == "University")
+    assert university.start_time is None
+    assert university.end_time.hour == 14
+    gym = next(item for item in parsed.commitments if item.title == "Gym")
+    assert gym.start_time.hour == 19
+    assert gym.end_time.hour == 20
+    assert gym.commitment_type == "personal"
+    assert sum(item.minutes for item in parsed.focus_requests) == 180
+
+
+def test_natural_preview_respects_university_until_two_without_meridiem(app, client, user):
+    with app.app_context():
+        project_id = _workspace(user, many=True)
+    _login(client)
+    tomorrow = date.today() + timedelta(days=1)
+    response = client.post(
+        "/api/v1/planner/natural-preview",
+        json={
+            "mode": "day",
+            "working_start": "09:00",
+            "working_end": "21:00",
+            "break_minutes": 15,
+            "project_id": project_id,
+            "request_text": "Tomorrow I have university until 2, gym at 7, I need 3 hours on V-SPACE and calculus, but don't overload me.",
+        },
+    )
+    assert response.status_code == 200, response.get_json()
+    preview = response.get_json()["preview"]
+    assert preview["start_date"] == tomorrow.isoformat()
+    assert preview["energy_mode"] == "light"
+    assert preview["title"].startswith("Tomorrow plan")
+    blocks = preview["days"][0]["blocks"]
+    university = next(item for item in blocks if item["block_type"] == "inferred_commitment" and item["title"] == "University")
+    assert university["start_time"] == "09:00"
+    assert university["end_time"] == "14:00"
+    gym = next(item for item in blocks if item["block_type"] == "inferred_commitment" and item["title"] == "Gym")
+    assert gym["start_time"] == "19:00"
+    assert gym["end_time"] == "20:00"
+    assert all(item["start_time"] >= "14:00" for item in blocks if item["block_type"] != "inferred_commitment")
+    assert preview["overload_minutes"] == 0
+    assert preview["deferred_minutes"] > 0
+
+
+def test_language_parser_understands_spoken_dayparts_and_flags_risky_ambiguity():
+    anchor = date(2026, 9, 12)
+    parsed = interpret_planner_request(
+        "Tomorrow I have class from 9 in the morning to 2 in the afternoon, then a meeting at 10 at night.",
+        anchor_date=anchor,
+    )
+    class_block = next(item for item in parsed.commitments if item.title == "Class")
+    meeting = next(item for item in parsed.commitments if item.title == "Meeting")
+    assert class_block.start_time.hour == 9
+    assert class_block.end_time.hour == 14
+    assert meeting.start_time.hour == 22
+    assert any("9:00 AM" in note and "2:00 PM" in note for note in parsed.assumptions)
+
+    ambiguous = interpret_planner_request("Tomorrow I have gym at 10.", anchor_date=anchor)
+    assert ambiguous.commitments == ()
+    assert ambiguous.clarifications
+    assert "10:00 AM" in ambiguous.clarifications[0]
+    assert "10:00 PM" in ambiguous.clarifications[0]
+
+    personalized = interpret_planner_request(
+        "Tomorrow I have gym at 10.",
+        anchor_date=anchor,
+        known_activity_times={"gym": time(19, 0)},
+    )
+    gym = next(item for item in personalized.commitments if item.title == "Gym")
+    assert gym.start_time.hour == 22
+    assert not personalized.clarifications
+
+    with_duration = interpret_planner_request(
+        "Tomorrow I have gym at 10 at night.",
+        anchor_date=anchor,
+        known_activity_times={"gym": {"start_time": time(19, 0), "duration_minutes": 90}},
+    )
+    gym = next(item for item in with_duration.commitments if item.title == "Gym")
+    assert gym.start_time.hour == 22
+    assert gym.end_time.hour == 23 and gym.end_time.minute == 30

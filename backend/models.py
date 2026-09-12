@@ -15,7 +15,8 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Unicode(120), nullable=False)
     email = db.Column(db.Unicode(255), nullable=False, unique=True)
-    password_hash = db.Column(db.Unicode(255), nullable=False)
+    password_hash = db.Column(db.Unicode(255), nullable=True)
+    email_verified_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(
         db.DateTime,
         nullable=False,
@@ -144,6 +145,14 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
     )
 
+    personalization_profile = db.relationship(
+        "UserPersonalizationProfile",
+        back_populates="user",
+        uselist=False,
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     module_questions = db.relationship(
         "ModuleQuestion",
         back_populates="user",
@@ -156,16 +165,113 @@ class User(UserMixin, db.Model):
         back_populates="user",
         lazy=True,
         cascade="all, delete-orphan",
+        foreign_keys="PrivateTutorSession.user_id",
     )
+
+    private_tutor_mastery = db.relationship(
+        "PrivateTutorMastery",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    auth_identities = db.relationship(
+        "UserAuthIdentity",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+    auth_tokens = db.relationship(
+        "UserAuthToken",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+    auth_sessions = db.relationship(
+        "UserAuthSession",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def has_password(self):
+        return bool(self.password_hash)
+
+    @property
+    def email_verified(self):
+        return self.email_verified_at is not None
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        return bool(self.password_hash) and check_password_hash(self.password_hash, password)
 
     def __repr__(self):
         return f"<User {self.email}>"
+
+
+class UserAuthIdentity(db.Model):
+    __tablename__ = "user_auth_identities"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider = db.Column(db.Unicode(32), nullable=False)
+    provider_subject = db.Column(db.Unicode(255), nullable=False)
+    provider_email = db.Column(db.Unicode(320), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship("User", back_populates="auth_identities")
+
+    __table_args__ = (
+        db.UniqueConstraint("provider", "provider_subject", name="uq_user_auth_identities_provider_subject"),
+        db.UniqueConstraint("user_id", "provider", name="uq_user_auth_identities_user_provider"),
+    )
+
+
+class UserAuthToken(db.Model):
+    __tablename__ = "user_auth_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    purpose = db.Column(db.Unicode(32), nullable=False, index=True)
+    token_hash = db.Column(db.Unicode(64), nullable=False, unique=True, index=True)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    used_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = db.relationship("User", back_populates="auth_tokens")
+
+
+class UserAuthSession(db.Model):
+    __tablename__ = "user_auth_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = db.Column(db.Unicode(64), nullable=False, unique=True, index=True)
+    auth_method = db.Column(db.Unicode(24), nullable=False, default="password")
+    remember = db.Column(db.Boolean, nullable=False, default=False)
+    user_agent = db.Column(db.Unicode(320), nullable=True)
+    ip_hash = db.Column(db.Unicode(64), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    revoked_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    user = db.relationship("User", back_populates="auth_sessions")
+
+
+class AuthRateLimitBucket(db.Model):
+    __tablename__ = "auth_rate_limit_buckets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    bucket_key = db.Column(db.Unicode(96), nullable=False, unique=True, index=True)
+    window_started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    blocked_until = db.Column(db.DateTime, nullable=True, index=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class UserExperienceProfile(db.Model):
@@ -200,6 +306,56 @@ class UserExperienceProfile(db.Model):
 
     def set_enabled_experiences(self, values):
         self.enabled_experiences_json = json.dumps(list(values or []))
+
+
+class UserPersonalizationProfile(db.Model):
+    __tablename__ = "user_personalization_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    onboarding_state = db.Column(db.Unicode(24), nullable=False, default="deferred", index=True)
+
+    usual_wake_time = db.Column(db.Time, nullable=True)
+    usual_sleep_time = db.Column(db.Time, nullable=True)
+    productive_period = db.Column(db.Unicode(24), nullable=True)
+    preferred_focus_minutes = db.Column(db.Integer, nullable=True)
+    preferred_break_minutes = db.Column(db.Integer, nullable=True)
+    planning_intensity = db.Column(db.Unicode(24), nullable=True)
+    workday_start = db.Column(db.Time, nullable=True)
+    workday_end = db.Column(db.Time, nullable=True)
+    avoid_after_time = db.Column(db.Time, nullable=True)
+    regular_commitments_json = db.Column(db.UnicodeText, nullable=False, default="[]")
+    priorities_json = db.Column(db.UnicodeText, nullable=False, default="[]")
+    overload_behavior = db.Column(db.Unicode(40), nullable=True)
+
+    data_use_notice_version = db.Column(db.Unicode(16), nullable=True)
+    data_use_acknowledged_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    deferred_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship("User", back_populates="personalization_profile")
+
+    def regular_commitments(self):
+        try:
+            value = json.loads(self.regular_commitments_json or "[]")
+        except (TypeError, json.JSONDecodeError):
+            return []
+        return value if isinstance(value, list) else []
+
+    def set_regular_commitments(self, values):
+        self.regular_commitments_json = json.dumps(list(values or []), ensure_ascii=False)
+
+    def priorities(self):
+        try:
+            value = json.loads(self.priorities_json or "[]")
+        except (TypeError, json.JSONDecodeError):
+            return []
+        return [str(item) for item in value] if isinstance(value, list) else []
+
+    def set_priorities(self, values):
+        self.priorities_json = json.dumps(list(values or []), ensure_ascii=False)
 
 
 class Project(db.Model):
@@ -2786,6 +2942,11 @@ class PrivateTutorSession(db.Model):
     )
     mode = db.Column(db.Unicode(32), nullable=False, index=True)
     difficulty = db.Column(db.Unicode(24), nullable=False, default="intermediate")
+    conversation_key = db.Column(db.Unicode(64), nullable=True, index=True)
+    parent_session_id = db.Column(
+        db.Integer, db.ForeignKey("private_tutor_sessions.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
     topic = db.Column(db.Unicode(500), nullable=True)
     request_text = db.Column(db.UnicodeText, nullable=True)
     content_json = db.Column(db.UnicodeText, nullable=False, default="{}")
@@ -2802,9 +2963,10 @@ class PrivateTutorSession(db.Model):
         db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    user = db.relationship("User", back_populates="private_tutor_sessions")
+    user = db.relationship("User", back_populates="private_tutor_sessions", foreign_keys=[user_id])
     module = db.relationship("LearningModule")
     lecture = db.relationship("Lecture")
+    parent_session = db.relationship("PrivateTutorSession", remote_side=[id], foreign_keys=[parent_session_id])
 
     @staticmethod
     def _json(value, fallback):
@@ -2833,6 +2995,34 @@ class PrivateTutorSession(db.Model):
     def weak_areas(self) -> list:
         parsed = self._json(self.weak_areas_json, [])
         return parsed if isinstance(parsed, list) else []
+
+
+class PrivateTutorMastery(db.Model):
+    """Deterministic per-topic mastery accumulated from graded Tutor quizzes."""
+
+    __tablename__ = "private_tutor_mastery"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "module_id", "topic_key", name="uq_private_tutor_mastery_user_module_topic"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    module_id = db.Column(db.Integer, db.ForeignKey("learning_modules.id", ondelete="CASCADE"), nullable=False, index=True)
+    topic_key = db.Column(db.Unicode(180), nullable=False)
+    topic_label = db.Column(db.Unicode(180), nullable=False)
+    quiz_attempts = db.Column(db.Integer, nullable=False, default=0)
+    question_count = db.Column(db.Integer, nullable=False, default=0)
+    correct_count = db.Column(db.Integer, nullable=False, default=0)
+    mastery_score = db.Column(db.Integer, nullable=False, default=0, index=True)
+    best_percentage = db.Column(db.Integer, nullable=False, default=0)
+    last_percentage = db.Column(db.Integer, nullable=False, default=0)
+    last_session_id = db.Column(db.Integer, db.ForeignKey("private_tutor_sessions.id", ondelete="SET NULL"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+    user = db.relationship("User", back_populates="private_tutor_mastery")
+    module = db.relationship("LearningModule")
+    last_session = db.relationship("PrivateTutorSession", foreign_keys=[last_session_id])
 
 
 class LifeOSActionProposal(db.Model):

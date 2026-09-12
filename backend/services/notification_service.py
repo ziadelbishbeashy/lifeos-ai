@@ -263,7 +263,7 @@ def send_test_email(user):
             (
                 "Status",
                 [
-                    "SMTP connection succeeded.",
+                    "Sender transactional API delivery succeeded.",
                     "LifeOS can now send reminders, daily checkups, and analytics emails.",
                 ],
             )

@@ -52,11 +52,56 @@ export type ExperienceProfile = {
   available_experiences: ExperienceDefinition[];
 };
 
+
+export type PersonalizationSummary = {
+  onboarding_state: "not_started" | "deferred" | "completed";
+  completed: boolean;
+  deferred: boolean;
+  configured: boolean;
+  answered_count: number;
+  total_questions: number;
+  notice_version: string;
+};
+
+export type PersonalizationCommitment = {
+  key?: string;
+  title: string;
+  days: number[];
+  start_time: string;
+  end_time: string;
+  commitment_type: string;
+};
+
+export type PersonalizationProfile = PersonalizationSummary & {
+  usual_wake_time: string | null;
+  usual_sleep_time: string | null;
+  productive_period: string | null;
+  preferred_focus_minutes: number | null;
+  preferred_break_minutes: number | null;
+  planning_intensity: string | null;
+  workday_start: string | null;
+  workday_end: string | null;
+  avoid_after_time: string | null;
+  regular_commitments: PersonalizationCommitment[];
+  priorities: string[];
+  overload_behavior: string | null;
+  usage: Record<string, string[]>;
+  privacy: {
+    notice_version: string;
+    account_private: boolean;
+    web_search_excluded: boolean;
+    message: string;
+  };
+  updated_at: string | null;
+};
+
 export type User = {
   id: number;
   name: string;
   email: string;
+  email_verified: boolean;
   experience: ExperienceProfile;
+  personalization: PersonalizationSummary;
 };
 
 export type SessionState = {

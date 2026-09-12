@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type { AssessmentImportProposal, LearningModule } from "../../api/types";
 import { ApiError } from "../../api/client";
+import { TimePicker12h } from "../../components/TimePicker12h";
 import {
   confirmSelectedAssessmentImportProposals,
   dismissAssessmentImportProposal,
@@ -145,9 +146,9 @@ export function AcademicScheduleImportPanel({ modules, onClose }: { modules: Lea
             <label><span>Type</span><select value={payload.assessment_type} onChange={(event) => field(proposal.id, "assessment_type", event.target.value)}>{TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
             <label className="wide"><span>Title</span><input value={payload.title} onChange={(event) => draftField(proposal.id, "title", event.target.value)} onBlur={(event) => field(proposal.id, "title", event.target.value)} /></label>
             <label><span>Exam date</span><input type="date" value={payload.assessment_date || ""} onChange={(event) => field(proposal.id, "assessment_date", event.target.value)} /></label>
-            <label><span>Exam time</span><input type="time" value={payload.assessment_time || ""} onChange={(event) => field(proposal.id, "assessment_time", event.target.value)} /></label>
+            <label><span>Exam time</span><TimePicker12h value={payload.assessment_time || "09:00"} onChange={(value) => field(proposal.id, "assessment_time", value)} allowEmpty ariaLabel="Exam time" /></label>
             <label><span>Due date</span><input type="date" value={payload.due_date || ""} onChange={(event) => field(proposal.id, "due_date", event.target.value)} /></label>
-            <label><span>Due time</span><input type="time" value={payload.due_time || ""} onChange={(event) => field(proposal.id, "due_time", event.target.value)} /></label>
+            <label><span>Due time</span><TimePicker12h value={payload.due_time || "17:00"} onChange={(value) => field(proposal.id, "due_time", value)} allowEmpty ariaLabel="Due time" /></label>
             <label><span>Weight %</span><input type="number" min="0" max="100" step="0.01" value={payload.weight_percent ?? ""} onChange={(event) => draftField(proposal.id, "weight_percent", event.target.value)} onBlur={(event) => field(proposal.id, "weight_percent", event.target.value)} /></label>
             <label><span>Prep minutes</span><input type="number" min="0" value={payload.estimated_study_minutes ?? ""} onChange={(event) => draftField(proposal.id, "estimated_study_minutes", event.target.value)} onBlur={(event) => field(proposal.id, "estimated_study_minutes", event.target.value)} /></label>
             <label className="wide"><span>Topics</span><input value={payload.topics || ""} onChange={(event) => draftField(proposal.id, "topics", event.target.value)} onBlur={(event) => field(proposal.id, "topics", event.target.value)} placeholder="Only if stated, or add your own after review" /></label>

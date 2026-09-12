@@ -22,6 +22,17 @@ _PUBLIC_API_ROUTES = {
     ("routes.py", "get", "/session"),
     ("routes.py", "post", "/auth/login"),
     ("routes.py", "post", "/auth/register"),
+    # Authentication bootstrap/recovery routes are deliberately public. They
+    # either establish identity, recover access, verify an out-of-band token,
+    # or return non-sensitive client configuration. Keeping them in this
+    # explicit allowlist means any future public auth route remains a reviewed
+    # security decision.
+    ("auth_security.py", "get", "/config"),
+    ("auth_security.py", "post", "/forgot-password"),
+    ("auth_security.py", "post", "/reset-password"),
+    ("auth_security.py", "post", "/email-verification/confirm"),
+    ("auth_security.py", "post", "/google/start"),
+    ("auth_security.py", "get", "/google/callback"),
     ("experience.py", "get", "/options"),
 }
 _HTTP_METHOD_DECORATORS = {"get", "post", "put", "patch", "delete"}

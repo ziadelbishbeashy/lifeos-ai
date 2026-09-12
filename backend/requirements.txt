@@ -23,3 +23,7 @@ langsmith>=0.4.43,<1
 # Optional I19 orchestration. LifeOS keeps deterministic planning, tools, I9 and DB ownership.
 # LangGraph brings langchain-core transitively; no generic autonomous agent executor is used.
 langgraph>=1,<2
+
+# Authentication V1: Google OpenID Connect ID-token verification + token exchange transport.
+google-auth>=2,<3
+requests>=2,<3

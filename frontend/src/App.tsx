@@ -17,6 +17,9 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { FocusInsightsPage, FocusPage } from "./pages/FocusPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { MemoryPage } from "./pages/MemoryPage";
 import { ModulesPage } from "./pages/ModulesPage";
 import { ModuleDetailsPage } from "./pages/ModuleDetailsPage";
@@ -27,6 +30,7 @@ import { ProjectDetailsPage } from "./pages/ProjectDetailsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SmartPlannerPage } from "./pages/SmartPlannerPage";
 import { PrivateTutorPage } from "./pages/PrivateTutorPage";
+import { PersonalizationOnboardingModal } from "./components/PersonalizationProfile";
 import { RegisterPage } from "./pages/RegisterPage";
 import { TasksPage } from "./pages/TasksPage";
 
@@ -51,7 +55,10 @@ function PrivateArea({ active, children }: { active: NativeSection; children: Re
     return null;
   }
 
-  return <NativeWorkspaceShell user={session.data.user} active={active}>{children}</NativeWorkspaceShell>;
+  return <>
+    <NativeWorkspaceShell user={session.data.user} active={active}>{children}</NativeWorkspaceShell>
+    <PersonalizationOnboardingModal user={session.data.user} />
+  </>;
 }
 
 function NotFoundPage() {
@@ -69,6 +76,9 @@ export function App() {
   if (path === "/") return <LandingPage />;
   if (path === "/login") return <LoginPage />;
   if (path === "/register") return <RegisterPage />;
+  if (path === "/forgot-password") return <ForgotPasswordPage />;
+  if (path === "/reset-password") return <ResetPasswordPage />;
+  if (path === "/verify-email") return <VerifyEmailPage />;
   if (path === "/onboarding") return <ExperienceOnboardingPage />;
   if (path === "/settings") return <PrivateArea active="settings"><ExperienceSettingsPage /></PrivateArea>;
   if (path === "/tutor") return <PrivateArea active="tutor"><PrivateTutorPage /></PrivateArea>;

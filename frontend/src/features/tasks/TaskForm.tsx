@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { ProjectSummary, Task, TaskInput } from "../../api/types";
+import { TimePicker12h } from "../../components/TimePicker12h";
 
 const statuses = ["Pending", "In Progress", "Blocked", "Completed"];
 const importance = ["Low", "Medium", "High", "Critical"];
@@ -154,7 +155,7 @@ export function TaskForm({ projects, initial, forcedProjectId, submitLabel, busy
               ) : <div />}
               <label>
                 <span>Reminder time</span>
-                <input required type="time" value={form.reminder_time ?? "09:00"} onChange={(e) => update("reminder_time", e.target.value)} />
+                <TimePicker12h value={form.reminder_time ?? "09:00"} onChange={(value) => update("reminder_time", value)} ariaLabel="Reminder time" />
               </label>
             </div>
           ) : null}

@@ -18,8 +18,14 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
 from services.smart_planner_language_service import (
+    DEFAULT_POINT_COMMITMENT_MINUTES,
     PlannerLanguageInterpretation,
     interpret_planner_request,
+)
+from services.personalization_profile_service import (
+    planner_defaults_for_user,
+    profile_for_user,
+    recurring_commitments_for_range,
 )
 
 from models import (
@@ -131,8 +137,9 @@ def normalize_planner_config(payload: dict[str, Any] | None, *, owner_id: int) -
     start_date = _parse_date(raw.get("start_date"))
     horizon_days = _parse_horizon(raw, mode)
     end_date = start_date + timedelta(days=horizon_days - 1)
-    working_start = _parse_time(raw.get("working_start"), default=time(9, 0))
-    working_end = _parse_time(raw.get("working_end"), default=time(17, 0))
+    personalization_defaults = planner_defaults_for_user(int(owner_id))
+    working_start = _parse_time(raw.get("working_start"), default=time.fromisoformat(personalization_defaults["working_start"]))
+    working_end = _parse_time(raw.get("working_end"), default=time.fromisoformat(personalization_defaults["working_end"]))
     start_dt = datetime.combine(start_date, working_start)
     end_dt = datetime.combine(start_date, working_end)
     work_minutes = int((end_dt - start_dt).total_seconds() // 60)
@@ -142,7 +149,8 @@ def normalize_planner_config(payload: dict[str, Any] | None, *, owner_id: int) -
         raise SmartPlannerValidationError("Working hours cannot exceed 16 hours per day.")
 
     try:
-        break_minutes = int(raw.get("break_minutes", 15))
+        raw_break = raw.get("break_minutes")
+        break_minutes = int(personalization_defaults["break_minutes"] if raw_break in (None, "") else raw_break)
     except (TypeError, ValueError) as error:
         raise SmartPlannerValidationError("Break length must be a number of minutes.") from error
     if break_minutes < 0 or break_minutes > 60:
@@ -326,7 +334,9 @@ def _academic_commitments(*, owner_id: int, start_date: date, end_date: date) ->
 
 def fixed_commitments(*, owner_id: int, start_date: date, end_date: date) -> list[dict[str, Any]]:
     manual = [commitment_to_dict(item) for item in list_owned_commitments(owner_id=owner_id, start_date=start_date, end_date=end_date)]
-    return sorted(manual + _academic_commitments(owner_id=owner_id, start_date=start_date, end_date=end_date), key=lambda item: (item["date"], item["start_time"], str(item["id"])))
+    academic = _academic_commitments(owner_id=owner_id, start_date=start_date, end_date=end_date)
+    routine = recurring_commitments_for_range(owner_id=owner_id, start_date=start_date, end_date=end_date)
+    return sorted(manual + academic + routine, key=lambda item: (item["date"], item["start_time"], str(item["id"])))
 
 
 def _effective_deadline(task: Task) -> date | None:
@@ -361,7 +371,35 @@ def _request_match_bonus(task: Task, request_text: str | None) -> float:
     return min(40.0, matched * 10.0)
 
 
-def _task_score(task: Task, *, start_date: date, request_text: str | None = None) -> tuple[float, int, int]:
+def _profile_priority_bonus(task: Task, priority_keys: set[str] | None) -> float:
+    keys = set(priority_keys or set())
+    if not keys:
+        return 0.0
+    project = getattr(task, "project", None)
+    haystack = " ".join(
+        part for part in (
+            str(task.title or ""), str(task.description or ""), str(task.module or ""),
+            str(getattr(project, "title", "") or ""), str(task.tags or ""),
+        ) if part
+    ).casefold()
+    bonus = 0.0
+    if "university" in keys and (str(task.module or "").strip() or any(word in haystack for word in ("lecture", "exam", "quiz", "assignment", "study", "calculus"))):
+        bonus += 12.0
+    if "projects" in keys and getattr(task, "project_id", None):
+        bonus += 8.0
+    keyword_groups = {
+        "career": ("career", "resume", "cv", "interview", "application", "job"),
+        "fitness": ("gym", "workout", "training", "run", "fitness", "cardio"),
+        "business": ("business", "client", "marketing", "sales", "ecommerce", "launch"),
+        "personal_time": ("personal", "family", "rest", "home"),
+    }
+    for key, words in keyword_groups.items():
+        if key in keys and any(word in haystack for word in words):
+            bonus += 8.0
+    return min(bonus, 24.0)
+
+
+def _task_score(task: Task, *, start_date: date, request_text: str | None = None, priority_keys: set[str] | None = None) -> tuple[float, int, int]:
     importance = IMPORTANCE_WEIGHT.get(str(task.importance or "Medium"), 50)
     deadline = _effective_deadline(task)
     if deadline is None:
@@ -383,7 +421,7 @@ def _task_score(task: Task, *, start_date: date, request_text: str | None = None
             urgency = 25
     blocked_penalty = -35 if str(task.status or "").casefold() == "blocked" else 0
     stored = max(0.0, min(float(task.priority_score or 0), 100.0))
-    score = importance + urgency + stored * 0.35 + blocked_penalty + _request_match_bonus(task, request_text)
+    score = importance + urgency + stored * 0.35 + blocked_penalty + _request_match_bonus(task, request_text) + _profile_priority_bonus(task, priority_keys)
     return score, -days, -int(task.id)
 
 
@@ -471,6 +509,89 @@ def _find_slot(*, day: date, minutes: int, window_start: time, window_end: time,
     if cursor + timedelta(minutes=minutes) <= limit:
         return cursor
     return None
+
+
+def _productive_period_window(period: str | None) -> tuple[time, time] | None:
+    """Translate a saved productivity preference into a deterministic clock window.
+
+    This intentionally lives in the scheduler as a defensive fallback. The
+    personalization service also exposes preferred_window_start/end, but the
+    scheduler must not lose the placement preference if an older/partial
+    profile payload omits those derived fields.
+    """
+    normalized = str(period or "").strip().casefold()
+    windows = {
+        "morning": (time(8, 0), time(12, 0)),
+        "afternoon": (time(12, 0), time(17, 0)),
+        "evening": (time(17, 0), time(22, 0)),
+        "late_night": (time(20, 0), time(23, 59)),
+    }
+    return windows.get(normalized)
+
+
+def _preferred_window_for_day(*, day: date, config: PlannerConfig, start_text: str | None, end_text: str | None) -> tuple[time, time] | None:
+    if not start_text or not end_text:
+        return None
+    try:
+        preferred_start = time.fromisoformat(str(start_text))
+        preferred_end = time.fromisoformat(str(end_text))
+    except ValueError:
+        return None
+    left = max(config.working_start, preferred_start)
+    right = min(config.working_end, preferred_end)
+    return (left, right) if right > left else None
+
+
+def _find_slot_with_preference(*, day: date, minutes: int, config: PlannerConfig, busy: list[tuple[datetime, datetime]], preferred: tuple[time, time] | None) -> tuple[datetime | None, bool]:
+    if preferred is not None:
+        start_dt = _find_slot(
+            day=day, minutes=minutes, window_start=preferred[0], window_end=preferred[1],
+            busy=busy, break_minutes=config.break_minutes,
+        )
+        if start_dt is not None:
+            return start_dt, True
+    return _find_slot(
+        day=day, minutes=minutes, window_start=config.working_start, window_end=config.working_end,
+        busy=busy, break_minutes=config.break_minutes,
+    ), False
+
+
+def _human_time(value: str | time | None) -> str:
+    if value is None:
+        return ""
+    parsed = value if isinstance(value, time) else time.fromisoformat(str(value))
+    hour = parsed.hour % 12 or 12
+    return f"{hour}:{parsed.minute:02d} {'PM' if parsed.hour >= 12 else 'AM'}"
+
+
+def _known_activity_times(owner_id: int) -> dict[str, Any]:
+    """Return saved routine timing hints for interpreting ambiguous point times.
+
+    The parser may use the saved AM/PM tendency and normal duration, but the
+    explicit hour in the current request always wins. This keeps the priority
+    order request > profile > defaults.
+    """
+    profile = profile_for_user(int(owner_id))
+    if profile is None:
+        return {}
+    result: dict[str, Any] = {}
+    for rule in profile.regular_commitments():
+        try:
+            start_at = time.fromisoformat(str(rule.get("start_time") or ""))
+            end_at = time.fromisoformat(str(rule.get("end_time") or ""))
+        except ValueError:
+            continue
+        duration = max(5, _minutes_between(date.today(), start_at, end_at)) if end_at > start_at else DEFAULT_POINT_COMMITMENT_MINUTES
+        hint = {"start_time": start_at, "duration_minutes": duration}
+        title = " ".join(str(rule.get("title") or "").casefold().split())
+        kind = str(rule.get("commitment_type") or "").casefold().strip()
+        if title:
+            result[title] = hint
+        if kind:
+            result[kind] = hint
+            if kind == "gym":
+                result["workout"] = hint
+    return result
 
 
 def _query_candidate_tasks(*, owner_id: int, project_id: int | None, candidate_task_ids: set[int] | None, exclude_task_ids: set[int]) -> list[Task]:
@@ -598,7 +719,7 @@ def build_smart_plan_preview(
     _rebalanced_from_plan_id: int | None = None,
     _temporary_commitments: list[dict[str, Any]] | None = None,
     _focus_requests: list[dict[str, Any]] | None = None,
-    _energy_mode: str = "normal",
+    _energy_mode: str | None = None,
     _interpretation: dict[str, Any] | None = None,
     _not_before_by_day: dict[date, time] | None = None,
 ) -> dict[str, Any]:
@@ -611,15 +732,35 @@ def build_smart_plan_preview(
     exclude_task_ids = set(_exclude_task_ids or set())
     exclude_task_ids.update(int(block.task_id) for block in preserved_blocks if block.task_id is not None)
 
+    personalization_defaults = planner_defaults_for_user(int(owner_id))
+    profile_priority_keys = set(str(item) for item in (personalization_defaults.get("priorities") or []))
     tasks = _query_candidate_tasks(
         owner_id=owner_id,
         project_id=config.project_id,
         candidate_task_ids=_candidate_task_ids,
         exclude_task_ids=exclude_task_ids,
     )
-    tasks = sorted(tasks, key=lambda task: _task_score(task, start_date=range_start, request_text=config.request_text), reverse=True)
+    tasks = sorted(
+        tasks,
+        key=lambda task: _task_score(task, start_date=range_start, request_text=config.request_text, priority_keys=profile_priority_keys),
+        reverse=True,
+    )
 
     commitments = fixed_commitments(owner_id=owner_id, start_date=range_start, end_date=range_end)
+    temporary = list(_temporary_commitments or [])[:8]
+    if temporary:
+        explicit_keys = {
+            (str(item.get("date") or ""), " ".join(str(item.get("title") or "").casefold().split()))
+            for item in temporary
+            if item.get("date") and item.get("title")
+        }
+        commitments = [
+            item for item in commitments
+            if not (
+                item.get("source") == "profile"
+                and (str(item.get("date") or ""), " ".join(str(item.get("title") or "").casefold().split())) in explicit_keys
+            )
+        ]
     commitments_by_day: dict[date, list[dict[str, Any]]] = {day: [] for day in dates}
     busy_by_day: dict[date, list[tuple[datetime, datetime]]] = {day: [] for day in dates}
     for item in commitments:
@@ -664,7 +805,7 @@ def build_smart_plan_preview(
     # High-confidence time constraints extracted from natural language remain
     # plan-local, locked blocks. They are never copied into recurring workspace
     # commitments and only persist after the normal I9 confirmation boundary.
-    for item in list(_temporary_commitments or [])[:8]:
+    for item in temporary:
         try:
             day = date.fromisoformat(str(item.get("date")))
             end_at = time.fromisoformat(str(item.get("end_time")))
@@ -702,12 +843,39 @@ def build_smart_plan_preview(
         for day in dates
     }
     raw_free_capacity = sum(daily_capacity.values())
-    energy_mode = str(_energy_mode or "normal").strip().casefold()
+    energy_mode = str(_energy_mode or personalization_defaults.get("energy_mode") or "normal").strip().casefold()
     if energy_mode not in {"light", "normal", "intense"}:
         energy_mode = "normal"
+    profile_capacity_factor = float(personalization_defaults.get("capacity_factor") or 1.0)
+    if _energy_mode == "light":
+        capacity_factor = LIGHT_DAY_CAPACITY_FACTOR
+    elif _energy_mode == "intense":
+        capacity_factor = 1.0
+    else:
+        capacity_factor = max(0.5, min(profile_capacity_factor, 1.0))
     energy_target_minutes = raw_free_capacity
-    if energy_mode == "light":
-        energy_target_minutes = max(30, int(raw_free_capacity * LIGHT_DAY_CAPACITY_FACTOR) // 5 * 5)
+    if capacity_factor < 0.999:
+        energy_target_minutes = max(30, int(raw_free_capacity * capacity_factor) // 5 * 5)
+    preferred_focus_minutes = max(25, min(int(personalization_defaults.get("preferred_focus_minutes") or 60), MAX_FOCUS_CHUNK_MINUTES))
+    productive_period = str(personalization_defaults.get("productive_period") or "").strip() or None
+    derived_productive_window = _productive_period_window(productive_period)
+    preferred_start_text = personalization_defaults.get("preferred_window_start")
+    preferred_end_text = personalization_defaults.get("preferred_window_end")
+    if derived_productive_window is not None:
+        # Defensive scheduler-level derivation: a saved productive period must
+        # influence placement even when the derived string fields are absent or
+        # stale. Explicit request working hours still clip this window below.
+        if not preferred_start_text:
+            preferred_start_text = derived_productive_window[0].strftime("%H:%M")
+        if not preferred_end_text:
+            preferred_end_text = derived_productive_window[1].strftime("%H:%M")
+    preferred_windows = {
+        day: _preferred_window_for_day(
+            day=day, config=config,
+            start_text=preferred_start_text,
+            end_text=preferred_end_text,
+        ) for day in dates
+    }
 
     scheduled_minutes = preserved_work_minutes
     focus_scheduled_minutes = 0
@@ -723,18 +891,14 @@ def build_smart_plan_preview(
             continue
         remaining = requested_minutes
         while remaining > 0:
-            desired = min(MAX_FOCUS_CHUNK_MINUTES, remaining)
+            desired = min(preferred_focus_minutes, MAX_FOCUS_CHUNK_MINUTES, remaining)
             placed = False
             chunk = desired
             while chunk >= MIN_FOCUS_CHUNK_MINUTES and not placed:
                 for day in dates:
-                    start_dt = _find_slot(
-                        day=day,
-                        minutes=chunk,
-                        window_start=config.working_start,
-                        window_end=config.working_end,
-                        busy=busy_by_day[day],
-                        break_minutes=config.break_minutes,
+                    start_dt, used_preferred_window = _find_slot_with_preference(
+                        day=day, minutes=chunk, config=config, busy=busy_by_day[day],
+                        preferred=preferred_windows.get(day),
                     )
                     if start_dt is None:
                         continue
@@ -746,7 +910,10 @@ def build_smart_plan_preview(
                         minutes=chunk,
                         sort_order=sort_order,
                         block_type="focus",
-                        rationale="Explicit focus time requested in your natural-language plan.",
+                        rationale=(
+                            "Explicit focus time requested in your natural-language plan."
+                            + (f" Placed near your {productive_period.replace('_', ' ')} focus preference." if used_preferred_window and productive_period and productive_period != "varies" else "")
+                        ),
                         locked=False,
                         importance="High",
                     )
@@ -776,11 +943,11 @@ def build_smart_plan_preview(
 
     task_minutes_total = sum(_estimate_minutes(task) for task in tasks)
     total_candidate_minutes = preserved_work_minutes + sum(max(0, int(item.get("minutes") or 0)) for item in list(_focus_requests or [])[:8]) + task_minutes_total
-    task_budget_limit = energy_target_minutes if energy_mode == "light" else raw_free_capacity
+    task_budget_limit = energy_target_minutes if capacity_factor < 0.999 else raw_free_capacity
 
     for task in tasks:
         minutes = _estimate_minutes(task)
-        if energy_mode == "light" and (scheduled_minutes - preserved_work_minutes) + minutes > task_budget_limit:
+        if capacity_factor < 0.999 and (scheduled_minutes - preserved_work_minutes) + minutes > task_budget_limit:
             project = getattr(task, "project", None)
             deadline = _effective_deadline(task)
             unscheduled.append({
@@ -791,24 +958,27 @@ def build_smart_plan_preview(
                 "project_title": str(project.title) if project else None,
                 "importance": str(task.importance or "Medium"),
                 "deadline": deadline.isoformat() if deadline else None,
-                "reason": "Light-day mode intentionally reserves recovery space instead of filling every available minute.",
-                "source": "workspace_task",
+                "reason": (
+                    "Light-day mode intentionally reserves recovery space instead of filling every available minute."
+                    if energy_mode == "light"
+                    else "Your planning-capacity preference intentionally leaves breathing room instead of filling every available minute."
+                ),
+                "source": "capacity_preference",
             })
             continue
         placed = False
         for day in dates:
-            start_dt = _find_slot(
-                day=day,
-                minutes=minutes,
-                window_start=config.working_start,
-                window_end=config.working_end,
-                busy=busy_by_day[day],
-                break_minutes=config.break_minutes,
+            start_dt, used_preferred_window = _find_slot_with_preference(
+                day=day, minutes=minutes, config=config, busy=busy_by_day[day],
+                preferred=preferred_windows.get(day),
             )
             if start_dt is None:
                 continue
             sort_order += 1
             block = _serialize_block(task=task, day=day, start_dt=start_dt, minutes=minutes, sort_order=sort_order, anchor_date=range_start)
+            if used_preferred_window and productive_period and productive_period != "varies":
+                existing_rationale = str(block.get("rationale") or "").rstrip(".")
+                block["rationale"] = f"{existing_rationale}. Placed near your {productive_period.replace('_', ' ')} focus preference."
             day_blocks[day].append(block)
             scheduled_minutes += minutes
             busy_by_day[day].append((start_dt, start_dt + timedelta(minutes=minutes + config.break_minutes)))
@@ -831,7 +1001,7 @@ def build_smart_plan_preview(
 
     deferred_minutes = sum(
         int(item["minutes"]) for item in unscheduled
-        if "Light-day mode" in str(item.get("reason") or "")
+        if item.get("source") == "capacity_preference"
     )
     overload_minutes = sum(int(item["minutes"]) for item in unscheduled) - deferred_minutes
     unscheduled_minutes = overload_minutes + deferred_minutes
@@ -864,10 +1034,10 @@ def build_smart_plan_preview(
 
     if not tasks and not preserved_work_blocks and not _focus_requests:
         summary = "There are no open tasks or requested focus blocks in the selected scope, so V-SPACE has nothing to schedule yet."
-    elif energy_mode == "light":
+    elif capacity_factor < 0.999:
         summary = (
-            f"V-SPACE built a lighter plan with {scheduled_minutes} minutes of focused work around "
-            f"{commitment_minutes_total} minutes of fixed time. Extra capacity is intentionally left open for recovery."
+            f"V-SPACE built a realistic plan with {scheduled_minutes} minutes of focused work around "
+            f"{commitment_minutes_total} minutes of fixed time. Some capacity is intentionally left open based on your planning preference."
         )
     elif overload_minutes:
         summary = (
@@ -881,7 +1051,13 @@ def build_smart_plan_preview(
         )
 
     if config.mode == "day":
-        title = "Today plan"
+        today = date.today()
+        if range_start == today:
+            title = "Today plan"
+        elif range_start == today + timedelta(days=1):
+            title = "Tomorrow plan"
+        else:
+            title = f"{range_start.strftime('%a %d %b')} plan"
     elif config.mode == "week":
         title = "Week plan"
     else:
@@ -892,7 +1068,51 @@ def build_smart_plan_preview(
             title = f"{title} · {project.title}"
 
     planned_new_work = max(scheduled_minutes - preserved_work_minutes, 0)
-    energy_reserve_minutes = max(raw_free_capacity - max(energy_target_minutes, planned_new_work), 0) if energy_mode == "light" else 0
+    energy_reserve_minutes = max(raw_free_capacity - max(energy_target_minutes, planned_new_work), 0) if capacity_factor < 0.999 else 0
+    overload_preference = str(personalization_defaults.get("overload_behavior") or "leave_unscheduled")
+    if overload_minutes:
+        if overload_preference == "ask":
+            summary += " Your profile says to ask before changing overloaded plans, so excess work is left unscheduled for your review."
+        elif overload_preference == "defer_low_priority":
+            summary += " Your profile prefers lower-priority work to remain for a later plan rather than crowd today."
+        elif overload_preference == "shorten_optional":
+            summary += " V-SPACE will not silently shorten explicit or fixed work; excess work stays unscheduled for review."
+
+    raw_payload = payload if isinstance(payload, dict) else {}
+    profile_sources = dict(personalization_defaults.get("sources") or {})
+    effective_sources = dict(profile_sources)
+    profile_start = str(personalization_defaults.get("working_start") or "09:00")
+    profile_end = str(personalization_defaults.get("working_end") or "17:00")
+    profile_break = int(personalization_defaults.get("break_minutes") or 15)
+    if raw_payload.get("working_start") not in (None, "") and config.working_start.strftime("%H:%M") != profile_start:
+        effective_sources["working_start"] = "request"
+    if raw_payload.get("working_end") not in (None, "") and config.working_end.strftime("%H:%M") != profile_end:
+        effective_sources["working_end"] = "request"
+    if raw_payload.get("break_minutes") not in (None, "") and int(config.break_minutes) != profile_break:
+        effective_sources["break_minutes"] = "request"
+    if _energy_mode is not None:
+        effective_sources["energy_mode"] = "request"
+
+    personalization_reasons = list(personalization_defaults.get("explanations") or [])
+    if profile_priority_keys:
+        labels = {"university": "university", "projects": "projects", "career": "career", "fitness": "fitness", "business": "business", "personal_time": "personal life"}
+        readable = ", ".join(labels.get(item, item.replace("_", " ")) for item in sorted(profile_priority_keys))
+        personalization_reasons.append(f"Task ranking gives a small preference to work that matches your selected priorities: {readable}.")
+    seen_profile_commitments: set[tuple[str, str, str, str]] = set()
+    for day in dates:
+        for item in commitments_by_day.get(day, []):
+            if item.get("source") != "profile":
+                continue
+            key = (str(item.get("title") or ""), str(item.get("start_time") or ""), str(item.get("end_time") or ""), day.strftime("%A"))
+            if key in seen_profile_commitments:
+                continue
+            seen_profile_commitments.add(key)
+            personalization_reasons.append(
+                f"{item.get('title') or 'A regular commitment'} is protected on {day.strftime('%A')} from {_human_time(item.get('start_time'))} to {_human_time(item.get('end_time'))} from your V-SPACE Profile."
+            )
+    # Keep explanations concise and deterministic in the preview.
+    personalization_reasons = personalization_reasons[:10]
+
     return {
         "version": SMART_PLANNER_PAYLOAD_VERSION,
         "title": title,
@@ -906,7 +1126,7 @@ def build_smart_plan_preview(
         "project_id": config.project_id,
         "request_text": config.request_text,
         "summary": summary,
-        "available_minutes": (energy_target_minutes + preserved_work_minutes) if energy_mode == "light" else (raw_free_capacity + preserved_work_minutes),
+        "available_minutes": (energy_target_minutes + preserved_work_minutes) if capacity_factor < 0.999 else (raw_free_capacity + preserved_work_minutes),
         "scheduled_minutes": scheduled_minutes,
         "candidate_minutes": total_candidate_minutes,
         "commitment_minutes": commitment_minutes_total,
@@ -924,6 +1144,19 @@ def build_smart_plan_preview(
         "read_only": True,
         "verified_from_state": True,
         "confirmation_required": True,
+        "planning_defaults": {
+            "working_start": config.working_start.strftime("%H:%M"),
+            "working_end": config.working_end.strftime("%H:%M"),
+            "break_minutes": config.break_minutes,
+            "energy_mode": energy_mode,
+            "capacity_factor": capacity_factor,
+            "preferred_focus_minutes": preferred_focus_minutes,
+            "productive_period": productive_period,
+            "sources": effective_sources,
+            "profile_applied": any(value == "profile" for value in effective_sources.values()) or bool(personalization_reasons),
+            "overload_preference": overload_preference,
+            "reasons": personalization_reasons,
+        },
     }
 
 
@@ -932,7 +1165,13 @@ def build_natural_language_plan_preview(*, owner_id: int, payload: dict[str, Any
     request_text = " ".join(str(raw.get("request_text") or "").split())[:1200]
     if not request_text:
         raise SmartPlannerValidationError("Tell V-SPACE what you want to plan.")
-    interpretation: PlannerLanguageInterpretation = interpret_planner_request(request_text, anchor_date=date.today())
+    interpretation: PlannerLanguageInterpretation = interpret_planner_request(
+        request_text, anchor_date=date.today(), known_activity_times=_known_activity_times(owner_id)
+    )
+    if interpretation.clarifications:
+        raise SmartPlannerValidationError(
+            "I need one detail before I can build this plan: " + " ".join(interpretation.clarifications)
+        )
     structured = dict(raw)
     if interpretation.mode:
         structured["mode"] = interpretation.mode
@@ -967,7 +1206,7 @@ def build_natural_language_plan_preview(*, owner_id: int, payload: dict[str, Any
         payload=structured,
         _temporary_commitments=[item.to_dict() for item in interpretation.commitments],
         _focus_requests=[item.to_dict() for item in interpretation.focus_requests],
-        _energy_mode=interpretation.energy_mode,
+        _energy_mode=interpretation.energy_mode if interpretation.energy_mode != "normal" else None,
         _interpretation=interpretation.to_dict(),
     )
 
@@ -1428,12 +1667,25 @@ def planner_state(*, owner_id: int, target_date: date | None = None) -> dict[str
     open_count = Task.query.filter(Task.user_id == int(owner_id), Task.status != "Completed").count()
     anchor = target_date or date.today()
     visible_commitments = fixed_commitments(owner_id=owner_id, start_date=anchor, end_date=anchor + timedelta(days=13))
+    personalization_defaults = planner_defaults_for_user(int(owner_id))
     return {
         "today": date.today().isoformat(),
         "open_task_count": int(open_count),
         "projects": [{"id": int(project.id), "title": project.title} for project in projects],
         "active_plan": smart_plan_to_dict(latest_owned_smart_plan(owner_id=owner_id, target_date=target_date)),
         "commitments": visible_commitments,
-        "defaults": {"mode": "day", "working_start": "09:00", "working_end": "17:00", "break_minutes": 15, "horizon_days": 7},
+        "defaults": {
+            "mode": "day",
+            "working_start": personalization_defaults["working_start"],
+            "working_end": personalization_defaults["working_end"],
+            "break_minutes": personalization_defaults["break_minutes"],
+            "horizon_days": 7,
+            "preferred_focus_minutes": personalization_defaults["preferred_focus_minutes"],
+            "energy_mode": personalization_defaults["energy_mode"],
+            "productive_period": personalization_defaults.get("productive_period"),
+            "capacity_factor": personalization_defaults.get("capacity_factor", 1.0),
+            "explanations": personalization_defaults.get("explanations", []),
+            "sources": personalization_defaults["sources"],
+        },
         "verified_from_state": True,
     }

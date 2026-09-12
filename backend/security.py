@@ -252,6 +252,11 @@ def init_security(app) -> None:
                 "/focus",
                 "/analytics",
                 "/notifications",
+                "/login",
+                "/register",
+                "/forgot-password",
+                "/reset-password",
+                "/verify-email",
             )
         ):
             response.headers.setdefault(
@@ -261,6 +266,9 @@ def init_security(app) -> None:
             response.headers.setdefault("Pragma", "no-cache")
             response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
             response.vary.add("Cookie")
+
+        if request.path in {"/reset-password", "/verify-email"}:
+            response.headers["Referrer-Policy"] = "no-referrer"
 
         if current_app.config.get("ENV_NAME") == "production":
             response.headers.setdefault(

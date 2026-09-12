@@ -29,6 +29,7 @@ from routes.notification_routes import notification_bp
 from routes.project_routes import project_bp
 from routes.task_routes import task_bp
 from security import init_security
+from services.auth_security_service import init_auth_session_security
 from services.scheduler_service import run_notification_check_once
 
 
@@ -545,6 +546,7 @@ def create_app(
     register_dashboard_routes(application)
     register_error_handlers(application)
     init_security(application)
+    init_auth_session_security(application)
     register_commands(application)
 
     return application

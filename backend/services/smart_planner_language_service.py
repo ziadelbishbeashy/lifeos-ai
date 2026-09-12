@@ -22,9 +22,12 @@ MAX_FOCUS_REQUESTS = 8
 MAX_INTERPRETED_COMMITMENTS = 8
 MAX_FOCUS_MINUTES = 8 * 60
 MAX_HORIZON_DAYS = 14
+DEFAULT_POINT_COMMITMENT_MINUTES = 60
 
 
-_TIME_TOKEN = r"(?:[01]?\d|2[0-3])(?::[0-5]\d)?\s*(?:a\.?m\.?|p\.?m\.?)?"
+_TIME_NUMBER = r"(?:[01]?\d|2[0-3])(?::[0-5]\d)?"
+_DAYPART_TOKEN = r"(?:morning|afternoon|evening|night|noon|midnight)"
+_TIME_TOKEN = rf"(?:noon|midnight|{_TIME_NUMBER}(?:\s*(?:a\.?m\.?|p\.?m\.?))?(?:\s*(?:(?:in|at)\s+)?(?:the\s+)?{_DAYPART_TOKEN})?)"
 _DURATION_RE = re.compile(
     r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>hours?|hrs?|hr|h|minutes?|mins?|min|m)\b",
     re.IGNORECASE,
@@ -79,6 +82,7 @@ class PlannerLanguageInterpretation:
     focus_requests: tuple[FocusRequest, ...] = ()
     priority_terms: tuple[str, ...] = ()
     assumptions: tuple[str, ...] = ()
+    clarifications: tuple[str, ...] = ()
 
     @property
     def understood(self) -> bool:
@@ -106,6 +110,8 @@ class PlannerLanguageInterpretation:
             "focus_requests": [item.to_dict() for item in self.focus_requests],
             "priority_terms": list(self.priority_terms),
             "assumptions": list(self.assumptions),
+            "clarifications": list(self.clarifications),
+            "requires_clarification": bool(self.clarifications),
             "understood": self.understood,
         }
 
@@ -114,10 +120,33 @@ def _clean(value: Any, *, limit: int = 600) -> str:
     return " ".join(str(value or "").split())[:limit].strip()
 
 
-def _parse_clock(token: str) -> time | None:
-    raw = _clean(token, limit=32).lower().replace(".", "")
+def _has_explicit_daypart(token: str) -> bool:
+    raw = _clean(token, limit=64).lower().replace(".", "")
+    return bool(re.search(r"\b(?:am|pm|morning|afternoon|evening|night|noon|midnight)\b", raw))
+
+
+def _human_time(value: time | None) -> str:
+    if value is None:
+        return "unknown time"
+    hour = value.hour % 12 or 12
+    return f"{hour}:{value.minute:02d} {'PM' if value.hour >= 12 else 'AM'}"
+
+
+def _parse_clock(token: str, *, prefer_pm: bool = False) -> time | None:
+    raw = _clean(token, limit=64).lower().replace(".", "")
     if not raw:
         return None
+    if raw == "noon":
+        return time(12, 0)
+    if raw == "midnight":
+        return time(0, 0)
+
+    daypart = None
+    daypart_match = re.search(r"\b(morning|afternoon|evening|night|noon|midnight)\b", raw)
+    if daypart_match:
+        daypart = daypart_match.group(1)
+        raw = re.sub(r"\s*(?:(?:in|at)\s+)?(?:the\s+)?(?:morning|afternoon|evening|night|noon|midnight)\s*$", "", raw).strip()
+
     meridiem = None
     if raw.endswith("am") or raw.endswith("pm"):
         meridiem = raw[-2:]
@@ -130,6 +159,7 @@ def _parse_clock(token: str) -> time | None:
             hour, minute = int(raw), 0
     except (TypeError, ValueError):
         return None
+
     if meridiem:
         if not 1 <= hour <= 12:
             return None
@@ -137,6 +167,29 @@ def _parse_clock(token: str) -> time | None:
             hour += 12
         if meridiem == "am" and hour == 12:
             hour = 0
+    elif daypart:
+        if not 1 <= hour <= 12:
+            return None
+        if daypart == "morning":
+            if hour == 12:
+                hour = 0
+        elif daypart in {"afternoon", "evening"}:
+            if hour != 12:
+                hour += 12
+        elif daypart in {"night", "midnight"}:
+            # Conversational "10 at night" -> 10 PM; "12 midnight" -> 12 AM.
+            if hour == 12:
+                hour = 0
+            elif 1 <= hour <= 11 and daypart == "night":
+                hour += 12
+            else:
+                return None
+        elif daypart == "noon":
+            if hour != 12:
+                return None
+            hour = 12
+    elif prefer_pm and 1 <= hour <= 11:
+        hour += 12
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         return None
     return time(hour, minute)
@@ -229,7 +282,12 @@ def _extract_mode_horizon(text: str, *, anchor: date, start_date: date | None) -
 
 def _extract_energy_mode(text: str) -> tuple[str, list[str]]:
     lower = text.lower()
-    if any(term in lower for term in ("i'm tired", "i am tired", "low energy", "lighter plan", "light day", "take it easy", "easy day")):
+    if any(term in lower for term in (
+        "i'm tired", "i am tired", "low energy", "lighter plan", "light day",
+        "take it easy", "easy day", "don't overload me", "dont overload me",
+        "do not overload me", "don't overbook me", "do not overbook me",
+        "not too much", "leave me some free time", "leave some free time",
+    )):
         return "light", ["Using a lighter day: V-SPACE will intentionally leave recovery capacity instead of filling every free minute."]
     if any(term in lower for term in ("intense day", "deep work day", "push today", "packed day", "maximize today", "maximise today")):
         return "intense", ["Using an intense day while still respecting fixed commitments and the working window."]
@@ -245,9 +303,11 @@ def _commitment_title(kind: str) -> str:
     return normalized.title()
 
 
-def _extract_commitments(text: str, *, target_date: date) -> tuple[list[InterpretedCommitment], list[str]]:
+def _extract_commitments(text: str, *, target_date: date, known_activity_times: dict[str, Any] | None = None) -> tuple[list[InterpretedCommitment], list[str], list[str]]:
     results: list[InterpretedCommitment] = []
     assumptions: list[str] = []
+    clarifications: list[str] = []
+    known_activity_times = {str(key).casefold(): value for key, value in (known_activity_times or {}).items()}
     occupied_spans: list[tuple[int, int]] = []
 
     range_pattern = re.compile(
@@ -255,7 +315,13 @@ def _extract_commitments(text: str, *, target_date: date) -> tuple[list[Interpre
         re.IGNORECASE,
     )
     for match in range_pattern.finditer(text):
-        start_at, end_at = _parse_clock(match.group("start")), _parse_clock(match.group("end"))
+        start_at = _parse_clock(match.group("start"))
+        end_at = _parse_clock(match.group("end"))
+        # Resolve common conversational ranges such as "class from 9 to 2".
+        # If the end has no meridiem and would otherwise fall before the start,
+        # prefer the same-day PM interpretation rather than silently dropping it.
+        if start_at and end_at and end_at <= start_at and not _has_explicit_daypart(match.group("end")):
+            end_at = _parse_clock(match.group("end"), prefer_pm=True)
         if not start_at or not end_at or end_at <= start_at:
             continue
         kind = match.group("kind").lower()
@@ -267,9 +333,9 @@ def _extract_commitments(text: str, *, target_date: date) -> tuple[list[Interpre
             commitment_type="class" if kind in {"university", "school", "class"} else kind if kind in {"meeting", "exam", "appointment"} else "other",
         ))
         occupied_spans.append(match.span())
-        assumptions.append(f"Blocked {start_at.strftime('%H:%M')}–{end_at.strftime('%H:%M')} for {_commitment_title(kind).lower()}.")
+        assumptions.append(f"Blocked {_human_time(start_at)}–{_human_time(end_at)} for {_commitment_title(kind).lower()}.")
         if len(results) >= MAX_INTERPRETED_COMMITMENTS:
-            return results, assumptions
+            return results, assumptions, clarifications
 
     until_pattern = re.compile(
         rf"\b(?P<kind>university|school|class|work|busy)\b[^,.]{{0,32}}?\buntil\s+(?P<end>{_TIME_TOKEN})",
@@ -278,7 +344,14 @@ def _extract_commitments(text: str, *, target_date: date) -> tuple[list[Interpre
     for match in until_pattern.finditer(text):
         if any(match.start() >= start and match.end() <= end for start, end in occupied_spans):
             continue
-        end_at = _parse_clock(match.group("end"))
+        raw_end = match.group("end")
+        has_meridiem = _has_explicit_daypart(raw_end)
+        end_at = _parse_clock(raw_end)
+        # "university until 2" is overwhelmingly a daytime end-time phrase in
+        # planner language. Without AM/PM, 01:00-07:59 would make the inferred
+        # commitment end before the normal working day and get discarded.
+        if end_at and not has_meridiem and 1 <= end_at.hour <= 7:
+            end_at = _parse_clock(raw_end, prefer_pm=True)
         if not end_at:
             continue
         kind = match.group("kind").lower()
@@ -290,10 +363,96 @@ def _extract_commitments(text: str, *, target_date: date) -> tuple[list[Interpre
             commitment_type="class" if kind in {"university", "school", "class"} else "other",
             assumption="start_at_working_window",
         ))
-        assumptions.append(f"Treated {_commitment_title(kind).lower()} as unavailable time until {end_at.strftime('%H:%M')}; its start will use your planner working start.")
+        assumptions.append(f"Treated {_commitment_title(kind).lower()} as unavailable time until {_human_time(end_at)}; its start will use your planner working start.")
         if len(results) >= MAX_INTERPRETED_COMMITMENTS:
             break
-    return results, assumptions
+
+    # Point commitments with no stated duration still matter to a realistic
+    # plan. For V1 we only infer high-confidence personal commitments and make
+    # the one-hour duration assumption explicit in the interpretation UI.
+    point_pattern = re.compile(
+        rf"\b(?P<kind>gym|workout|training|meeting|appointment|exam|class|university|work)\b[^,.]{{0,18}}?\bat\s+(?P<start>{_TIME_TOKEN})",
+        re.IGNORECASE,
+    )
+    for match in point_pattern.finditer(text):
+        if any(match.start() >= start and match.end() <= end for start, end in occupied_spans):
+            continue
+        raw_start = match.group("start")
+        has_meridiem = _has_explicit_daypart(raw_start)
+        start_at = _parse_clock(raw_start)
+        known_duration = DEFAULT_POINT_COMMITMENT_MINUTES
+        if start_at and not has_meridiem:
+            kind_key = match.group("kind").lower()
+            known_raw = known_activity_times.get(kind_key) or known_activity_times.get("gym" if kind_key == "workout" else kind_key)
+            known_start: time | None = None
+            if isinstance(known_raw, time):
+                # Backward-compatible test/helper input.
+                known_start = known_raw
+            elif isinstance(known_raw, dict):
+                candidate = known_raw.get("start_time")
+                if isinstance(candidate, time):
+                    known_start = candidate
+                try:
+                    known_duration = max(5, min(int(known_raw.get("duration_minutes") or DEFAULT_POINT_COMMITMENT_MINUTES), 8 * 60))
+                except (TypeError, ValueError):
+                    known_duration = DEFAULT_POINT_COMMITMENT_MINUTES
+            if known_start is not None and 1 <= start_at.hour <= 12:
+                # Use only the saved AM/PM tendency, never the saved clock time itself.
+                if known_start.hour >= 12 and start_at.hour < 12:
+                    start_at = time(start_at.hour + 12, start_at.minute)
+                elif known_start.hour < 12 and start_at.hour == 12:
+                    start_at = time(0, start_at.minute)
+                assumptions.append(f"Used your usual {kind_key} routine to understand {_human_time(start_at)} as the intended time.")
+            elif 1 <= start_at.hour <= 8:
+                start_at = _parse_clock(raw_start, prefer_pm=True)
+                assumptions.append(f"Assumed {_human_time(start_at)} for {kind_key}; add AM or PM if you meant a different time.")
+            elif 9 <= start_at.hour <= 11:
+                clarifications.append(f"Did you mean {kind_key} at {start_at.hour}:00 AM or {start_at.hour}:00 PM? Say AM, PM, morning, afternoon, evening or night.")
+                continue
+        if not start_at:
+            continue
+        # When the saved profile contains the same routine, keep its normal
+        # duration even if the user overrides only the start time today.
+        duration_minutes = DEFAULT_POINT_COMMITMENT_MINUTES
+        if has_meridiem:
+            kind_key = match.group("kind").lower()
+            known_raw = known_activity_times.get(kind_key) or known_activity_times.get("gym" if kind_key == "workout" else kind_key)
+            if isinstance(known_raw, dict):
+                try:
+                    duration_minutes = max(5, min(int(known_raw.get("duration_minutes") or DEFAULT_POINT_COMMITMENT_MINUTES), 8 * 60))
+                except (TypeError, ValueError):
+                    pass
+        else:
+            duration_minutes = known_duration
+        start_minutes = start_at.hour * 60 + start_at.minute
+        end_minutes = start_minutes + duration_minutes
+        if end_minutes >= 24 * 60:
+            continue
+        end_at = time(end_minutes // 60, end_minutes % 60)
+        kind = match.group("kind").lower()
+        title = "Gym" if kind in {"gym", "workout"} else _commitment_title(kind)
+        commitment_type = (
+            "class" if kind in {"class", "university"}
+            else kind if kind in {"meeting", "appointment", "exam"}
+            else "personal" if kind in {"gym", "workout", "training"}
+            else "other"
+        )
+        results.append(InterpretedCommitment(
+            title=title,
+            date=target_date,
+            start_time=start_at,
+            end_time=end_at,
+            commitment_type=commitment_type,
+            assumption="default_point_duration",
+        ))
+        assumptions.append(
+            f"Interpreted {title.lower()} at {_human_time(start_at)} and reserved "
+            f"{duration_minutes} minutes because no duration was provided"
+            + (" and your saved routine supplied the usual duration." if duration_minutes != DEFAULT_POINT_COMMITMENT_MINUTES else ".")
+        )
+        if len(results) >= MAX_INTERPRETED_COMMITMENTS:
+            break
+    return results, assumptions, clarifications
 
 
 def _clean_focus_title(raw: str) -> str:
@@ -355,7 +514,7 @@ def _extract_priority_terms(text: str) -> tuple[str, ...]:
     return tuple(items)
 
 
-def interpret_planner_request(text: str, *, anchor_date: date | None = None) -> PlannerLanguageInterpretation:
+def interpret_planner_request(text: str, *, anchor_date: date | None = None, known_activity_times: dict[str, Any] | None = None) -> PlannerLanguageInterpretation:
     cleaned = _clean(text, limit=1200)
     if not cleaned:
         return PlannerLanguageInterpretation(text="")
@@ -369,7 +528,7 @@ def interpret_planner_request(text: str, *, anchor_date: date | None = None) -> 
     assumptions.extend(notes)
     energy_mode, notes = _extract_energy_mode(cleaned)
     assumptions.extend(notes)
-    commitments, notes = _extract_commitments(cleaned, target_date=target_date)
+    commitments, notes, clarifications = _extract_commitments(cleaned, target_date=target_date, known_activity_times=known_activity_times)
     assumptions.extend(notes)
     focus_requests, notes = _extract_focus_requests(cleaned)
     assumptions.extend(notes)
@@ -401,4 +560,5 @@ def interpret_planner_request(text: str, *, anchor_date: date | None = None) -> 
         focus_requests=tuple(focus_requests),
         priority_terms=priority_terms,
         assumptions=tuple(assumptions[:16]),
+        clarifications=tuple(clarifications[:4]),
     )

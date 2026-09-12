@@ -42,3 +42,8 @@ export async function logout() {
   resetCsrfToken();
   return result;
 }
+
+export async function startGoogleAuth(input: { mode?: "login" | "link"; next?: string }) {
+  const result = await apiPost<{ authorization_url: string }>("/api/v1/auth/google/start", input);
+  window.location.assign(result.authorization_url);
+}

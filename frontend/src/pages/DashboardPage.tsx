@@ -93,6 +93,10 @@ export function DashboardPage() {
     </section>
     <DashboardAsk/>
 
+    {session.data?.user?.personalization.onboarding_state !== "completed" ? <a className="personalization-dashboard-card" href="/settings">
+      <div><span>✦ Personalize V-SPACE</span><strong>Better plans with fewer assumptions</strong><p>Add your routine, regular commitments and preferred work rhythm. It is optional and editable at any time.</p></div><em>Set up profile →</em>
+    </a> : null}
+
     <section className="dashboard-stat-grid" aria-label="Workspace statistics">
       <StatCard tone="purple" title="Active Projects" value={data.counts.active_projects} detail={`${data.counts.projects} total workspaces`} icon="M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2h7.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-10Z" />
       <StatCard tone="blue" title="Open Tasks" value={data.counts.open_tasks} detail={`${data.counts.tasks} total actions`} icon="M9 5h11v2H9V5Zm0 6h11v2H9v-2Zm0 6h11v2H9v-2ZM4.5 4A1.5 1.5 0 1 1 3 5.5 1.5 1.5 0 0 1 4.5 4Zm0 6A1.5 1.5 0 1 1 3 11.5 1.5 1.5 0 0 1 4.5 10Zm0 6A1.5 1.5 0 1 1 3 17.5 1.5 1.5 0 0 1 4.5 16Z" />

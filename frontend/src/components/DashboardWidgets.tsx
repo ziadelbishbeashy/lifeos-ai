@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
 import { BrandMark, Icon } from "./VSpaceUi";
+import { formatTime12h } from "./TimePicker12h";
 
 export function DashboardAsk() {
   const prompts = ["What should I focus on today?", "What’s blocking my projects?", "Plan the rest of my week."];
@@ -15,7 +16,7 @@ export function TodayPlanPreview({ date }: { date: string }) {
   const day = query.data?.planner?.active_plan?.days.find(d => d.date === date);
   const scheduled = day?.scheduled_minutes ?? day?.blocks.reduce((sum, b) => sum + b.minutes, 0) ?? 0;
   return <article className="dashboard-panel vs-today-plan"><div className="dashboard-panel-heading"><div><span className="panel-kicker">Make space for what matters</span><h2>Today’s plan</h2></div><span className="vs-panel-icon"><Icon name="calendar"/></span></div>
-    {query.isPending ? <div className="vs-mini-loading" role="status">Loading your schedule…</div> : query.isError ? <div className="vs-plan-empty"><Icon name="calendar"/><h3>Let’s check your schedule.</h3><p>We couldn’t load your plan right now.</p><button type="button" className="workspace-secondary-button" onClick={() => void query.refetch()}>Try again</button></div> : day?.blocks.length ? <><div className="vs-plan-total"><strong>{duration(scheduled)}</strong><span>planned today</span></div><div className="vs-mini-timeline">{day.blocks.slice(0, 3).map((block, i) => <a className={`vs-mini-block ${block.state === "current" ? "current" : ""}`} href="/planner" key={`${block.start_time}-${i}`}><time>{block.start_time}</time><div><strong>{block.title}</strong><span>{block.project_title || "Personal workspace"} · {duration(block.minutes)}</span></div></a>)}</div></> : <div className="vs-plan-empty"><span className="vs-panel-icon"><Icon name="calendar"/></span><h3>A good day starts with a little space.</h3><p>Bring your priorities and fixed commitments into one realistic plan.</p></div>}
+    {query.isPending ? <div className="vs-mini-loading" role="status">Loading your schedule…</div> : query.isError ? <div className="vs-plan-empty"><Icon name="calendar"/><h3>Let’s check your schedule.</h3><p>We couldn’t load your plan right now.</p><button type="button" className="workspace-secondary-button" onClick={() => void query.refetch()}>Try again</button></div> : day?.blocks.length ? <><div className="vs-plan-total"><strong>{duration(scheduled)}</strong><span>planned today</span></div><div className="vs-mini-timeline">{day.blocks.slice(0, 3).map((block, i) => <a className={`vs-mini-block ${block.state === "current" ? "current" : ""}`} href="/planner" key={`${block.start_time}-${i}`}><time>{formatTime12h(block.start_time)}</time><div><strong>{block.title}</strong><span>{block.project_title || "Personal workspace"} · {duration(block.minutes)}</span></div></a>)}</div></> : <div className="vs-plan-empty"><span className="vs-panel-icon"><Icon name="calendar"/></span><h3>A good day starts with a little space.</h3><p>Bring your priorities and fixed commitments into one realistic plan.</p></div>}
     <a href="/planner" className="workspace-secondary-button vs-full-button">{day?.blocks.length ? "View today’s plan" : "Plan my day"}<Icon name="arrow"/></a>
   </article>;
 }

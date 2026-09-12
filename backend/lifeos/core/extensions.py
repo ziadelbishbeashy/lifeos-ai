@@ -14,6 +14,7 @@ csrf = CSRFProtect()
 login_manager.login_view = "auth_bp.login"
 login_manager.login_message = "Please log in to access your workspace."
 login_manager.login_message_category = "info"
+login_manager.session_protection = "strong"
 
 
 def init_extensions(app) -> None:

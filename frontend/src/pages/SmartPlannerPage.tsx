@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "../api/client";
 import { PageState } from "../components/NativeUi";
+import { formatTime12h, TimePicker12h } from "../components/TimePicker12h";
 
 
 type PlannerProject = { id: number; title: string };
@@ -13,7 +14,7 @@ type PlannerCommitment = {
   end_time: string;
   commitment_type: string;
   notes: string | null;
-  source: "manual" | "academic";
+  source: "manual" | "academic" | "profile";
   editable: boolean;
   module_title?: string | null;
 };
@@ -60,6 +61,8 @@ type PlannerInterpretation = {
   focus_requests: Array<{ title: string; minutes: number; source_text: string }>;
   priority_terms: string[];
   assumptions: string[];
+  clarifications?: string[];
+  requires_clarification?: boolean;
   understood: boolean;
 };
 
@@ -104,6 +107,19 @@ type SmartPlan = {
   read_only?: boolean;
   verified_from_state?: boolean;
   confirmation_required?: boolean;
+  planning_defaults?: {
+    working_start: string;
+    working_end: string;
+    break_minutes: number;
+    energy_mode: "light" | "normal" | "intense";
+    sources: Record<string, "profile" | "default" | "request">;
+    profile_applied: boolean;
+    overload_preference?: string;
+    capacity_factor?: number;
+    preferred_focus_minutes?: number;
+    productive_period?: string | null;
+    reasons?: string[];
+  };
 };
 type PlannerState = {
   today: string;
@@ -111,7 +127,19 @@ type PlannerState = {
   projects: PlannerProject[];
   active_plan: SmartPlan | null;
   commitments: PlannerCommitment[];
-  defaults: { mode: "day" | "week"; working_start: string; working_end: string; break_minutes: number; horizon_days: number };
+  defaults: {
+    mode: "day" | "week";
+    working_start: string;
+    working_end: string;
+    break_minutes: number;
+    horizon_days: number;
+    preferred_focus_minutes?: number;
+    energy_mode?: "light" | "normal" | "intense";
+    productive_period?: string | null;
+    capacity_factor?: number;
+    explanations?: string[];
+    sources?: Record<string, "profile" | "default" | "request">;
+  };
   verified_from_state: boolean;
 };
 type PlannerProposal = {
@@ -182,10 +210,10 @@ function PlanTimeline({ plan, editable, onEdit }: { plan: SmartPlan; editable: b
         <div className="planner-day-line">
           {entries.length ? entries.map((entry) => {
             if (entry.kind === "commitment") return <article className="planner-block planner-commitment" key={`commitment-${entry.item.id}`}>
-              <div className="planner-block-time"><strong>{entry.item.start_time}</strong><span>{entry.item.end_time}</span></div>
+              <div className="planner-block-time"><strong>{formatTime12h(entry.item.start_time)}</strong><span>{formatTime12h(entry.item.end_time)}</span></div>
               <div className="planner-block-rail"><i /></div>
               <div className="planner-block-card">
-                <div className="planner-block-top"><span className="planner-fixed-label"><PlanningIcon type="pin" /> Fixed · {entry.item.commitment_type}</span><small>{entry.item.source === "academic" ? "Academic schedule" : "Commitment"}</small></div>
+                <div className="planner-block-top"><span className="planner-fixed-label"><PlanningIcon type="pin" /> Fixed · {entry.item.commitment_type}</span><small>{entry.item.source === "academic" ? "Academic schedule" : entry.item.source === "profile" ? "V-SPACE Profile" : "Commitment"}</small></div>
                 <h3>{entry.item.title}</h3>
                 {entry.item.notes ? <p>{entry.item.notes}</p> : null}
               </div>
@@ -193,7 +221,7 @@ function PlanTimeline({ plan, editable, onEdit }: { plan: SmartPlan; editable: b
 
             const block = entry.item;
             if (block.block_type === "inferred_commitment") return <article className="planner-block planner-commitment planner-inferred-commitment" key={`${block.date}-${block.start_time}-${block.title}-${block.sort_order}`}>
-              <div className="planner-block-time"><strong>{block.start_time}</strong><span>{block.end_time}</span></div>
+              <div className="planner-block-time"><strong>{formatTime12h(block.start_time)}</strong><span>{formatTime12h(block.end_time)}</span></div>
               <div className="planner-block-rail"><i /></div>
               <div className="planner-block-card">
                 <div className="planner-block-top"><span className="planner-fixed-label"><PlanningIcon type="spark" /> Understood from prompt</span><span className="planner-lock-badge"><PlanningIcon type="lock" /> Locked</span></div>
@@ -204,7 +232,7 @@ function PlanTimeline({ plan, editable, onEdit }: { plan: SmartPlan; editable: b
             </article>;
 
             return <article className={`planner-block planner-task-state-${block.state || "upcoming"} ${block.block_type === "focus" ? "planner-focus-block" : ""}`} key={`${block.date}-${block.start_time}-${block.task_id}-${block.sort_order}`}>
-              <div className="planner-block-time"><strong>{block.start_time}</strong><span>{block.end_time}</span></div>
+              <div className="planner-block-time"><strong>{formatTime12h(block.start_time)}</strong><span>{formatTime12h(block.end_time)}</span></div>
               <div className="planner-block-rail"><i /></div>
               <div className="planner-block-card">
                 <div className="planner-block-top">
@@ -252,11 +280,21 @@ export function SmartPlannerPage() {
   const [commitmentEnd, setCommitmentEnd] = useState("13:00");
   const [commitmentType, setCommitmentType] = useState("meeting");
   const [editingBlock, setEditingBlock] = useState<BlockEdit | null>(null);
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
 
   const stateQuery = useQuery({
     queryKey: ["smart-planner", startDate],
     queryFn: () => apiGet<{ planner: PlannerState }>(`/api/v1/planner?date=${encodeURIComponent(startDate)}`),
   });
+
+  useEffect(() => {
+    if (defaultsApplied || !stateQuery.data?.planner.defaults) return;
+    const defaults = stateQuery.data.planner.defaults;
+    setWorkingStart(defaults.working_start || "09:00");
+    setWorkingEnd(defaults.working_end || "17:00");
+    setBreakMinutes(Number(defaults.break_minutes ?? 15));
+    setDefaultsApplied(true);
+  }, [defaultsApplied, stateQuery.data?.planner.defaults]);
 
   const payload = () => ({
     mode,
@@ -433,7 +471,7 @@ export function SmartPlannerPage() {
       </button>
     </section>
 
-    {error ? <div className="planner-alert error" role="alert">{error}</div> : null}
+    {error ? <div className={error.startsWith("I need one detail") ? "planner-alert clarification" : "planner-alert error"} role="alert">{error.startsWith("I need one detail") ? <><strong>One quick detail</strong><span>{error.replace(/^I need one detail before I can build this plan:\s*/, "")}</span></> : error}</div> : null}
     {message ? <div className="planner-alert success" role="status">{message}</div> : null}
 
     {preview?.interpretation?.understood ? <section className="planner-understood-card">
@@ -448,6 +486,7 @@ export function SmartPlannerPage() {
       </div>
       {preview.interpretation.assumptions.length ? <ul>{preview.interpretation.assumptions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul> : null}
     </section> : null}
+    {preview?.planning_defaults?.profile_applied ? <section className="planner-personalization-reasons"><div className="planner-profile-defaults-note"><PlanningIcon type="spark" /><div><strong>This plan used your V-SPACE Profile</strong><span>Your current request still has the highest priority. These saved preferences only filled in what you did not specify.</span></div><a href="/settings">Review profile</a></div>{preview.planning_defaults.reasons?.length ? <div className="planner-why-plan"><strong>Why V-SPACE planned it this way</strong><ul>{preview.planning_defaults.reasons.slice(0,6).map((reason,index)=><li key={`${index}-${reason}`}>{reason}</li>)}</ul></div> : null}</section> : null}
 
     <div className="planner-layout">
       <main className="planner-main">
@@ -455,7 +494,7 @@ export function SmartPlannerPage() {
           <article><span><PlanningIcon type="calendar" />Plan</span><strong>{shownPlan ? `${dateLabel(shownPlan.start_date)}${shownPlan.end_date !== shownPlan.start_date ? ` – ${dateLabel(shownPlan.end_date)}` : ""}` : dateLabel(startDate)}</strong><small>{preview ? "Fresh preview" : accepted ? "Accepted schedule" : "Ready to plan"}</small></article>
           <article><span><PlanningIcon type="clock" />Scheduled</span><strong>{shownPlan ? minutesLabel(shownPlan.scheduled_minutes) : "—"}</strong><small>{shownPlan ? `${shownPlan.scheduled_tasks ?? shownPlan.days.reduce((sum, day) => sum + day.blocks.length, 0)} task blocks` : `${planner.open_task_count} open tasks available`}</small></article>
           <article><span><PlanningIcon type="pin" />Fixed time</span><strong>{shownPlan ? minutesLabel(shownPlan.commitment_minutes || 0) : visibleCommitments.length ? `${visibleCommitments.length} items` : "None"}</strong><small>{visibleCommitments.length ? `${visibleCommitments.filter((item) => item.source === "academic").length} from academic schedule` : "Add classes, meetings or appointments."}</small></article>
-          <article className={shownPlan?.overload_minutes ? "warning" : ""}><span><PlanningIcon type="balance" />Workload</span><strong>{shownPlan ? (shownPlan.overload_minutes ? `${minutesLabel(shownPlan.overload_minutes)} over` : shownPlan.energy_mode === "light" ? "Light" : "Fits") : "—"}</strong><small>{shownPlan?.overload_minutes ? "Work stays unscheduled instead of overfilling the day." : shownPlan?.energy_mode === "light" ? `${minutesLabel(shownPlan.energy_reserve_minutes || 0)} intentionally reserved` : "Capacity stays realistic."}</small></article>
+          <article className={shownPlan?.overload_minutes ? "warning" : ""}><span><PlanningIcon type="balance" />Workload</span><strong>{shownPlan ? (shownPlan.overload_minutes ? `${minutesLabel(shownPlan.overload_minutes)} over` : (shownPlan.energy_reserve_minutes || 0) > 0 ? (shownPlan.energy_mode === "light" ? "Light" : "Breathing room") : "Fits") : "—"}</strong><small>{shownPlan?.overload_minutes ? "Work stays unscheduled instead of overfilling the day." : (shownPlan?.energy_reserve_minutes || 0) > 0 ? `${minutesLabel(shownPlan?.energy_reserve_minutes || 0)} intentionally kept open` : "Capacity stays realistic."}</small></article>
         </section>
 
         {shownPlan ? <section className="vs-workload" aria-label="Plan workload"><div><span>Available <strong>{minutesLabel(shownPlan.available_minutes)}</strong></span><span>Scheduled <strong>{minutesLabel(shownPlan.scheduled_minutes)}</strong></span><span>Unscheduled <strong>{minutesLabel(shownPlan.unscheduled_minutes ?? shownPlan.overload_minutes)}</strong></span></div><meter min={0} max={Math.max(1, shownPlan.available_minutes)} value={Math.min(shownPlan.available_minutes, shownPlan.scheduled_minutes)} aria-label="Scheduled share of available time"/><p>{shownPlan.overload_minutes ? "Some work needs another time slot." : "Room to make progress, with your commitments accounted for."}</p></section> : null}
@@ -480,11 +519,12 @@ export function SmartPlannerPage() {
       <aside className="planner-sidebar">
         <section className="planner-settings-card">
           <div className="planner-card-heading"><span>Planning controls</span><h2>Shape the plan</h2><p>Set your available hours. Fixed commitments and locked blocks keep their place.</p></div>
+          <div className={`planner-default-source ${Object.values(planner.defaults.sources || {}).some((source) => source === "profile") ? "profile" : "default"}`}><PlanningIcon type="spark" /><span>{Object.values(planner.defaults.sources || {}).some((source) => source === "profile") ? "Personalized defaults are active. Sleep/routine, focus rhythm and workload preferences can influence this plan unless you override them here." : "Using visible V-SPACE defaults. Complete your profile to reduce assumptions."}</span>{Object.values(planner.defaults.sources || {}).some((source) => source === "profile") ? <a href="/settings">Edit</a> : <a href="/settings">Personalize</a>}</div><div className="planner-default-summary"><span>Usable window <strong>{formatTime12h(workingStart)}–{formatTime12h(workingEnd)}</strong></span><span>Break <strong>{breakMinutes} min</strong></span>{planner.defaults.preferred_focus_minutes ? <span>Focus rhythm <strong>{planner.defaults.preferred_focus_minutes} min</strong></span> : null}{planner.defaults.productive_period && planner.defaults.productive_period !== "varies" ? <span>Peak focus <strong>{planner.defaults.productive_period.replace("_", " ")}</strong></span> : null}</div>
           <label><span>Start date</span><input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setCommitmentDate(event.target.value); setPreview(null); setProposal(null); }} /></label>
           <label><span>Project</span><select value={projectId} onChange={(event) => { setProjectId(event.target.value); setPreview(null); setProposal(null); }}><option value="">All open work</option>{planner.projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
           {mode === "goal" ? <label><span>Goal horizon</span><select value={horizonDays} onChange={(event) => setHorizonDays(Number(event.target.value))}>{[3, 5, 7, 10, 14].map((days) => <option key={days} value={days}>{days} days</option>)}</select></label> : null}
-          <div className="planner-time-grid"><label><span>Start</span><input type="time" value={workingStart} onChange={(event) => setWorkingStart(event.target.value)} /></label><label><span>Finish</span><input type="time" value={workingEnd} onChange={(event) => setWorkingEnd(event.target.value)} /></label></div>
-          <label><span>Break between blocks</span><select value={breakMinutes} onChange={(event) => setBreakMinutes(Number(event.target.value))}><option value={0}>No automatic break</option><option value={5}>5 minutes</option><option value={10}>10 minutes</option><option value={15}>15 minutes</option><option value={30}>30 minutes</option></select></label>
+          <div className="planner-time-grid"><label><span>Start</span><TimePicker12h value={workingStart} onChange={setWorkingStart} ariaLabel="Planning start" /></label><label><span>Finish</span><TimePicker12h value={workingEnd} onChange={setWorkingEnd} ariaLabel="Planning finish" /></label></div>
+          <label><span>Break between blocks</span><select value={breakMinutes} onChange={(event) => setBreakMinutes(Number(event.target.value))}><option value={0}>No automatic break</option><option value={5}>5 minutes</option><option value={10}>10 minutes</option><option value={15}>15 minutes</option><option value={20}>20 minutes</option><option value={30}>30 minutes</option></select></label>
           <button type="button" className="planner-secondary-action" onClick={() => previewMutation.mutate()} disabled={previewMutation.isPending}>Regenerate plan</button>
         </section>
 
@@ -492,8 +532,8 @@ export function SmartPlannerPage() {
           <div className="planner-card-heading"><span>Fixed commitments</span><h2>Protect your real time</h2><p>Classes, meetings and timed assessments block the planner from scheduling over them.</p></div>
           <div className="planner-commitment-list">
             {planner.commitments.filter((item) => item.date >= startDate).slice(0, 6).map((item) => <article key={String(item.id)}>
-              <div><strong>{item.title}</strong><span>{dateLabel(item.date)} · {item.start_time}–{item.end_time}</span><small>{item.source === "academic" ? `Academic${item.module_title ? ` · ${item.module_title}` : ""}` : item.commitment_type}</small></div>
-              {item.editable && typeof item.id === "number" ? <button type="button" aria-label={`Remove ${item.title}`} onClick={() => deleteCommitmentMutation.mutate(item.id as number)}>×</button> : <i className="planner-readonly-dot" title="Synced from academic schedule" />}
+              <div><strong>{item.title}</strong><span>{dateLabel(item.date)} · {formatTime12h(item.start_time)}–{formatTime12h(item.end_time)}</span><small>{item.source === "academic" ? `Academic${item.module_title ? ` · ${item.module_title}` : ""}` : item.source === "profile" ? `Profile routine · ${item.commitment_type}` : item.commitment_type}</small></div>
+              {item.editable && typeof item.id === "number" ? <button type="button" aria-label={`Remove ${item.title}`} onClick={() => deleteCommitmentMutation.mutate(item.id as number)}>×</button> : <i className="planner-readonly-dot" title={item.source === "profile" ? "From your V-SPACE Profile" : "Synced from academic schedule"} />}
             </article>)}
             {!planner.commitments.filter((item) => item.date >= startDate).length ? <p className="planner-no-commitments">No fixed commitments in the next two weeks.</p> : null}
           </div>
@@ -501,7 +541,7 @@ export function SmartPlannerPage() {
             <label><span>Title</span><input value={commitmentTitle} onChange={(event) => setCommitmentTitle(event.target.value)} placeholder="Example: University class" /></label>
             <label><span>Type</span><select value={commitmentType} onChange={(event) => setCommitmentType(event.target.value)}><option value="class">Class</option><option value="meeting">Meeting</option><option value="exam">Exam</option><option value="appointment">Appointment</option><option value="personal">Personal</option><option value="other">Other</option></select></label>
             <label><span>Date</span><input type="date" value={commitmentDate} onChange={(event) => setCommitmentDate(event.target.value)} /></label>
-            <div className="planner-time-grid"><label><span>Start</span><input type="time" value={commitmentStart} onChange={(event) => setCommitmentStart(event.target.value)} /></label><label><span>Finish</span><input type="time" value={commitmentEnd} onChange={(event) => setCommitmentEnd(event.target.value)} /></label></div>
+            <div className="planner-time-grid"><label><span>Start</span><TimePicker12h value={commitmentStart} onChange={setCommitmentStart} ariaLabel="Commitment start" /></label><label><span>Finish</span><TimePicker12h value={commitmentEnd} onChange={setCommitmentEnd} ariaLabel="Commitment finish" /></label></div>
             <button type="button" className="planner-primary-action" disabled={createCommitmentMutation.isPending || !commitmentTitle.trim()} onClick={() => createCommitmentMutation.mutate()}>{createCommitmentMutation.isPending ? "Saving…" : "Save commitment"}</button>
             <button type="button" className="planner-text-action" onClick={() => setShowCommitmentForm(false)}>Cancel</button>
           </div>}
@@ -510,7 +550,7 @@ export function SmartPlannerPage() {
         {editingBlock ? <section className="planner-settings-card planner-edit-card">
           <div className="planner-card-heading"><span>Manual adjustment</span><h2>{editingBlock.title}</h2><p>Adjust the time, then lock this block if you want it to stay in place when the plan changes.</p></div>
           <label><span>Date</span><input type="date" value={editingBlock.date} onChange={(event) => setEditingBlock({ ...editingBlock, date: event.target.value })} /></label>
-          <div className="planner-time-grid"><label><span>Start</span><input type="time" value={editingBlock.start_time} onChange={(event) => setEditingBlock({ ...editingBlock, start_time: event.target.value })} /></label><label><span>Finish</span><input type="time" value={editingBlock.end_time} onChange={(event) => setEditingBlock({ ...editingBlock, end_time: event.target.value })} /></label></div>
+          <div className="planner-time-grid"><label><span>Start</span><TimePicker12h value={editingBlock.start_time} onChange={(value) => setEditingBlock({ ...editingBlock, start_time: value })} ariaLabel="Block start" /></label><label><span>Finish</span><TimePicker12h value={editingBlock.end_time} onChange={(value) => setEditingBlock({ ...editingBlock, end_time: value })} ariaLabel="Block finish" /></label></div>
           <label className="planner-lock-toggle"><input type="checkbox" checked={editingBlock.locked} onChange={(event) => setEditingBlock({ ...editingBlock, locked: event.target.checked })} /><span><PlanningIcon type="lock" /> Keep this block locked during rebalancing</span></label>
           <button type="button" className="planner-primary-action" disabled={updateBlockMutation.isPending} onClick={() => updateBlockMutation.mutate(editingBlock)}>{updateBlockMutation.isPending ? "Saving…" : "Save adjustment"}</button>
           <button type="button" className="planner-text-action" onClick={() => setEditingBlock(null)}>Cancel</button>

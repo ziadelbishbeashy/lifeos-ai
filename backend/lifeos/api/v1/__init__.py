@@ -5,7 +5,9 @@ recreating the legacy route-file monolith.
 """
 
 from lifeos.api.v1.documents import documents_api_bp
+from lifeos.api.v1.auth_security import auth_security_api_bp
 from lifeos.api.v1.experience import experience_api_bp
+from lifeos.api.v1.personalization import personalization_api_bp
 from lifeos.api.v1.document_collections import document_collections_api_bp
 from lifeos.api.v1.notes import notes_api_bp
 from lifeos.api.v1.focus import focus_api_bp
@@ -25,7 +27,9 @@ from lifeos.api.v1.tasks import tasks_api_bp
 
 def register_api_v1(app) -> None:
     app.register_blueprint(api_v1_bp)
+    app.register_blueprint(auth_security_api_bp)
     app.register_blueprint(experience_api_bp)
+    app.register_blueprint(personalization_api_bp)
     app.register_blueprint(projects_api_bp)
     app.register_blueprint(tasks_api_bp)
     app.register_blueprint(documents_api_bp)
@@ -45,7 +49,9 @@ def register_api_v1(app) -> None:
 
 __all__ = [
     "api_v1_bp",
+    "auth_security_api_bp",
     "experience_api_bp",
+    "personalization_api_bp",
     "projects_api_bp",
     "tasks_api_bp",
     "documents_api_bp",

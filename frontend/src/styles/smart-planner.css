@@ -711,3 +711,9 @@ html[data-theme="dark"] .planner-focus-block .planner-block-card {
   .planner-understood-heading { align-items: flex-start; }
   .planner-understood-heading strong { width: 100%; }
 }
+
+/* Personalization V2 planner explanations + 12-hour controls */
+.planner-personalization-reasons{display:grid;gap:10px;margin:0 0 14px}.planner-why-plan{padding:14px 16px;border:1px solid rgba(77,141,255,.16);border-radius:13px;background:rgba(77,141,255,.045)}.planner-why-plan>strong{font-size:.78rem;color:var(--app-text,#31374b)}.planner-why-plan ul{display:grid;gap:6px;margin:9px 0 0;padding-left:18px;color:var(--app-text-muted,#81899b);font-size:.75rem;line-height:1.5}.planner-default-summary{display:flex;flex-wrap:wrap;gap:6px;margin-top:-5px}.planner-default-summary>span{padding:6px 8px;border:1px solid var(--app-border,rgba(132,142,166,.18));border-radius:8px;background:var(--app-subtle,rgba(112,121,150,.04));color:var(--app-text-muted,#81899b);font-size:.68rem}.planner-default-summary strong{color:var(--app-text,#34394c);font-weight:750;text-transform:capitalize}.planner-settings-card .time-picker-12h{margin-top:5px}.planner-settings-card .time-picker-12h select{min-width:54px;background:var(--app-surface,#fff);border-color:var(--app-border,rgba(132,142,166,.22));color:var(--app-text,#34394c)}.planner-settings-card .time-picker-meridiem{background:var(--app-surface,#fff);border-color:var(--app-border,rgba(132,142,166,.22))}.planner-settings-card .time-picker-meridiem button.active{background:rgba(77,141,255,.12);color:var(--app-primary,#5d68e8)}
+html[data-theme="dark"] .planner-why-plan{background:rgba(77,141,255,.07)}
+
+.planner-alert.clarification{display:flex;flex-direction:column;gap:4px;color:var(--ux-text);background:rgba(77,141,255,.10);border:1px solid rgba(103,183,255,.24)}.planner-alert.clarification strong{color:var(--ux-accent-2);font-size:13px}.planner-alert.clarification span{color:var(--ux-muted);font-size:13px}

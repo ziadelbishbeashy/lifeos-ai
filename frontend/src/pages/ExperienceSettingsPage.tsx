@@ -4,6 +4,8 @@ import { apiPatch, ApiError } from "../api/client";
 import type { ExperienceKey, ExperienceProfile } from "../api/types";
 import { useSession } from "../auth/session";
 import { ExperienceSelector } from "../features/experience/ExperienceSelector";
+import { PersonalizationSettingsPanel } from "../components/PersonalizationProfile";
+import { AccountSecurityPanel } from "../components/AccountSecurityPanel";
 
 export function ExperienceSettingsPage() {
   const session = useSession();
@@ -79,6 +81,10 @@ export function ExperienceSettingsPage() {
         })}
       </div>
     </article>
+
+    <PersonalizationSettingsPanel />
+
+    <AccountSecurityPanel />
 
     <article className="experience-settings-summary">
       <div><span>Current default</span><strong>{primaryOption?.label || "Not selected"}</strong><small>{primaryOption?.workspace_label || "V-SPACE workspace"}</small></div>

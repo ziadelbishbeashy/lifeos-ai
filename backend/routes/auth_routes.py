@@ -14,9 +14,17 @@ from flask import (
     session,
     url_for,
 )
-from flask_login import current_user, login_required, login_user, logout_user
+from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
+from services.auth_email_service import send_email_verification
+from services.auth_security_service import (
+    auth_rate_limit_is_blocked,
+    clear_auth_failures,
+    establish_authenticated_session,
+    record_auth_failure,
+    revoke_current_authenticated_session,
+)
 from services.auth_service import (
     AccountCreationError,
     DuplicateEmailError,
@@ -56,6 +64,12 @@ def register():
         entered_name = (request.form.get("name") or "").strip()
         entered_email = (request.form.get("email") or "").strip()
 
+        normalized_attempt_email = normalize_email(entered_email)
+        if auth_rate_limit_is_blocked(purpose="register", identity=normalized_attempt_email):
+            flash("Too many account-creation attempts. Try again later.", "error")
+            return render_template("register.html", entered_name=entered_name, entered_email=entered_email), 429
+        record_auth_failure(purpose="register", identity=normalized_attempt_email)
+
         registration = build_registration_input(
             name=entered_name,
             email=entered_email,
@@ -69,8 +83,11 @@ def register():
         else:
             try:
                 user = create_user(registration)
-                session.clear()
-                login_user(user)
+                try:
+                    send_email_verification(user)
+                except Exception:
+                    current_app.logger.exception("V-SPACE could not send the registration verification email.")
+                establish_authenticated_session(user=user, remember=False, auth_method="password")
                 flash(
                     "Your LifeOS account was created successfully.",
                     "success",
@@ -105,9 +122,14 @@ def login():
         email = normalize_email(request.form.get("email"))
         password = request.form.get("password", "")
         remember = request.form.get("remember") == "on"
+        if auth_rate_limit_is_blocked(purpose="login", identity=email):
+            flash("Too many sign-in attempts. Try again later.", "error")
+            return render_template("login.html", entered_email=email), 429
+
         user = authenticate_user(email, password)
 
         if user is None:
+            record_auth_failure(purpose="login", identity=email)
             flash("Incorrect email or password.", "error")
             return render_template("login.html", entered_email=email)
 
@@ -118,8 +140,8 @@ def login():
                 "LifeOS could not claim legacy projects during login."
             )
 
-        session.clear()
-        login_user(user, remember=remember)
+        clear_auth_failures(purpose="login", identity=email)
+        establish_authenticated_session(user=user, remember=remember, auth_method="password")
         flash(f"Welcome back, {user.name}.", "success")
 
         next_page = request.args.get("next")
@@ -133,7 +155,6 @@ def login():
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
-    logout_user()
-    session.clear()
+    revoke_current_authenticated_session()
     flash("You have been logged out.", "success")
     return redirect(url_for("landing"))
