@@ -87,6 +87,23 @@ def _parse_time(value: Any, field_name: str) -> time | None:
         ) from error
 
 
+def _validate_schedule_pairs(
+    *,
+    assessment_date: date | None,
+    assessment_time: time | None,
+    due_date: date | None,
+    due_time: time | None,
+) -> None:
+    """Reject orphaned times that cannot be placed on a real calendar date."""
+
+    if assessment_time is not None and assessment_date is None:
+        raise ModuleAssessmentValidationError(
+            "assessment_time requires assessment_date."
+        )
+    if due_time is not None and due_date is None:
+        raise ModuleAssessmentValidationError("due_time requires due_date.")
+
+
 def _parse_weight(value: Any) -> Decimal | None:
     if value in (None, ""):
         return None
@@ -174,6 +191,12 @@ def validate_module_assessment_payload(payload: dict[str, Any]) -> dict[str, Any
         "estimated_study_minutes": _parse_estimated_minutes(payload.get("estimated_study_minutes")),
         "notes": _clean_optional_text(payload.get("notes")),
     }
+    _validate_schedule_pairs(
+        assessment_date=normalized["assessment_date"],
+        assessment_time=normalized["assessment_time"],
+        due_date=normalized["due_date"],
+        due_time=normalized["due_time"],
+    )
     return {
         **normalized,
         "assessment_date": normalized["assessment_date"].isoformat() if normalized["assessment_date"] else None,
@@ -243,21 +266,31 @@ def create_owned_module_assessment(
     notes: Any = None,
 ) -> ModuleAssessment:
     module = require_owned_module(module_id, user_id)
+    parsed_assessment_date = _parse_date(assessment_date, "assessment_date")
+    parsed_assessment_time = _parse_time(assessment_time, "assessment_time")
+    parsed_due_date = _parse_date(due_date, "due_date")
+    parsed_due_time = _parse_time(due_time, "due_time")
+    _validate_schedule_pairs(
+        assessment_date=parsed_assessment_date,
+        assessment_time=parsed_assessment_time,
+        due_date=parsed_due_date,
+        due_time=parsed_due_time,
+    )
     assessment = ModuleAssessment(
         module_id=module.id,
         title=_normalize_title(title),
         assessment_type=_normalize_type(assessment_type),
-        assessment_date=_parse_date(assessment_date, "assessment_date"),
-        assessment_time=_parse_time(assessment_time, "assessment_time"),
-        due_date=_parse_date(due_date, "due_date"),
-        due_time=_parse_time(due_time, "due_time"),
+        assessment_date=parsed_assessment_date,
+        assessment_time=parsed_assessment_time,
+        due_date=parsed_due_date,
+        due_time=parsed_due_time,
         weight_percent=_parse_weight(weight_percent),
         status=_normalize_status(status),
         topics=_clean_optional_text(topics),
         estimated_study_minutes=_parse_estimated_minutes(estimated_study_minutes),
         notes=_clean_optional_text(notes),
     )
-    return _commit(assessment, "LifeOS could not create the assessment.")
+    return _commit(assessment, "V-SPACE could not create the assessment.")
 
 
 def update_owned_module_assessment(
@@ -315,8 +348,14 @@ def update_owned_module_assessment(
         )
     if "notes" in changes:
         assessment.notes = _clean_optional_text(changes.get("notes"))
+    _validate_schedule_pairs(
+        assessment_date=assessment.assessment_date,
+        assessment_time=assessment.assessment_time,
+        due_date=assessment.due_date,
+        due_time=assessment.due_time,
+    )
     assessment.updated_at = datetime.utcnow()
-    return _commit(assessment, "LifeOS could not update the assessment.")
+    return _commit(assessment, "V-SPACE could not update the assessment.")
 
 
 def delete_owned_module_assessment(
@@ -334,7 +373,7 @@ def delete_owned_module_assessment(
     except SQLAlchemyError as error:
         db.session.rollback()
         raise ModuleAssessmentPersistenceError(
-            "LifeOS could not delete the assessment."
+            "V-SPACE could not delete the assessment."
         ) from error
     return title
 
@@ -344,6 +383,37 @@ def assessment_target_date(assessment: ModuleAssessment) -> date | None:
     if assessment.assessment_type == "Assignment":
         return assessment.due_date or assessment.assessment_date
     return assessment.assessment_date or assessment.due_date
+
+
+def assessment_target_time(assessment: ModuleAssessment) -> time | None:
+    """Return the time paired with the authoritative target date when known."""
+
+    if assessment.assessment_type == "Assignment":
+        if assessment.due_date is not None:
+            return assessment.due_time
+        return assessment.assessment_time
+    if assessment.assessment_date is not None:
+        return assessment.assessment_time
+    return assessment.due_time
+
+
+def assessment_target_kind(assessment: ModuleAssessment) -> str | None:
+    if assessment.assessment_type == "Assignment" and assessment.due_date is not None:
+        return "due"
+    if assessment.assessment_date is not None:
+        return "assessment"
+    if assessment.due_date is not None:
+        return "due"
+    return None
+
+
+def assessment_planner_ready(assessment: ModuleAssessment) -> bool:
+    minutes = int(assessment.estimated_study_minutes or 0)
+    return (
+        assessment.status not in {"Completed", "Cancelled"}
+        and assessment_target_date(assessment) is not None
+        and minutes > 0
+    )
 
 
 def days_until_assessment(
