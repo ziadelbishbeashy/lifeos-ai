@@ -234,12 +234,54 @@ def _proposal_payload(candidate: dict[str, Any], *, module_id: int | None, sourc
         "status": "Upcoming",
     }
     # Title/type are required proposal identity. Optional AI-extracted values are
-    # validated independently so one malformed field becomes reviewable/null
-    # rather than poisoning the whole schedule import.
+    # kept reviewable when malformed, but schedule date/time fields must be
+    # normalized as pairs because a time is only valid when its matching date is
+    # present. Validating the time in isolation would incorrectly erase imported
+    # exam/due times after the schedule-pair safety rule was introduced.
     normalized_base = validate_module_assessment_payload(base)
     normalized: dict[str, Any] = dict(normalized_base)
     issues: list[str] = []
-    for field in ("assessment_date", "assessment_time", "due_date", "due_time", "weight_percent", "topics", "estimated_study_minutes", "notes"):
+
+    for date_field, time_field in (
+        ("assessment_date", "assessment_time"),
+        ("due_date", "due_time"),
+    ):
+        raw_date = candidate.get(date_field)
+        raw_time = candidate.get(time_field)
+        normalized[date_field] = None
+        normalized[time_field] = None
+
+        if raw_date not in (None, ""):
+            try:
+                checked_date = validate_module_assessment_payload(
+                    {**base, date_field: raw_date}
+                )
+                normalized[date_field] = checked_date.get(date_field)
+            except ModuleAssessmentValidationError as error:
+                issues.append(str(error))
+
+        if raw_time not in (None, ""):
+            if normalized[date_field] is None:
+                issues.append(f"{time_field} requires {date_field}.")
+            else:
+                try:
+                    checked_pair = validate_module_assessment_payload(
+                        {
+                            **base,
+                            date_field: normalized[date_field],
+                            time_field: raw_time,
+                        }
+                    )
+                    normalized[time_field] = checked_pair.get(time_field)
+                except ModuleAssessmentValidationError as error:
+                    issues.append(str(error))
+
+    for field in (
+        "weight_percent",
+        "topics",
+        "estimated_study_minutes",
+        "notes",
+    ):
         value = candidate.get(field)
         if value in (None, ""):
             normalized[field] = None
