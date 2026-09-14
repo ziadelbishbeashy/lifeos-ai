@@ -3134,6 +3134,13 @@ class SmartPlannerBlock(db.Model):
         nullable=True,
         index=True,
     )
+    assessment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("module_assessments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    completed_at = db.Column(db.DateTime, nullable=True)
     block_date = db.Column(db.Date, nullable=False, index=True)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
