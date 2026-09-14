@@ -21,6 +21,8 @@ type PlannerCommitment = {
 type PlannerBlock = {
   id?: number;
   task_id: number | null;
+  assessment_id?: number | null;
+  completed_at?: string | null;
   title: string;
   date: string;
   start_time: string;
@@ -194,7 +196,7 @@ function StateBadge({ state }: { state?: PlannerBlock["state"] }) {
   return <span className={`planner-state-badge state-${state}`}>{label}</span>;
 }
 
-function PlanTimeline({ plan, editable, onEdit }: { plan: SmartPlan; editable: boolean; onEdit: (block: PlannerBlock) => void }) {
+function PlanTimeline({ plan, editable, onEdit, onTogglePrep }: { plan: SmartPlan; editable: boolean; onEdit: (block: PlannerBlock) => void; onTogglePrep: (block: PlannerBlock, completed: boolean) => void }) {
   const visibleDays = plan.days.filter((day) => day.blocks.length || day.commitments?.length || plan.mode === "day");
   return <div className="planner-timeline">
     {visibleDays.map((day) => {
@@ -236,15 +238,16 @@ function PlanTimeline({ plan, editable, onEdit }: { plan: SmartPlan; editable: b
               <div className="planner-block-rail"><i /></div>
               <div className="planner-block-card">
                 <div className="planner-block-top">
-                  <span className={`planner-priority priority-${(block.importance || "medium").toLowerCase()}`}>{block.block_type === "focus" ? "Focus" : block.importance || "Medium"}</span>
+                  <span className={`planner-priority priority-${(block.importance || "medium").toLowerCase()}`}>{block.block_type === "focus" ? "Focus" : block.block_type === "assessment_prep" ? "Assessment prep" : block.importance || "Medium"}</span>
                   <div className="planner-block-badges"><StateBadge state={block.state} />{block.locked ? <span className="planner-lock-badge"><PlanningIcon type="lock" /> Locked</span> : null}<small>{minutesLabel(block.minutes)}</small></div>
                 </div>
                 <h3>{block.title}</h3>
                 <div className="planner-block-meta">
-                  <span>{block.block_type === "focus" ? "Requested focus time" : block.project_title || "General workspace"}</span>
+                  <span>{block.block_type === "focus" ? "Requested focus time" : block.block_type === "assessment_prep" ? "Academic preparation" : block.project_title || "General workspace"}</span>
                   {block.deadline ? <span>Due {dateLabel(block.deadline)}</span> : null}
                 </div>
                 {block.rationale ? <p>{block.rationale}</p> : null}
+                {editable && block.id && block.block_type === "assessment_prep" ? <button className={`planner-prep-complete ${block.state === "completed" ? "is-complete" : ""}`} type="button" onClick={() => onTogglePrep(block, block.state !== "completed")}><PlanningIcon type="check" /> {block.state === "completed" ? "Mark as not done" : "Mark study done"}</button> : null}
                 {editable && block.id && block.state !== "completed" ? <button className="planner-block-edit" type="button" onClick={() => onEdit(block)}><PlanningIcon type="edit" /> Edit time & lock</button> : null}
               </div>
             </article>;
@@ -405,6 +408,20 @@ export function SmartPlannerPage() {
     onError: (value) => setError(apiMessage(value, "V-SPACE could not remove that commitment.")),
   });
 
+  const prepCompletionMutation = useMutation({
+    mutationFn: ({ id, completed }: { id: number; completed: boolean }) => {
+      const planId = stateQuery.data?.planner.active_plan?.id;
+      if (!planId) throw new Error("No accepted plan");
+      return apiPatch<{ plan: SmartPlan }>(`/api/v1/planner/plans/${planId}/blocks/${id}`, { completed });
+    },
+    onSuccess: async (_data, variables) => {
+      setMessage(variables.completed ? "Study session marked complete. Future plans will count this preparation." : "Study session reopened.");
+      setError(null);
+      await stateQuery.refetch();
+    },
+    onError: (value) => setError(apiMessage(value, "V-SPACE could not update that study session.")),
+  });
+
   const updateBlockMutation = useMutation({
     mutationFn: (edit: BlockEdit) => {
       const planId = stateQuery.data?.planner.active_plan?.id;
@@ -505,7 +522,7 @@ export function SmartPlannerPage() {
           </header>
           {shownPlan ? <>
             <div className="planner-plan-summary"><PlanningIcon type={shownPlan.overload_minutes ? "warning" : "check"} /><p>{shownPlan.summary}</p></div>
-            <PlanTimeline plan={shownPlan} editable={accepted} onEdit={editBlock} />
+            <PlanTimeline plan={shownPlan} editable={accepted} onEdit={editBlock} onTogglePrep={(block, completed) => { if (block.id) prepCompletionMutation.mutate({ id: block.id, completed }); }} />
           </> : <div className="planner-empty-state"><div className="planner-empty-orb"><PlanningIcon type="spark" /></div><h3>Your workload is ready.</h3><p>Add fixed commitments if you need them, choose your working window and build a plan. Previewing never changes anything in V-SPACE.</p><button type="button" onClick={() => previewMutation.mutate()}>Plan {mode === "day" ? "my day" : mode === "week" ? "my week" : "my goal"}</button></div>}
         </section>
 
