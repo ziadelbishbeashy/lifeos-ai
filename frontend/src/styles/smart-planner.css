@@ -717,3 +717,25 @@ html[data-theme="dark"] .planner-focus-block .planner-block-card {
 html[data-theme="dark"] .planner-why-plan{background:rgba(77,141,255,.07)}
 
 .planner-alert.clarification{display:flex;flex-direction:column;gap:4px;color:var(--ux-text);background:rgba(77,141,255,.10);border:1px solid rgba(103,183,255,.24)}.planner-alert.clarification strong{color:var(--ux-accent-2);font-size:13px}.planner-alert.clarification span{color:var(--ux-muted);font-size:13px}
+
+
+.planner-prep-complete{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-top:11px;
+  margin-right:12px;
+  padding:7px 10px;
+  border:1px solid rgba(55,166,126,.18);
+  border-radius:9px;
+  color:#2f8768;
+  background:rgba(55,166,126,.07);
+  font:inherit;
+  font-size:.72rem;
+  font-weight:800;
+  cursor:pointer;
+}
+.planner-prep-complete svg{width:13px;height:13px;fill:currentColor}
+.planner-prep-complete.is-complete{color:var(--app-text-muted,#81899b);background:var(--app-subtle,rgba(112,121,150,.05));border-color:var(--app-border,rgba(132,142,166,.18))}
+.planner-task-state-completed.planner-focus-block .planner-block-card,
+.planner-task-state-completed .planner-block-card{opacity:.78}
