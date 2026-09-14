@@ -27,6 +27,11 @@ from services.personalization_profile_service import (
     profile_for_user,
     recurring_commitments_for_range,
 )
+from services.module_assessment_service import (
+    assessment_target_date,
+    assessment_target_kind,
+    assessment_target_time,
+)
 
 from models import (
     LearningModule,
@@ -50,10 +55,12 @@ MAX_CANDIDATE_TASKS = 80
 MAX_BLOCKS = 80
 MAX_GOAL_DAYS = 14
 ACADEMIC_ASSESSMENT_MINUTES = 60
+ASSESSMENT_PREP_LOOKAHEAD_DAYS = 14
+ASSESSMENT_PREP_MAX_CHUNK_MINUTES = 90
 LIGHT_DAY_CAPACITY_FACTOR = 0.65
 MAX_FOCUS_CHUNK_MINUTES = 90
 MIN_FOCUS_CHUNK_MINUTES = 30
-NATURAL_BLOCK_TYPES = frozenset({"focus", "inferred_commitment"})
+NATURAL_BLOCK_TYPES = frozenset({"focus", "assessment_prep", "inferred_commitment"})
 
 
 class SmartPlannerError(RuntimeError):
@@ -332,6 +339,65 @@ def _academic_commitments(*, owner_id: int, start_date: date, end_date: date) ->
     return result
 
 
+def _assessment_preparation_requests(
+    *, owner_id: int, start_date: date, end_date: date
+) -> list[dict[str, Any]]:
+    """Return deterministic study-work requests for upcoming assessments.
+
+    Assessment rows remain the source of truth. This function only derives
+    read-only planner work from confirmed workspace data.
+    """
+
+    lookahead_end = end_date + timedelta(days=ASSESSMENT_PREP_LOOKAHEAD_DAYS)
+    rows = (
+        ModuleAssessment.query
+        .join(LearningModule, ModuleAssessment.module_id == LearningModule.id)
+        .filter(
+            LearningModule.user_id == int(owner_id),
+            ModuleAssessment.status.notin_(["Completed", "Cancelled"]),
+            ModuleAssessment.estimated_study_minutes.isnot(None),
+            ModuleAssessment.estimated_study_minutes > 0,
+        )
+        .order_by(ModuleAssessment.id.asc())
+        .all()
+    )
+    result: list[dict[str, Any]] = []
+    for assessment in rows:
+        target = assessment_target_date(assessment)
+        if target is None or target < start_date or target > lookahead_end:
+            continue
+        minutes = max(0, min(int(assessment.estimated_study_minutes or 0), 40 * 60))
+        if minutes <= 0:
+            continue
+        module = assessment.module
+        target_time = assessment_target_time(assessment)
+        result.append({
+            "assessment_id": int(assessment.id),
+            "module_id": int(module.id),
+            "module_title": str(module.title),
+            "title": str(assessment.title),
+            "assessment_type": str(assessment.assessment_type),
+            "target_date": target,
+            "target_time": target_time,
+            "target_kind": assessment_target_kind(assessment),
+            "minutes": minutes,
+            "topics": str(assessment.topics or "").strip() or None,
+            "weight_percent": (
+                float(assessment.weight_percent)
+                if assessment.weight_percent is not None
+                else None
+            ),
+        })
+    return sorted(
+        result,
+        key=lambda item: (
+            item["target_date"],
+            -(item["weight_percent"] or 0.0),
+            item["assessment_id"],
+        ),
+    )
+
+
 def fixed_commitments(*, owner_id: int, start_date: date, end_date: date) -> list[dict[str, Any]]:
     manual = [commitment_to_dict(item) for item in list_owned_commitments(owner_id=owner_id, start_date=start_date, end_date=end_date)]
     academic = _academic_commitments(owner_id=owner_id, start_date=start_date, end_date=end_date)
@@ -554,6 +620,49 @@ def _find_slot_with_preference(*, day: date, minutes: int, config: PlannerConfig
         day=day, minutes=minutes, window_start=config.working_start, window_end=config.working_end,
         busy=busy, break_minutes=config.break_minutes,
     ), False
+
+
+def _find_assessment_prep_slot(
+    *,
+    day: date,
+    minutes: int,
+    config: PlannerConfig,
+    busy: list[tuple[datetime, datetime]],
+    preferred: tuple[time, time] | None,
+    latest_end: time | None,
+) -> tuple[datetime | None, bool]:
+    """Find a prep slot that never crosses the assessment/due cutoff."""
+
+    window_end = min(config.working_end, latest_end) if latest_end else config.working_end
+    if window_end <= config.working_start:
+        return None, False
+    clipped_preferred = preferred
+    if clipped_preferred is not None:
+        left = max(config.working_start, clipped_preferred[0])
+        right = min(window_end, clipped_preferred[1])
+        clipped_preferred = (left, right) if right > left else None
+    if clipped_preferred is not None:
+        start_dt = _find_slot(
+            day=day,
+            minutes=minutes,
+            window_start=clipped_preferred[0],
+            window_end=clipped_preferred[1],
+            busy=busy,
+            break_minutes=config.break_minutes,
+        )
+        if start_dt is not None:
+            return start_dt, True
+    return (
+        _find_slot(
+            day=day,
+            minutes=minutes,
+            window_start=config.working_start,
+            window_end=window_end,
+            busy=busy,
+            break_minutes=config.break_minutes,
+        ),
+        False,
+    )
 
 
 def _human_time(value: str | time | None) -> str:
@@ -877,8 +986,15 @@ def build_smart_plan_preview(
         ) for day in dates
     }
 
+    assessment_prep_requests = _assessment_preparation_requests(
+        owner_id=owner_id,
+        start_date=range_start,
+        end_date=range_end,
+    )
+
     scheduled_minutes = preserved_work_minutes
     focus_scheduled_minutes = 0
+    assessment_prep_scheduled_minutes = 0
     unscheduled: list[dict[str, Any]] = []
 
     # Explicit duration requests are honoured before general open tasks because
@@ -941,8 +1057,120 @@ def build_smart_plan_preview(
                 "source": "focus_request",
             })
 
+    # Confirmed assessments become deterministic preparation work. Exact
+    # assessment time stays a fixed commitment; preparation is placed before it.
+    for request in assessment_prep_requests:
+        remaining = int(request["minutes"])
+        target_day = request["target_date"]
+        target_time = request["target_time"]
+        eligible_days = [day for day in dates if day <= target_day]
+        # If an exam has no known clock time, do not guess that prep can happen
+        # after the exam on the target day. Assignment due dates are safe to use
+        # through the normal working window when no due time is supplied.
+        if target_time is None and request["target_kind"] == "assessment":
+            eligible_days = [day for day in eligible_days if day < target_day]
+        if not eligible_days:
+            unscheduled.append({
+                "task_id": None,
+                "assessment_id": request["assessment_id"],
+                "title": f'Prepare · {request["module_title"]} · {request["title"]}',
+                "minutes": remaining,
+                "project_id": None,
+                "project_title": None,
+                "importance": "High",
+                "deadline": target_day.isoformat(),
+                "reason": "There is no safe planning window before this assessment.",
+                "source": "assessment_prep",
+            })
+            continue
+
+        rounds = 0
+        while remaining > 0 and rounds < 12:
+            placed_this_round = False
+            for day in eligible_days:
+                if remaining <= 0:
+                    break
+                desired = min(
+                    preferred_focus_minutes,
+                    ASSESSMENT_PREP_MAX_CHUNK_MINUTES,
+                    remaining,
+                )
+                chunk = desired
+                placed = False
+                while chunk >= MIN_FOCUS_CHUNK_MINUTES and not placed:
+                    latest_end = target_time if day == target_day else None
+                    start_dt, used_preferred_window = _find_assessment_prep_slot(
+                        day=day,
+                        minutes=chunk,
+                        config=config,
+                        busy=busy_by_day[day],
+                        preferred=preferred_windows.get(day),
+                        latest_end=latest_end,
+                    )
+                    if start_dt is None:
+                        chunk -= 15
+                        continue
+                    sort_order += 1
+                    topics = request.get("topics")
+                    rationale = (
+                        f'Preparation for {request["module_title"]} · {request["title"]} '
+                        f'before {target_day.isoformat()}.'
+                    )
+                    if topics:
+                        rationale += f" Topics: {topics}."
+                    if used_preferred_window and productive_period and productive_period != "varies":
+                        rationale += f" Placed near your {productive_period.replace('_', ' ')} focus preference."
+                    block = _natural_block(
+                        title=f'Prepare · {request["module_title"]} · {request["title"]}',
+                        day=day,
+                        start_dt=start_dt,
+                        minutes=chunk,
+                        sort_order=sort_order,
+                        block_type="assessment_prep",
+                        rationale=rationale,
+                        locked=False,
+                        importance="High",
+                    )
+                    block["deadline"] = target_day.isoformat()
+                    block["assessment_id"] = request["assessment_id"]
+                    block["module_id"] = request["module_id"]
+                    block["module_title"] = request["module_title"]
+                    day_blocks[day].append(block)
+                    busy_by_day[day].append(
+                        (start_dt, start_dt + timedelta(minutes=chunk + config.break_minutes))
+                    )
+                    assessment_prep_scheduled_minutes += chunk
+                    scheduled_minutes += chunk
+                    remaining -= chunk
+                    placed = True
+                    placed_this_round = True
+                # one preparation chunk per assessment/day/round spreads work
+                # before filling the same day again.
+            if not placed_this_round:
+                break
+            rounds += 1
+
+        if remaining > 0:
+            unscheduled.append({
+                "task_id": None,
+                "assessment_id": request["assessment_id"],
+                "title": f'Prepare · {request["module_title"]} · {request["title"]}',
+                "minutes": remaining,
+                "project_id": None,
+                "project_title": None,
+                "importance": "High",
+                "deadline": target_day.isoformat(),
+                "reason": "Not all preparation fits before the assessment around your fixed commitments.",
+                "source": "assessment_prep",
+            })
+
     task_minutes_total = sum(_estimate_minutes(task) for task in tasks)
-    total_candidate_minutes = preserved_work_minutes + sum(max(0, int(item.get("minutes") or 0)) for item in list(_focus_requests or [])[:8]) + task_minutes_total
+    total_candidate_minutes = (
+        preserved_work_minutes
+        + sum(max(0, int(item.get("minutes") or 0)) for item in list(_focus_requests or [])[:8])
+        + sum(int(item["minutes"]) for item in assessment_prep_requests)
+        + task_minutes_total
+    )
     task_budget_limit = energy_target_minutes if capacity_factor < 0.999 else raw_free_capacity
 
     for task in tasks:
@@ -1136,7 +1364,8 @@ def build_smart_plan_preview(
         "energy_mode": energy_mode,
         "energy_reserve_minutes": energy_reserve_minutes,
         "scheduled_tasks": work_block_count,
-        "candidate_tasks": len(tasks) + len(list(_focus_requests or [])[:8]) + preserved_work_blocks,
+        "candidate_tasks": len(tasks) + len(list(_focus_requests or [])[:8]) + len(assessment_prep_requests) + preserved_work_blocks,
+        "assessment_prep_minutes": assessment_prep_scheduled_minutes,
         "days": days_payload,
         "unscheduled": unscheduled,
         "rebalanced_from_plan_id": _rebalanced_from_plan_id,
