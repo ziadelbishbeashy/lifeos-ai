@@ -10,7 +10,10 @@ from __future__ import annotations
 from typing import Any
 
 from services.module_assessment_service import (
+    assessment_planner_ready,
     assessment_target_date,
+    assessment_target_kind,
+    assessment_target_time,
     assessment_timing_label,
     days_until_assessment,
 )
@@ -505,6 +508,9 @@ def serialize_module_assessment(assessment) -> dict[str, Any]:
         "due_date": _iso(assessment.due_date),
         "due_time": _iso(assessment.due_time),
         "target_date": _iso(assessment_target_date(assessment)),
+        "target_time": _iso(assessment_target_time(assessment)),
+        "target_kind": assessment_target_kind(assessment),
+        "planner_ready": assessment_planner_ready(assessment),
         "weight_percent": (
             float(assessment.weight_percent)
             if assessment.weight_percent is not None
