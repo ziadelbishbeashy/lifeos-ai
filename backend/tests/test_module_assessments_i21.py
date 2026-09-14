@@ -219,3 +219,61 @@ def test_delete_module_assessment(app, client, user):
 
     with app.app_context():
         assert db.session.get(ModuleAssessment, assessment_id) is None
+
+
+def test_assessment_exposes_planner_metadata(app, client, user):
+    _login(client)
+    module_id = _module(app, user, "Calculus")
+    target = date.today() + timedelta(days=4)
+
+    response = client.post(
+        f"/api/v1/modules/{module_id}/assessments",
+        json={
+            "title": "Calculus Midterm",
+            "assessment_type": "Midterm",
+            "assessment_date": target.isoformat(),
+            "assessment_time": "10:00",
+            "estimated_study_minutes": 300,
+        },
+    )
+
+    assert response.status_code == 201
+    item = response.get_json()["item"]
+    assert item["target_date"] == target.isoformat()
+    assert item["target_time"].startswith("10:00")
+    assert item["target_kind"] == "assessment"
+    assert item["planner_ready"] is True
+
+
+def test_assessment_rejects_time_without_matching_date(app, client, user):
+    _login(client)
+    module_id = _module(app, user)
+
+    response = client.post(
+        f"/api/v1/modules/{module_id}/assessments",
+        json={
+            "title": "Orphan time",
+            "assessment_type": "Quiz",
+            "assessment_time": "10:00",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "assessment_time requires assessment_date" in response.get_json()["message"]
+
+
+def test_assignment_due_time_requires_due_date(app, client, user):
+    _login(client)
+    module_id = _module(app, user)
+
+    response = client.post(
+        f"/api/v1/modules/{module_id}/assessments",
+        json={
+            "title": "Coursework",
+            "assessment_type": "Assignment",
+            "due_time": "23:59",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "due_time requires due_date" in response.get_json()["message"]
