@@ -441,11 +441,12 @@ def test_completed_assessment_prep_is_not_scheduled_again(app, client, user):
         plan = SmartPlannerPlan.query.filter_by(user_id=user, status="accepted").one()
         prep_blocks = [b for b in plan.blocks if b.block_type == "assessment_prep"]
         assert prep_blocks
+        plan_id = plan.id
         prep_block_id = prep_blocks[0].id
         first_minutes = prep_blocks[0].minutes
 
     completed = client.patch(
-        f"/api/v1/planner/plans/{plan.id}/blocks/{prep_block_id}",
+        f"/api/v1/planner/plans/{plan_id}/blocks/{prep_block_id}",
         json={"completed": True},
     )
     assert completed.status_code == 200, completed.get_json()
