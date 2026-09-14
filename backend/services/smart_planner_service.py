@@ -316,6 +316,24 @@ def _academic_commitments(*, owner_id: int, start_date: date, end_date: date) ->
         .order_by(ModuleAssessment.assessment_date.asc(), ModuleAssessment.assessment_time.asc(), ModuleAssessment.id.asc())
         .all()
     )
+    completed_rows = (
+        SmartPlannerBlock.query
+        .join(SmartPlannerPlan, SmartPlannerBlock.plan_id == SmartPlannerPlan.id)
+        .filter(
+            SmartPlannerPlan.user_id == int(owner_id),
+            SmartPlannerBlock.block_type == "assessment_prep",
+            SmartPlannerBlock.assessment_id.isnot(None),
+            SmartPlannerBlock.completed_at.isnot(None),
+        )
+        .all()
+    )
+    completed_by_assessment: dict[int, int] = {}
+    for block in completed_rows:
+        assessment_id = int(block.assessment_id)
+        completed_by_assessment[assessment_id] = (
+            completed_by_assessment.get(assessment_id, 0) + int(block.minutes or 0)
+        )
+
     result: list[dict[str, Any]] = []
     for assessment in rows:
         day = assessment.assessment_date
@@ -366,7 +384,9 @@ def _assessment_preparation_requests(
         target = assessment_target_date(assessment)
         if target is None or target < start_date or target > lookahead_end:
             continue
-        minutes = max(0, min(int(assessment.estimated_study_minutes or 0), 40 * 60))
+        total_minutes = max(0, min(int(assessment.estimated_study_minutes or 0), 40 * 60))
+        completed_minutes = completed_by_assessment.get(int(assessment.id), 0)
+        minutes = max(0, total_minutes - completed_minutes)
         if minutes <= 0:
             continue
         module = assessment.module
@@ -381,6 +401,8 @@ def _assessment_preparation_requests(
             "target_time": target_time,
             "target_kind": assessment_target_kind(assessment),
             "minutes": minutes,
+            "total_minutes": total_minutes,
+            "completed_minutes": completed_minutes,
             "topics": str(assessment.topics or "").strip() or None,
             "weight_percent": (
                 float(assessment.weight_percent)
@@ -1535,6 +1557,8 @@ def build_rebalance_preview(
     for block in plan.blocks:
         if block.block_date < start:
             continue
+        if block.completed_at is not None:
+            continue
         if block.task is not None and str(block.task.status or "") == "Completed":
             continue
         if block.locked:
@@ -1605,6 +1629,7 @@ def apply_confirmed_smart_plan(*, owner_id: int, proposal: LifeOSActionProposal)
         raise SmartPlannerValidationError("This Smart Planner proposal has no valid schedule blocks.")
 
     owned_tasks: dict[int, Task] = {}
+    owned_assessments: dict[int, ModuleAssessment] = {}
     for block in blocks:
         block_type = str(block.get("block_type") or "task")
         raw_task_id = block.get("task_id")
@@ -1622,6 +1647,23 @@ def apply_confirmed_smart_plan(*, owner_id: int, proposal: LifeOSActionProposal)
                 raise SmartPlannerValidationError("A natural-language planner block contains an unexpected task reference.")
             if not " ".join(str(block.get("title") or "").split()):
                 raise SmartPlannerValidationError("A natural-language planner block is missing its title.")
+            if block_type == "assessment_prep":
+                try:
+                    assessment_id = int(block.get("assessment_id"))
+                except (TypeError, ValueError) as error:
+                    raise SmartPlannerValidationError("Assessment preparation is missing its assessment reference.") from error
+                assessment = (
+                    ModuleAssessment.query
+                    .join(LearningModule, ModuleAssessment.module_id == LearningModule.id)
+                    .filter(
+                        ModuleAssessment.id == assessment_id,
+                        LearningModule.user_id == int(owner_id),
+                    )
+                    .first()
+                )
+                if assessment is None:
+                    raise SmartPlannerValidationError("An assessment preparation block is no longer available.")
+                owned_assessments[assessment_id] = assessment
         else:
             raise SmartPlannerValidationError("A planner block type is no longer supported. Regenerate the plan.")
 
@@ -1711,9 +1753,15 @@ def apply_confirmed_smart_plan(*, owner_id: int, proposal: LifeOSActionProposal)
                     deadline = date.fromisoformat(str(block.get("deadline")))
                 except ValueError:
                     deadline = None
+            assessment_id = None
+            if block_type == "assessment_prep":
+                assessment_id = int(block.get("assessment_id"))
+                if assessment_id not in owned_assessments:
+                    raise SmartPlannerValidationError("An assessment preparation block is no longer available.")
             db.session.add(SmartPlannerBlock(
                 plan_id=plan.id,
                 task_id=None,
+                assessment_id=assessment_id,
                 block_date=block_date,
                 start_time=start_at,
                 end_time=end_at,
@@ -1738,6 +1786,8 @@ def apply_confirmed_smart_plan(*, owner_id: int, proposal: LifeOSActionProposal)
         raise SmartPlannerPersistenceError("V-SPACE could not save the confirmed Smart Planner schedule.") from error
 
 def _block_state(block: SmartPlannerBlock) -> str:
+    if block.completed_at is not None:
+        return "completed"
     task = block.task
     if task is not None and str(task.status or "") == "Completed":
         return "completed"
@@ -1755,6 +1805,8 @@ def _block_to_dict(block: SmartPlannerBlock) -> dict[str, Any]:
     return {
         "id": int(block.id),
         "task_id": int(block.task_id) if block.task_id is not None else None,
+        "assessment_id": int(block.assessment_id) if block.assessment_id is not None else None,
+        "completed_at": block.completed_at.isoformat() if block.completed_at else None,
         "title": block.title,
         "date": block.block_date.isoformat(),
         "start_time": block.start_time.strftime("%H:%M"),
@@ -1846,6 +1898,11 @@ def update_owned_plan_block(*, owner_id: int, plan_id: int, block_id: int, paylo
     if block.task is not None and str(block.task.status or "") == "Completed":
         raise SmartPlannerValidationError("Completed task blocks stay in place as history.")
     raw = payload if isinstance(payload, dict) else {}
+    if "completed" in raw:
+        if str(block.block_type or "") != "assessment_prep":
+            raise SmartPlannerValidationError("Only assessment preparation blocks can be completed from the planner.")
+        block.completed_at = datetime.utcnow() if bool(raw.get("completed")) else None
+
     day = _parse_date(raw.get("date"), default=block.block_date)
     if day < plan.start_date or day > plan.end_date:
         raise SmartPlannerValidationError("Move the block to a day inside this accepted plan.")
