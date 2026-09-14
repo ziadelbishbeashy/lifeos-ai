@@ -396,3 +396,150 @@ def test_manual_commitments_are_owner_scoped(app, client, user):
     assert response.status_code == 400
     with app.app_context():
         assert db.session.get(SmartPlannerCommitment, commitment_id) is not None
+
+
+def test_completed_assessment_prep_is_not_scheduled_again(app, client, user):
+    start = date.today()
+    exam_day = start + timedelta(days=2)
+    with app.app_context():
+        project_id, _ = _workspace(user)
+        module = LearningModule(user_id=user, title="Calculus", status="Active")
+        db.session.add(module)
+        db.session.flush()
+        assessment = ModuleAssessment(
+            module_id=module.id,
+            title="Calculus Midterm",
+            assessment_type="Midterm",
+            assessment_date=exam_day,
+            assessment_time=time(10, 0),
+            estimated_study_minutes=120,
+            status="Upcoming",
+        )
+        db.session.add(assessment)
+        db.session.commit()
+
+    _login(client)
+    prepared = client.post(
+        "/api/v1/planner/proposals",
+        json={
+            "mode": "goal",
+            "start_date": start.isoformat(),
+            "horizon_days": 3,
+            "working_start": "09:00",
+            "working_end": "17:00",
+            "break_minutes": 15,
+            "project_id": project_id,
+            "request_text": "Prepare for my assessment",
+        },
+    )
+    assert prepared.status_code == 201, prepared.get_json()
+    proposal_id = prepared.get_json()["proposal"]["id"]
+    confirmed = client.post(f"/api/v1/intelligence/action-proposals/{proposal_id}/confirm")
+    assert confirmed.status_code == 200, confirmed.get_json()
+
+    with app.app_context():
+        plan = SmartPlannerPlan.query.filter_by(user_id=user, status="accepted").one()
+        prep_blocks = [b for b in plan.blocks if b.block_type == "assessment_prep"]
+        assert prep_blocks
+        prep_block_id = prep_blocks[0].id
+        first_minutes = prep_blocks[0].minutes
+
+    completed = client.patch(
+        f"/api/v1/planner/plans/{plan.id}/blocks/{prep_block_id}",
+        json={"completed": True},
+    )
+    assert completed.status_code == 200, completed.get_json()
+    saved = next(
+        block
+        for day in completed.get_json()["plan"]["days"]
+        for block in day["blocks"]
+        if block["id"] == prep_block_id
+    )
+    assert saved["state"] == "completed"
+    assert saved["completed_at"] is not None
+
+    preview = client.post(
+        "/api/v1/planner/preview",
+        json={
+            "mode": "goal",
+            "start_date": start.isoformat(),
+            "horizon_days": 3,
+            "working_start": "09:00",
+            "working_end": "17:00",
+            "break_minutes": 15,
+            "project_id": project_id,
+            "request_text": "Prepare for my assessment",
+        },
+    )
+    assert preview.status_code == 200, preview.get_json()
+    remaining = [
+        block
+        for day in preview.get_json()["preview"]["days"]
+        for block in day["blocks"]
+        if block["block_type"] == "assessment_prep"
+    ]
+    assert sum(block["minutes"] for block in remaining) == 120 - first_minutes
+
+
+def test_rebalance_does_not_recreate_completed_assessment_prep(app, client, user):
+    start = date.today()
+    exam_day = start + timedelta(days=2)
+    with app.app_context():
+        project_id, _ = _workspace(user)
+        module = LearningModule(user_id=user, title="Physics", status="Active")
+        db.session.add(module)
+        db.session.flush()
+        assessment = ModuleAssessment(
+            module_id=module.id,
+            title="Physics Final",
+            assessment_type="Final",
+            assessment_date=exam_day,
+            assessment_time=time(14, 0),
+            estimated_study_minutes=120,
+            status="Upcoming",
+        )
+        db.session.add(assessment)
+        db.session.commit()
+
+    _login(client)
+    prepared = client.post(
+        "/api/v1/planner/proposals",
+        json={
+            "mode": "goal",
+            "start_date": start.isoformat(),
+            "horizon_days": 3,
+            "working_start": "09:00",
+            "working_end": "17:00",
+            "break_minutes": 15,
+            "project_id": project_id,
+            "request_text": "Prepare for Physics",
+        },
+    )
+    assert prepared.status_code == 201, prepared.get_json()
+    proposal_id = prepared.get_json()["proposal"]["id"]
+    assert client.post(f"/api/v1/intelligence/action-proposals/{proposal_id}/confirm").status_code == 200
+
+    with app.app_context():
+        plan = SmartPlannerPlan.query.filter_by(user_id=user, status="accepted").one()
+        prep = next(b for b in plan.blocks if b.block_type == "assessment_prep")
+        plan_id = plan.id
+        prep_id = prep.id
+        completed_minutes = prep.minutes
+
+    assert client.patch(
+        f"/api/v1/planner/plans/{plan_id}/blocks/{prep_id}",
+        json={"completed": True},
+    ).status_code == 200
+
+    rebalanced = client.post(
+        f"/api/v1/planner/plans/{plan_id}/rebalance-preview",
+        json={"from_date": start.isoformat()},
+    )
+    assert rebalanced.status_code == 200, rebalanced.get_json()
+    prep_blocks = [
+        block
+        for day in rebalanced.get_json()["preview"]["days"]
+        for block in day["blocks"]
+        if block["block_type"] == "assessment_prep"
+    ]
+    assert sum(block["minutes"] for block in prep_blocks) == 120 - completed_minutes
