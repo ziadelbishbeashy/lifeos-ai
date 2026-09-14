@@ -155,6 +155,111 @@ def test_timed_academic_assessment_is_read_only_fixed_commitment(app, client, us
     assert academic["module_title"] == "Calculus"
 
 
+def test_upcoming_assessment_creates_preparation_blocks_before_exam(app, client, user):
+    start = date.today()
+    exam_day = start + timedelta(days=2)
+    with app.app_context():
+        project_id, _ = _workspace(user)
+        module = LearningModule(user_id=user, title="Calculus", status="Active")
+        db.session.add(module)
+        db.session.flush()
+        db.session.add(ModuleAssessment(
+            module_id=module.id,
+            title="Calculus Midterm",
+            assessment_type="Midterm",
+            assessment_date=exam_day,
+            assessment_time=time(10, 0),
+            estimated_study_minutes=180,
+            topics="Integration, series",
+            status="Upcoming",
+        ))
+        db.session.commit()
+
+    _login(client)
+    response = client.post(
+        "/api/v1/planner/preview",
+        json={
+            "mode": "goal",
+            "start_date": start.isoformat(),
+            "horizon_days": 3,
+            "working_start": "09:00",
+            "working_end": "17:00",
+            "break_minutes": 15,
+            "project_id": project_id,
+            "request_text": "Prepare for the next few days",
+        },
+    )
+
+    assert response.status_code == 200, response.get_json()
+    preview = response.get_json()["preview"]
+    prep = [
+        block
+        for day in preview["days"]
+        for block in day["blocks"]
+        if block["block_type"] == "assessment_prep"
+    ]
+    assert prep
+    assert sum(block["minutes"] for block in prep) == 180
+    assert preview["assessment_prep_minutes"] == 180
+    assert all(block["deadline"] == exam_day.isoformat() for block in prep)
+    assert all(block["date"] <= exam_day.isoformat() for block in prep)
+
+    exam_day_blocks = [block for block in prep if block["date"] == exam_day.isoformat()]
+    assert all(block["end_time"] <= "10:00" for block in exam_day_blocks)
+
+    commitments = [
+        item
+        for day in preview["days"]
+        for item in day["commitments"]
+        if item["source"] == "academic"
+    ]
+    assert any(item["title"] == "Calculus Midterm" for item in commitments)
+
+
+def test_untimed_exam_does_not_guess_prep_can_happen_after_exam(app, client, user):
+    start = date.today()
+    exam_day = start + timedelta(days=1)
+    with app.app_context():
+        project_id, _ = _workspace(user)
+        module = LearningModule(user_id=user, title="Physics", status="Active")
+        db.session.add(module)
+        db.session.flush()
+        db.session.add(ModuleAssessment(
+            module_id=module.id,
+            title="Physics Quiz",
+            assessment_type="Quiz",
+            assessment_date=exam_day,
+            assessment_time=None,
+            estimated_study_minutes=60,
+            status="Upcoming",
+        ))
+        db.session.commit()
+
+    _login(client)
+    response = client.post(
+        "/api/v1/planner/preview",
+        json={
+            "mode": "goal",
+            "start_date": start.isoformat(),
+            "horizon_days": 2,
+            "working_start": "09:00",
+            "working_end": "17:00",
+            "project_id": project_id,
+            "request_text": "Plan my study time",
+        },
+    )
+
+    assert response.status_code == 200, response.get_json()
+    prep = [
+        block
+        for day in response.get_json()["preview"]["days"]
+        for block in day["blocks"]
+        if block["block_type"] == "assessment_prep"
+    ]
+    assert prep
+    assert all(block["date"] < exam_day.isoformat() for block in prep)
+
+
 def test_goal_mode_uses_requested_horizon(app, client, user):
     with app.app_context():
         project_id, _ = _workspace(user)
