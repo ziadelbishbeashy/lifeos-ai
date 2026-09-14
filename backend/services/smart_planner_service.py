@@ -316,24 +316,6 @@ def _academic_commitments(*, owner_id: int, start_date: date, end_date: date) ->
         .order_by(ModuleAssessment.assessment_date.asc(), ModuleAssessment.assessment_time.asc(), ModuleAssessment.id.asc())
         .all()
     )
-    completed_rows = (
-        SmartPlannerBlock.query
-        .join(SmartPlannerPlan, SmartPlannerBlock.plan_id == SmartPlannerPlan.id)
-        .filter(
-            SmartPlannerPlan.user_id == int(owner_id),
-            SmartPlannerBlock.block_type == "assessment_prep",
-            SmartPlannerBlock.assessment_id.isnot(None),
-            SmartPlannerBlock.completed_at.isnot(None),
-        )
-        .all()
-    )
-    completed_by_assessment: dict[int, int] = {}
-    for block in completed_rows:
-        assessment_id = int(block.assessment_id)
-        completed_by_assessment[assessment_id] = (
-            completed_by_assessment.get(assessment_id, 0) + int(block.minutes or 0)
-        )
-
     result: list[dict[str, Any]] = []
     for assessment in rows:
         day = assessment.assessment_date
@@ -379,6 +361,24 @@ def _assessment_preparation_requests(
         .order_by(ModuleAssessment.id.asc())
         .all()
     )
+    completed_rows = (
+        SmartPlannerBlock.query
+        .join(SmartPlannerPlan, SmartPlannerBlock.plan_id == SmartPlannerPlan.id)
+        .filter(
+            SmartPlannerPlan.user_id == int(owner_id),
+            SmartPlannerBlock.block_type == "assessment_prep",
+            SmartPlannerBlock.assessment_id.isnot(None),
+            SmartPlannerBlock.completed_at.isnot(None),
+        )
+        .all()
+    )
+    completed_by_assessment: dict[int, int] = {}
+    for block in completed_rows:
+        assessment_id = int(block.assessment_id)
+        completed_by_assessment[assessment_id] = (
+            completed_by_assessment.get(assessment_id, 0) + int(block.minutes or 0)
+        )
+
     result: list[dict[str, Any]] = []
     for assessment in rows:
         target = assessment_target_date(assessment)
