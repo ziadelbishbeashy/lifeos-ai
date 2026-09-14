@@ -681,6 +681,9 @@ export type ModuleAssessment = {
   due_date: string | null;
   due_time: string | null;
   target_date: string | null;
+  target_time: string | null;
+  target_kind: "assessment" | "due" | null;
+  planner_ready: boolean;
   weight_percent: number | null;
   status: string;
   topics: string | null;
