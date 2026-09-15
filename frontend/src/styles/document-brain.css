@@ -2057,3 +2057,65 @@ html[data-theme="light"] .brain-tab--ask .brain-tab-icon {
   flex-wrap: wrap;
   gap: 0.7rem;
 }
+
+
+.brain-professional-summary{
+  display:grid;
+  gap:14px;
+  padding:16px;
+  border:1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+  border-radius:14px;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(96,165,250,.08), transparent 28%),
+    var(--ux-surface, #121720);
+}
+.brain-professional-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.brain-professional-heading h2{
+  margin:5px 0 5px;
+  font-size:20px;
+  letter-spacing:-.02em;
+}
+.brain-professional-heading p{
+  max-width:760px;
+  margin:0;
+  color:var(--ux-text-2,#c7ced9);
+  font-size:13px;
+  line-height:1.55;
+}
+.brain-evidence-meter{
+  flex:0 0 auto;
+  min-width:120px;
+  display:grid;
+  gap:3px;
+  padding:10px 12px;
+  border:1px solid var(--ux-border-soft, rgba(255,255,255,.07));
+  border-radius:10px;
+  background:var(--ux-bg-soft,rgba(255,255,255,.025));
+  text-align:right;
+}
+.brain-evidence-meter span{
+  color:var(--ux-muted,#8d98aa);
+  font-size:11px;
+  font-weight:750;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.brain-evidence-meter strong{
+  color:var(--ux-accent-2,#a79fff);
+  font-size:18px;
+}
+.brain-professional-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+@media (max-width:760px){
+  .brain-professional-heading{display:grid}
+  .brain-evidence-meter{justify-self:start;text-align:left}
+  .brain-professional-grid{grid-template-columns:1fr}
+}
