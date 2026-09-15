@@ -336,6 +336,12 @@ export function DocumentDetailsPage() {
   const docType = experience.type_label || data.analysis?.document_type || "Document";
   const attention = experience.attention || [];
   const recommendedActions = experience.actions || [];
+  const professionalSummary = experience.professional_summary || {};
+  const professionalFindings = professionalSummary.key_findings || [];
+  const professionalDetails = professionalSummary.important_details || [];
+  const professionalRisks = professionalSummary.risks || [];
+  const professionalGaps = professionalSummary.gaps || [];
+  const professionalEvidence = professionalSummary.evidence || {};
   const suggestedQuestions = (experience.questions || []).length
     ? experience.questions
     : [
@@ -506,6 +512,90 @@ export function DocumentDetailsPage() {
                   <span>Focus now</span>
                   <strong>{experience.focus || "Review the analysis and decide the next useful action."}</strong>
                   <VerifyButton source={experience.focus_source} />
+                </div>
+              </article>
+
+              <article className="brain-professional-summary">
+                <div className="brain-professional-heading">
+                  <div>
+                    <span className="brain-eyebrow">Document intelligence</span>
+                    <h2>Professional analysis</h2>
+                    {professionalSummary.purpose ? <p>{professionalSummary.purpose}</p> : null}
+                  </div>
+                  <div className="brain-evidence-meter">
+                    <span>Evidence coverage</span>
+                    <strong>{professionalEvidence.referenced_items || 0}/{professionalEvidence.total_items || 0}</strong>
+                  </div>
+                </div>
+
+                <div className="brain-professional-grid">
+                  <BrainSectionCard eyebrow="Key findings" title="What the document says" count={professionalFindings.length}>
+                    {professionalFindings.length ? (
+                      <div className="brain-insight-list">
+                        {professionalFindings.map((item: any, index: number) => (
+                          <div className="brain-insight-item" key={index}>
+                            <div>
+                              <span>{item.label || "Key finding"}</span>
+                              <strong>{item.title}</strong>
+                              {item.detail ? <p>{item.detail}</p> : null}
+                            </div>
+                            <VerifyButton source={item.source} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : <DetailEmpty title="No key findings" text="No grounded key findings were returned for this document." />}
+                  </BrainSectionCard>
+
+                  <BrainSectionCard eyebrow="Important details" title="Requirements, decisions & dates" count={professionalDetails.length}>
+                    {professionalDetails.length ? (
+                      <div className="brain-insight-list">
+                        {professionalDetails.map((item: any, index: number) => (
+                          <div className="brain-insight-item" key={index}>
+                            <div>
+                              <span>{item.label}</span>
+                              <strong>{item.title}</strong>
+                              {item.detail ? <p>{item.detail}</p> : null}
+                            </div>
+                            <VerifyButton source={item.source} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : <DetailEmpty title="No structured details" text="No requirements, decisions, or important dates were identified." />}
+                  </BrainSectionCard>
+
+                  <BrainSectionCard eyebrow="Risks" title="What could go wrong" count={professionalRisks.length}>
+                    {professionalRisks.length ? (
+                      <div className="brain-insight-list">
+                        {professionalRisks.map((item: any, index: number) => (
+                          <div className="brain-insight-item is-danger" key={index}>
+                            <div>
+                              <span>{item.label}</span>
+                              <strong>{item.title}</strong>
+                              {item.detail ? <p>{item.detail}</p> : null}
+                            </div>
+                            <VerifyButton source={item.source} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : <DetailEmpty title="No grounded risks found" text="The current analysis did not surface a specific risk." />}
+                  </BrainSectionCard>
+
+                  <BrainSectionCard eyebrow="Missing information" title="What is still unclear" count={professionalGaps.length}>
+                    {professionalGaps.length ? (
+                      <div className="brain-insight-list">
+                        {professionalGaps.map((item: any, index: number) => (
+                          <div className="brain-insight-item is-warning" key={index}>
+                            <div>
+                              <span>{item.label}</span>
+                              <strong>{item.title}</strong>
+                              {item.detail ? <p>{item.detail}</p> : null}
+                            </div>
+                            <VerifyButton source={item.source} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : <DetailEmpty title="No major information gaps" text="The current analysis did not identify a missing-information question." />}
+                  </BrainSectionCard>
                 </div>
               </article>
 
