@@ -114,7 +114,7 @@ type SelectedPdfContext = {
   section: string;
 };
 
-type Tab = "overview" | "details" | "pdf" | "search" | "tables" | "actions" | "ask";
+type Tab = "overview" | "details" | "extract" | "study" | "pdf" | "search" | "tables" | "actions" | "ask";
 type DetailIconName = "overview" | "details" | "pdf" | "search" | "tables" | "actions" | "ask";
 
 function textOf(value: any) {
@@ -133,7 +133,7 @@ export function DocumentDetailsPage() {
   const queryClient = useQueryClient();
   const requestedParams = new URLSearchParams(window.location.search);
   const requestedPage = Number(requestedParams.get("page") || "");
-  const allowedTabs: Tab[] = ["overview", "pdf", "ask", "search", "details", "tables", "actions"];
+  const allowedTabs: Tab[] = ["overview", "details", "extract", "study", "pdf", "ask", "search", "tables", "actions"];
   const requestedTab: Tab = allowedTabs.find(value => value === requestedParams.get("tab")) || "overview";
   const [tab, setTab] = useState<Tab>(requestedTab);
   const [error, setError] = useState<string | null>(null);
@@ -480,13 +480,15 @@ export function DocumentDetailsPage() {
 
       <nav className="brain-tabs" aria-label="Document workspace">
         {([
-          ["overview", "Overview", "At a glance", "overview"],
+          ["overview", "Overview", "Executive view", "overview"],
+          ["details", "Deep Analysis", "Full structure", "details"],
+          ["extract", "Extract", "Facts & dates", "details"],
+          ["study", "Study", "Learn from it", "ask"],
+          ["actions", "Action Items", data.suggestions.length ? `${data.suggestions.length} suggested` : "Next steps", "actions"],
           ["pdf", "Read", "Original PDF", "pdf"],
           ["ask", "Ask AI", "Answers with evidence", "ask"],
           ["search", "Search", "Find passages", "search"],
-          ["details", "Details", "Structured analysis", "details"],
           ["tables", "Tables", "Rows & columns", "tables"],
-          ["actions", "Actions", data.suggestions.length ? `${data.suggestions.length} suggested` : "Next steps", "actions"],
         ] as const).map(([key, label, hint, icon]) => (
           <button key={key} type="button" data-db-tab={key} className={`brain-tab brain-tab--${key} ${tab === key ? "active" : ""}`.trim()} onClick={() => setTab(key)} aria-label={label} aria-pressed={tab === key}>
             <span className="brain-tab-icon"><BrainDetailIcon name={icon} /></span>
@@ -700,6 +702,110 @@ export function DocumentDetailsPage() {
               ) : section.preview ? <p className="brain-muted-copy">{section.preview}</p> : null}
             </BrainSectionCard>
           )) : <DetailEmpty title="No detailed sections" text="Run an analysis to populate document-specific detail." />}
+        </div>
+      ) : null}
+
+      {tab === "extract" ? (
+        <div className="brain-detail-stack">
+          <article className="brain-card">
+            <div className="brain-card-heading">
+              <div>
+                <span className="brain-eyebrow">Extract</span>
+                <h2>Important facts, decisions & dates</h2>
+              </div>
+              <span className="brain-count-badge">{professionalDetails.length}</span>
+            </div>
+            <p className="brain-muted-copy">A focused extraction from the grounded analysis. Every available item keeps its source so you can verify it against the PDF.</p>
+            {professionalDetails.length ? (
+              <div className="brain-extract-grid">
+                {professionalDetails.map((item: any, index: number) => (
+                  <div className="brain-extract-item" key={index}>
+                    <span>{item.label}</span>
+                    <strong>{item.title}</strong>
+                    {item.detail ? <p>{item.detail}</p> : null}
+                    <VerifyButton source={item.source} />
+                  </div>
+                ))}
+              </div>
+            ) : <DetailEmpty title="Nothing structured to extract yet" text="Re-analyse the document or open Deep Analysis to review the available sections." />}
+          </article>
+
+          <BrainSectionCard eyebrow="Key findings" title="High-signal takeaways" count={professionalFindings.length}>
+            {professionalFindings.length ? (
+              <div className="brain-insight-list">
+                {professionalFindings.map((item: any, index: number) => (
+                  <div className="brain-insight-item" key={index}>
+                    <div>
+                      <span>{item.label || "Key finding"}</span>
+                      <strong>{item.title}</strong>
+                      {item.detail ? <p>{item.detail}</p> : null}
+                    </div>
+                    <VerifyButton source={item.source} />
+                  </div>
+                ))}
+              </div>
+            ) : <DetailEmpty title="No key findings" text="The current analysis did not return grounded key findings." />}
+          </BrainSectionCard>
+        </div>
+      ) : null}
+
+      {tab === "study" ? (
+        <div className="brain-detail-stack">
+          <article className="brain-card brain-study-hero">
+            <div>
+              <span className="brain-eyebrow">Study mode</span>
+              <h2>Turn this document into something you can learn</h2>
+              <p>Review the core ideas first, then use the grounded questions to test understanding without leaving the document context.</p>
+            </div>
+            <button className="workspace-primary-button" type="button" onClick={() => startQuestion("Teach me the main ideas in this document step by step.")}>
+              Teach me this
+            </button>
+          </article>
+
+          <div className="brain-overview-grid">
+            <BrainSectionCard eyebrow="Core ideas" title="What to understand" count={professionalFindings.length}>
+              {professionalFindings.length ? (
+                <div className="brain-insight-list">
+                  {professionalFindings.map((item: any, index: number) => (
+                    <div className="brain-insight-item" key={index}>
+                      <div>
+                        <span>Concept {index + 1}</span>
+                        <strong>{item.title}</strong>
+                        {item.detail ? <p>{item.detail}</p> : null}
+                      </div>
+                      <VerifyButton source={item.source} />
+                    </div>
+                  ))}
+                </div>
+              ) : <DetailEmpty title="No study points yet" text="The document needs grounded key findings before Study mode can organise them." />}
+            </BrainSectionCard>
+
+            <BrainSectionCard eyebrow="Practice" title="Questions to test yourself" count={suggestedQuestions.length}>
+              <div className="brain-question-list">
+                {suggestedQuestions.slice(0, 8).map((item: any, index: number) => {
+                  const question = textOf(item);
+                  return <button key={index} type="button" onClick={() => startQuestion(question)}>{question}</button>;
+                })}
+              </div>
+            </BrainSectionCard>
+          </div>
+
+          <BrainSectionCard eyebrow="Knowledge gaps" title="What to clarify next" count={professionalGaps.length}>
+            {professionalGaps.length ? (
+              <div className="brain-insight-list">
+                {professionalGaps.map((item: any, index: number) => (
+                  <div className="brain-insight-item is-warning" key={index}>
+                    <div>
+                      <span>{item.label}</span>
+                      <strong>{item.title}</strong>
+                      {item.detail ? <p>{item.detail}</p> : null}
+                    </div>
+                    <VerifyButton source={item.source} />
+                  </div>
+                ))}
+              </div>
+            ) : <DetailEmpty title="No major gaps identified" text="Use Ask AI if you want V-SPACE to explain a specific section in another way." />}
+          </BrainSectionCard>
         </div>
       ) : null}
 
