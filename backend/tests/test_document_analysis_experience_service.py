@@ -129,3 +129,79 @@ def test_experience_falls_back_to_analysis_actions_without_persisted_suggestions
     assert result["actions"][0]["title"] == "Review launch checklist"
     assert result["actions"][0]["persisted"] is False
     assert result["attention_count"] == 0
+
+
+def test_experience_builds_professional_summary_from_grounded_analysis():
+    result = build_document_analysis_experience(
+        overview={
+            "analysis": {
+                "summary": "The document defines the release plan and launch controls.",
+                "purpose": "Ship the release safely.",
+                "key_points": [
+                    {
+                        "title": "Launch readiness is the immediate goal",
+                        "detail": "All critical flows must pass before release.",
+                        "source": {"page": 1, "evidence": "Launch readiness is required."},
+                    }
+                ],
+                "requirements": [
+                    {
+                        "requirement": "Complete regression testing",
+                        "details": "Authentication and planner flows must pass.",
+                        "source": {"page": 2},
+                    }
+                ],
+                "decisions": [
+                    {
+                        "decision": "Use staged rollout",
+                        "reason": "Reduce deployment risk.",
+                        "source": {"page": 3},
+                    }
+                ],
+                "deadlines": [
+                    {
+                        "description": "Production launch",
+                        "date": "2026-09-30",
+                        "source": {"page": 4},
+                    }
+                ],
+                "risks": [
+                    {
+                        "risk": "Unverified migration path",
+                        "impact": "Deployment may fail.",
+                        "source": {"page": 5},
+                    }
+                ],
+                "missing_information": [
+                    {
+                        "question": "Who owns rollback?",
+                        "why_it_matters": "Ownership affects recovery speed.",
+                        "source": {"page": 6},
+                    }
+                ],
+                "action_items": [],
+                "questions": [],
+            }
+        },
+        type_workspace={
+            "type_key": "project_plan",
+            "type_label": "Project Plan",
+            "metadata": {},
+            "populated_sections": [],
+        },
+        suggestions=[],
+    )
+
+    summary = result["professional_summary"]
+    assert summary["executive_summary"].startswith("The document defines")
+    assert summary["purpose"] == "Ship the release safely."
+    assert summary["key_findings"][0]["title"] == "Launch readiness is the immediate goal"
+    assert [item["label"] for item in summary["important_details"]] == [
+        "Requirement",
+        "Decision",
+        "Date",
+    ]
+    assert summary["risks"][0]["title"] == "Unverified migration path"
+    assert summary["gaps"][0]["title"] == "Who owns rollback?"
+    assert summary["evidence"]["referenced_items"] == 6
+    assert summary["evidence"]["total_items"] == 6
